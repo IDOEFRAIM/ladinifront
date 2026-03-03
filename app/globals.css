@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* Space Grotesk and Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+/* ╔══════════════════════════════════════════════╗ */
+/* ║  FrontAg — Minimalisme Organique             ║ */
+/* ║  Souveraineté, Transparence, Accompagnement  ║ */
+/* ╚══════════════════════════════════════════════╝ */
+
+:root {
+  --background: #F9FBF8;       /* Blanc cassé très léger avec une pointe de vert */
+  --foreground: #064E3B;       /* Vert Émeraude profond (texte principal) */
+  --primary: #D97706;          /* Ambre Doré (accentuation) */
+  --primary-light: #FDE68A;
+  --secondary: #064E3B;        /* Vert Émeraude profond */
+  --border: rgba(6, 78, 59, 0.1); /* Bordures très douces */
+  --muted: #4B5563;            /* Stone-600 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Body text readable in sunlight: larger line-height and open metrics */
+p, li, span, a {
+  line-height: 1.6;
+}
+
+/* Scrollbar sobre */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Focus visible pour accessibilité */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Suppression des animations pour les utilisateurs qui le préfèrent */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
