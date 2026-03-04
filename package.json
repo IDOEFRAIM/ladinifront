@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
+    "build": "drizzle-kit generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push --force",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
