@@ -73,7 +73,7 @@ async function getOrgContext(): Promise<{ ctx: OrgContext | null; error: string 
     const session = await getSessionFromRequest({ cookies: cookieStore } as any);
     if (session?.activeOrgId) {
       orgId = session.activeOrgId;
-      console.log(`getOrgContext: using activeOrgId from session=${orgId}`);
+        if (process.env.NODE_ENV !== 'production') console.log(`getOrgContext: using activeOrgId from session=${orgId}`);
     }
   }
   // Fallback: client may cache the first org in `user-org` cookie
@@ -84,7 +84,7 @@ async function getOrgContext(): Promise<{ ctx: OrgContext | null; error: string 
         const parsed = JSON.parse(userOrgRaw);
         if (parsed && parsed.organizationId) {
           orgId = String(parsed.organizationId);
-          console.log(`getOrgContext: using organizationId from user-org cookie=${orgId}`);
+          if (process.env.NODE_ENV !== 'production') console.log(`getOrgContext: using organizationId from user-org cookie=${orgId}`);
         }
       } catch (e) {
         // ignore malformed cookie

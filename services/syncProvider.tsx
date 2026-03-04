@@ -8,7 +8,7 @@ export default function SyncProvider() {
 
     useEffect(() => {
         if (isOnline) {
-            console.log("🌐 Connexion rétablie : Lancement de la synchro...");
+            if (process.env.NODE_ENV !== 'production') console.log("🌐 Connexion rétablie : Lancement de la synchro...");
             processSyncQueue().then(res => {
                 if (res.syncedCount > 0) {
                     alert(`${res.syncedCount} commandes synchronisées !`);

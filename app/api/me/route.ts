@@ -6,17 +6,18 @@ import * as schema from '@/src/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 
 export async function GET(req: Request) {
+  const isDev = process.env.NODE_ENV !== 'production';
   try {
     try {
-      console.log('[api/me] request url:', (req as any).url || 'n/a');
-      try { console.log('[api/me] headers:', Object.fromEntries((req as any).headers || [])); } catch (e) { /* ignore */ }
-      try { console.log('[api/me] cookie header:', (req as any).headers?.get ? (req as any).headers.get('cookie') : undefined); } catch (e) { /* ignore */ }
+      if (isDev) console.log('[api/me] request url:', (req as any).url || 'n/a');
+      try { if (isDev) console.log('[api/me] headers:', Object.fromEntries((req as any).headers || [])); } catch (e) { /* ignore */ }
+      try { if (isDev) console.log('[api/me] cookie header:', (req as any).headers?.get ? (req as any).headers.get('cookie') : undefined); } catch (e) { /* ignore */ }
     } catch (e) {
       console.error('[api/me] pre-log error', e);
     }
     // 1. Récupération de la session
     const session = await getSessionFromRequest(req as any);
-    console.log('[api/me] session:', { hasUser: !!session?.userId, preview: session?.userId ? String(session.userId).slice(0,8) : null });
+    if (isDev) console.log('[api/me] session:', { hasUser: !!session?.userId, preview: session?.userId ? String(session.userId).slice(0,8) : null });
     if (!session?.userId) {
       return NextResponse.json({ success: false, error: 'Authentification requise' }, { status: 401 });
     }
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
     let ctx: any;
     try {
       ctx = await buildAccessContext(session.userId);
-      console.log('[api/me] buildAccessContext success:', { role: ctx?.role || null, orgScopes: Array.isArray(ctx?.orgScopes) ? ctx.orgScopes.length : 0 });
+      if (isDev) console.log('[api/me] buildAccessContext success:', { role: ctx?.role || null, orgScopes: Array.isArray(ctx?.orgScopes) ? ctx.orgScopes.length : 0 });
     } catch (buildErr) {
       console.error('[api/me] buildAccessContext error for userId=', session.userId, buildErr);
       throw buildErr;

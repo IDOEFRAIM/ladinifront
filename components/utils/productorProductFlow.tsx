@@ -41,6 +41,7 @@ interface ProductFormData {
 export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const isDev = process.env.NODE_ENV !== 'production';
   
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,7 +84,7 @@ const foundCat = CATEGORIES.find(c =>
       c.label.toLowerCase() === initialData.categoryLabel?.toLowerCase() ||
       c.id === initialData.category
     );
-     console.log("Hydrating form with initial data:", foundCat);
+    if (isDev) console.log("Hydrating form with initial data:", foundCat);
 
     reset({
       // On utilise l'ID trouvé, sinon on garde ce qu'il y a dans la DB

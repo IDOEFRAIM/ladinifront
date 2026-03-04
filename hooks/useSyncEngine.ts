@@ -9,6 +9,7 @@ import { localDb } from '@/lib/dexie'; // Utilisation de localDb au lieu de db
 export function useSyncEngine() {
   const isOnline = useNetwork();
   const [isSyncing, setIsSyncing] = useState(false);
+  const isDev = process.env.NODE_ENV !== 'production';
 
   // 1. SURVEILLANCE DES COMMANDES EN ATTENTE
   // useLiveQuery est parfait pour mettre à jour l'UI dès qu'une commande est ajoutée
@@ -40,11 +41,11 @@ export function useSyncEngine() {
           const result = await processSyncQueue();
           
           if (result.syncedCount > 0) {
-            console.log(`🚀 Moteur de Synchro : ${result.syncedCount} commandes traitées.`);
+            if (isDev) console.log(`🚀 Moteur de Synchro : ${result.syncedCount} commandes traitées.`);
           }
 
           if (result.errors > 0) {
-            console.warn(`⚠️ Moteur de Synchro : ${result.errors} échecs.`);
+            if (isDev) console.warn(`⚠️ Moteur de Synchro : ${result.errors} échecs.`);
           }
         }
       } catch (err) {

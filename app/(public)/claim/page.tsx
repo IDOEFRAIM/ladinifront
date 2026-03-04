@@ -128,6 +128,7 @@ const Commitment = ({ icon, text }: { icon: React.ReactNode; text: string }) => 
 
 /*  Main Page  */
 export default function ClaimPage() {
+    const isDev = process.env.NODE_ENV !== 'production';
     const { register, handleSubmit, formState: { errors } } = useForm<ClaimFormData>();
     const [status, setStatus] = useState<'idle'|'submitting'|'success'>('idle');
     const [previewUrl, setPreviewUrl] = useState<string|null>(null);
@@ -143,7 +144,7 @@ export default function ClaimPage() {
     const onSubmit = async (data: ClaimFormData) => {
         setStatus('submitting');
         await new Promise(r => setTimeout(r, 1500));
-        console.log('Claim submitted:', data);
+        if (isDev) console.log('Claim submitted:', data);
         setStatus('success');
     };
 

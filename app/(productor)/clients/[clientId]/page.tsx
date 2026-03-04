@@ -189,6 +189,7 @@ function ActionCenter({
 
 export default function ClientDetailPage({ params }: PageProps) {
     const { clientId } = use(params);
+    const isDev = process.env.NODE_ENV !== 'production';
 
     const [orderStep, setOrderStep] = useState<'idle' | 'selecting' | 'confirm'>('idle');
     const [selectedProduct, setSelectedProduct] = useState<string>('');
@@ -203,7 +204,7 @@ export default function ClientDetailPage({ params }: PageProps) {
     const totalPrice = qty * (currentProductData?.price || 0);
 
     const handleConfirmOrder = () => {
-        console.log(`Commande confirmée pour ${clientId}: ${qty}kg de ${selectedProduct}`);
+        if (isDev) console.log(`Commande confirmée pour ${clientId}: ${qty}kg de ${selectedProduct}`);
         alert("Vente enregistrée avec succès !");
         setOrderStep('idle');
         setQty(0);

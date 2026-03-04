@@ -13,6 +13,8 @@ import { Leaf, Plus, HeartPulse, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
 const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
 
@@ -28,7 +30,7 @@ function LoadingView() {
 }
 
 function EmptyView({ user, router, activeOrg }: { user: any; router: any; activeOrg?: any }) {
-  console.log('EmptyView props', { user, activeOrg });
+  if (isDev) console.log('EmptyView props', { user, activeOrg });
   return (
     <div style={{ minHeight: '100vh', background: C.sand, padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: C.glass, backdropFilter: 'blur(20px)', padding: '48px 40px', borderRadius: 32, border: `1px solid ${C.border}`, maxWidth: 720, textAlign: 'center' as const, boxShadow: '0 20px 60px rgba(6,78,59,0.06)' }}>
@@ -152,7 +154,7 @@ function DashboardView({ activeUnit, setActiveUnit, healthScore, totalValue }: {
     );
   };
   if (assets.length === 0) return <EmptyView user={user} router={router} activeOrg={activeOrg} />;
-    console.log('Rendering DashboardView with', { activeUnit, healthScore, totalValue }); // For debugging; can be removed in production. 
+    if (isDev) console.log('Rendering DashboardView with', { activeUnit, healthScore, totalValue });
   return (
     <>
       <OrgSelector />

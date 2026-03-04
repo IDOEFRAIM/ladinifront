@@ -1,5 +1,6 @@
 // components/Market/ProductCard.tsx
 
+'use client';
 import React from 'react';
 import { Product } from '@/types/market';
 import { useRouter } from 'next/navigation';
@@ -64,6 +65,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
                 {/* ACTION */}
                 <button 
+                    onClick={(e) => { e.stopPropagation(); handleViewProduct(); }}
                     className="mt-auto w-full bg-green-800 text-white py-3 rounded-lg text-xs font-semibold uppercase tracking-wider hover:bg-green-700 transition-colors"
                 >
                     Commander

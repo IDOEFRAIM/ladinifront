@@ -33,7 +33,9 @@ export async function POST(req: Request) {
   cookieStore.set(COOKIE_NAMES.USER_PERMISSIONS, JSON.stringify(perms), publicOpts());
   cookieStore.set(COOKIE_NAMES.USER_ORG, JSON.stringify({ organizationId, role: roleForCookie }), publicOpts());
 
-  console.log(`select-org: user=${session.userId} selected org=${organizationId}; perms=${JSON.stringify(perms)}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`select-org: user=${session.userId} selected org=${organizationId}; perms=${JSON.stringify(perms)}`);
+  }
 
   return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }

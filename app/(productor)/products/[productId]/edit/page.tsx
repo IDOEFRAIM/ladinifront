@@ -24,7 +24,8 @@ export default function EditPage({ params }: PageProps) {
 
   useEffect(() => {
     // Debugging: This will now show the actual ID in your console
-    console.log("Current Product ID:", productId);
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev) console.log("Current Product ID:", productId);
 
     async function fetchProduct() {
       if (!productId) {

@@ -32,6 +32,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
 }
 
 export async function getSessionFromRequest(request: Request | { cookies?: any } | { headers?: any }) {
+  const isDev = process.env.NODE_ENV !== 'production';
   let token: string | undefined;
   try {
     // @ts-ignore
@@ -83,12 +84,12 @@ export async function getSessionFromRequest(request: Request | { cookies?: any }
             .split(';')
             .map((p: string) => p.split('=')[0].trim())
             .filter(Boolean);
-          console.debug(`[session] no ${COOKIE_NAMES.SESSION_TOKEN} cookie found; Cookie header contains:`, names.join(','));
+          if (isDev) console.debug(`[session] no ${COOKIE_NAMES.SESSION_TOKEN} cookie found; Cookie header contains:`, names.join(','));
         } catch (e) {
-          console.debug(`[session] no ${COOKIE_NAMES.SESSION_TOKEN} cookie found but Cookie header present (could not parse names)`);
+          if (isDev) console.debug(`[session] no ${COOKIE_NAMES.SESSION_TOKEN} cookie found but Cookie header present (could not parse names)`);
         }
       } else {
-        console.debug('[session] no session-token and no Cookie header present on request');
+        if (isDev) console.debug('[session] no session-token and no Cookie header present on request');
       }
     } catch (e) {
       // ignore logging errors
@@ -99,14 +100,16 @@ export async function getSessionFromRequest(request: Request | { cookies?: any }
   try {
     // Minimal debug info to help investigate intermittent 401s in dev.
     // Do not log full token in production.
-    const short = token ? (token.length > 8 ? token.slice(0, 8) + '...' : token) : 'none';
-    if (!payload) {
-      console.debug(`[session] token present=${!!token} tokenPreview=${short} — verifySession returned null`);
-    } else {
-      console.debug(`[session] verified userId=${payload.userId} tokenPreview=${short} permissionVersion=${payload.permissionVersion || 'n/a'}`);
+    if (isDev) {
+      const short = token ? (token.length > 8 ? token.slice(0, 8) + '...' : token) : 'none';
+      if (!payload) {
+        console.debug(`[session] token present=${!!token} tokenPreview=${short} — verifySession returned null`);
+      } else {
+        console.debug(`[session] verified userId=${payload.userId} tokenPreview=${short} permissionVersion=${payload.permissionVersion || 'n/a'}`);
+      }
     }
   } catch (e) {
-    console.debug('[session] debug logging failed', e);
+    if (isDev) console.debug('[session] debug logging failed', e);
   }
 
   return payload;

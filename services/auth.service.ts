@@ -45,7 +45,8 @@ async function setSessionCookies(user: {
     const cookieStore = await cookies();
     const cookieOpts = DEFAULT_COOKIE_OPTS;
     // Do NOT write raw `user-id` cookie anymore. Use signed `session-token` instead.
-    cookieStore.set(COOKIE_NAMES.USER_ROLE, user.role, publicOpts());
+    const roleValue = (user.role || '').toString().toUpperCase();
+    cookieStore.set(COOKIE_NAMES.USER_ROLE, roleValue, publicOpts());
     cookieStore.set(COOKIE_NAMES.USER_NAME, user.name || '', publicOpts());
     if (location) {
         cookieStore.set(COOKIE_NAMES.USER_ZONE, JSON.stringify(location), publicOpts());
@@ -66,7 +67,7 @@ async function setSessionCookies(user: {
     if (primaryOrg) {
         try {
             cookieStore.set(COOKIE_NAMES.ACTIVE_ORG_ID, primaryOrg.organizationId, publicOpts());
-            console.log(`setSessionCookies: active-org-id cookie written=${primaryOrg.organizationId}`);
+            if (process.env.NODE_ENV !== 'production') console.log(`setSessionCookies: active-org-id cookie written=${primaryOrg.organizationId}`);
         } catch (e) {
             console.warn('Could not set active-org-id cookie', e);
         }
@@ -79,33 +80,31 @@ async function setSessionCookies(user: {
     const pv = (user.updatedAt ?? new Date()).getTime().toString();
     cookieStore.set(COOKIE_NAMES.PERMISSION_VERSION, pv, publicOpts());
     // Create a signed session token (JWT) containing minimal identity info and set it httpOnly
+    // Sign session token and set httpOnly cookie. Ensure USER_ROLE stays written even if signing fails.
+    const activeOrgIdForToken = orgs.length > 0 ? orgs[0].organizationId : undefined;
     try {
-        const activeOrgIdForToken = orgs.length > 0 ? orgs[0].organizationId : undefined;
-        const token = await signSession({ userId: user.id, role: user.role, permissionVersion: pv, activeOrgId: activeOrgIdForToken });
+        const token = await signSession({ userId: user.id, role: roleValue, permissionVersion: pv, activeOrgId: activeOrgIdForToken });
         cookieStore.set(COOKIE_NAMES.SESSION_TOKEN, token, httpOnlyOpts());
-                // Non-httpOnly readiness cookie to let client detect when the server-set httpOnly
-                // `session-token` is present. Clients should remove this when they read it.
-                try {
-                    cookieStore.set(COOKIE_NAMES.SESSION_READY, '1', publicOpts());
-                } catch (e) {
-                    // non-fatal — cookie API may throw in some environments
-                    console.warn('Could not set session-ready cookie', e);
-                }
-
-                // Ensure `user-role` is written after token signing as a reliable client-visible
-                // indicator. Some environments / ordering cause the initial write to be missed
-                // by the browser; rewriting here increases robustness.
-                try {
-                    const roleValue = (user.role || '').toString().toUpperCase();
-                    cookieStore.set(COOKIE_NAMES.USER_ROLE, roleValue, publicOpts());
-                } catch (e) {
-                    console.warn('Could not set user-role cookie after signing session', e);
-                }
-
-                console.log(`setSessionCookies: session-token signed (len=${token?.length}), activeOrgId=${activeOrgIdForToken}`);
     } catch (err) {
         console.warn('Could not sign session token', err);
     }
+
+    // Session readiness flag: non-httpOnly cookie clients poll for
+    try {
+        cookieStore.set(COOKIE_NAMES.SESSION_READY, '1', publicOpts());
+    } catch (e) {
+        // non-fatal — cookie API may throw in some environments
+        console.warn('Could not set session-ready cookie', e);
+    }
+
+    // Re-write USER_ROLE after signing/ready to maximize client visibility across environments
+    try {
+        cookieStore.set(COOKIE_NAMES.USER_ROLE, roleValue, publicOpts());
+    } catch (e) {
+        console.warn('Could not set user-role cookie after signing session', e);
+    }
+
+    if (process.env.NODE_ENV !== 'production') console.log(`setSessionCookies: session setup complete for user=${user.id} activeOrg=${activeOrgIdForToken}`);
 }
 
 // ╔══════════════════════════════════════════════╗

@@ -37,6 +37,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const isDev = process.env.NODE_ENV !== 'production';
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     userLocation: null,
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const hydrateSession = useCallback((userData: any) => {
-    console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
+    if (isDev) console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
     Cookies.set(COOKIE_NAMES.USER_ROLE, userData.role, { expires: 7, sameSite: 'lax' });
     Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
 
@@ -84,23 +85,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (Cookies.get(COOKIE_NAMES.SESSION_READY)) {
             sawReady = true;
             Cookies.remove(COOKIE_NAMES.SESSION_READY);
-            console.debug('[Auth] SESSION_READY detected, cleaning and proceeding to /api/me');
+            if (isDev) console.debug('[Auth] SESSION_READY detected, cleaning and proceeding to /api/me');
             break;
           }
           await delay(100);
         }
-        if (!sawReady) console.debug('[Auth] SESSION_READY not detected during poll, calling /api/me directly');
+        if (!sawReady && isDev) console.debug('[Auth] SESSION_READY not detected during poll, calling /api/me directly');
 
-        console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
+        if (isDev) console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
         let res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
 
         if (!res.ok && res.status === 401) {
-          console.debug('[Auth] /api/me returned 401; retrying after delay');
+          if (isDev) console.debug('[Auth] /api/me returned 401; retrying after delay');
           await delay(300);
           res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
         }
 
-        console.debug('[Auth] /api/me response', { ok: res.ok, status: res.status, durationMs: Date.now() - startMs });
+        if (isDev) console.debug('[Auth] /api/me response', { ok: res.ok, status: res.status, durationMs: Date.now() - startMs });
 
         if (res.ok) {
           const data = await res.json();
@@ -108,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
               const clientPv = Cookies.get(COOKIE_NAMES.PERMISSION_VERSION);
               if (clientPv && data.user.permissionVersion && String(data.user.permissionVersion) !== String(clientPv)) {
-                console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.user.permissionVersion });
+                if (isDev) console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.user.permissionVersion });
               }
             } catch (e) {
               // ignore
@@ -124,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
           const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
 
-          console.debug('[Auth] Falling back to UI cookies', { savedRole, savedName });
+          if (isDev) console.debug('[Auth] Falling back to UI cookies', { savedRole, savedName });
           setAuthState(prev => ({
             ...prev,
             user: { id: undefined, name: savedName || null, role: savedRole },

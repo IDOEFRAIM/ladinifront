@@ -18,7 +18,8 @@ interface HeaderProps {
 export default function DashboardHeader({ activeUnit, onUnitChange }: HeaderProps) {
     // On trouve la culture active pour le titre dynamique
     const currentUnit = CROP_UNITS.find(u => u.id === activeUnit);
-console.log("DashboardHeader rendered with activeUnit:", activeUnit);
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev) console.log("DashboardHeader rendered with activeUnit:", activeUnit);
     return (
         <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-8">
             

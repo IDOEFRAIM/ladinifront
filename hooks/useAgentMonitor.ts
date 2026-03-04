@@ -289,6 +289,7 @@ export function useMonitoringSSE(
 ) {
     const [isConnected, setIsConnected] = useState(false);
     const isMounted = useMounted();
+    const isDev = process.env.NODE_ENV !== 'production';
 
     // Utiliser une ref pour onEvent pour éviter que le useEffect ne dépende
     // d'une fonction qui change à chaque rendu (problème fréquent qui relance la connexion)
@@ -301,7 +302,7 @@ export function useMonitoringSSE(
         // Protection cruciale : on attend que le composant soit monté ET que le rôle soit défini
         if (!isMounted || !role) return;
 
-        console.log(`Initialisation SSE pour role: ${role}`); // Debug
+        if (isDev) console.log(`Initialisation SSE pour role: ${role}`); // Debug
 
         try {
             monitoringSSE.connect(role);
