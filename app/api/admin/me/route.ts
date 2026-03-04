@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest) {
     // If admin changed their own role, update cookie
     if (targetUserId === user.id) {
       const cookieStore = await cookies();
-      cookieStore.set(COOKIE_NAMES.USER_ROLE, String(updated.role), publicOpts());
+      cookieStore.set(COOKIE_NAMES.USER_ROLE, String(updated.role).toUpperCase(), publicOpts());
     }
 
     return NextResponse.json({ success: true, data: { id: updated.id, role: updated.role } });

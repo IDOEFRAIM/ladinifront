@@ -52,19 +52,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateSession = useCallback((userData: any) => {
     if (isDev) console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
-    Cookies.set(COOKIE_NAMES.USER_ROLE, userData.role, { expires: 7, sameSite: 'lax' });
+    const normalizedRole = (userData.role || '').toString().toUpperCase();
+    Cookies.set(COOKIE_NAMES.USER_ROLE, normalizedRole, { expires: 7, sameSite: 'lax' });
     Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
 
     const orgs = Array.isArray(userData.organizations)
       ? userData.organizations.map((o: any) => ({
           organizationId: o.organizationId,
-          role: o.role,
+          role: (o.role || '').toString().toUpperCase(),
           name: o.name || undefined,
         }))
       : [];
 
     setAuthState({
-      user: { id: userData.id ?? undefined, name: userData.name ?? null, role: userData.role },
+      user: { id: userData.id ?? undefined, name: userData.name ?? null, role: normalizedRole },
       userLocation: userData.location || null,
       permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
       organizations: orgs,

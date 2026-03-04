@@ -119,6 +119,7 @@ export async function createStock(farmId: string, data: {
     quantity: number;
     unit: string;
     batchId?: string;
+    type?: 'HARVEST' | 'INPUT' | 'EQUIPMENT';
 }) {
     if (!farmId) return { success: false, error: "FarmId requis" };
 
@@ -133,7 +134,9 @@ export async function createStock(farmId: string, data: {
             farmId,
             itemName: validation.data.itemName,
             quantity: validation.data.quantity,
-            unit: validation.data.unit as any
+            unit: validation.data.unit as any,
+            // Persist type when provided, otherwise allow DB default
+            ...(validation.data.type ? { type: validation.data.type as any } : {})
             }).returning();
 
             await tx.insert(schema.stockMovements).values({

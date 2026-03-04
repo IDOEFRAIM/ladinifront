@@ -141,6 +141,8 @@ export const CreateStockSchema = z.object({
   quantity: PositiveFloat,
   unit: z.string().min(1, "Unité requise").max(20),
   batchId: z.string().optional(),
+  // Optional stock type: HARVEST (récolte), INPUT (intrant), EQUIPMENT (matériel)
+  type: z.enum(['HARVEST', 'INPUT', 'EQUIPMENT']).optional(),
 });
 
 export const StockMovementSchema = z.object({
