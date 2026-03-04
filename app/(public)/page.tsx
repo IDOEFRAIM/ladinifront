@@ -255,11 +255,11 @@ function HeroSection() {
         </motion.div>
 
         {/* RIGHT - Floating dashboard preview */}
-        <motion.div variants={stagger} initial="hidden" animate="show" style={{ flex: '1 1 420px', position: 'relative', minHeight: 460 }}>
-          <motion.div style={{ y: y2, position: 'relative', width: '100%', height: '100%' }}>
+        <motion.div variants={stagger} initial="hidden" animate="show" style={{ flex: '1 1 420px', minWidth: 0 }}>
+          <motion.div className="grid grid-cols-2 gap-4 md:relative md:min-h-115" style={{ y: y2 }}>
 
             {/* AI Advisor card */}
-            <motion.div variants={scalePop} style={{ position: 'absolute', right: 0, top: 20, width: 340, zIndex: 4 }}>
+            <motion.div variants={scalePop} className="col-span-2 md:absolute md:right-0 md:top-5 md:w-[min(340px,100%)] md:z-4">
               <GlassCard style={{ background: C.glassBold, padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 12, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -289,7 +289,7 @@ function HeroSection() {
             </motion.div>
 
             {/* Floating KPI */}
-            <motion.div variants={scalePop} style={{ position: 'absolute', left: 0, top: 200, zIndex: 5 }}>
+            <motion.div variants={scalePop} className="col-span-1 md:absolute md:left-0 md:top-50 md:z-5">
               <GlassCard style={{ padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'center', background: C.white, boxShadow: '0 12px 40px rgba(6,78,59,0.08)' }}>
                 <div style={{ width: 44, height: 44, borderRadius: 14, background: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Sprout size={20} color={C.emerald} />
@@ -306,7 +306,7 @@ function HeroSection() {
               variants={fadeUp}
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ position: 'absolute', left: 60, top: 80, zIndex: 3 }}
+              className="col-span-1 flex items-center md:absolute md:left-15 md:top-20 md:z-3"
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 100, background: C.white, boxShadow: '0 8px 32px rgba(6,78,59,0.06)', border: `1px solid ${C.border}` }}>
                 <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2.5, repeat: Infinity }} style={{ width: 8, height: 8, borderRadius: 8, background: C.emerald }} />
@@ -315,7 +315,7 @@ function HeroSection() {
             </motion.div>
 
             {/* Eco rings */}
-            <motion.div variants={scalePop} style={{ position: 'absolute', right: 10, bottom: 10, zIndex: 2 }}>
+            <motion.div variants={scalePop} className="col-span-2 md:absolute md:right-2.5 md:bottom-2.5 md:z-2">
               <GlassCard style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
                 <EcoRing value={72} color={C.emerald} size={56} label={"Sant\u00e9"} />
                 <EcoRing value={58} color={C.amber} size={56} label="Eau" />
@@ -364,10 +364,10 @@ function BentoFeatures() {
         subtitle={"Trois piliers : Conseil intelligent, March\u00e9 connect\u00e9, Gouvernance transparente."}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 24 }}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6">
 
         {/* AXE 1 : Conseil IA */}
-        <motion.div variants={fadeUp} style={{ gridColumn: 'span 7' }}>
+        <motion.div variants={fadeUp} className="md:col-span-7">
           <GlassCard style={{ minHeight: 340, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 32 }}>
             <div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 100, background: 'rgba(16,185,129,0.08)', marginBottom: 14 }}>
@@ -403,7 +403,7 @@ function BentoFeatures() {
         </motion.div>
 
         {/* AXE 1b : Inclusion Vocale */}
-        <motion.div variants={fadeUp} style={{ gridColumn: 'span 5' }}>
+        <motion.div variants={fadeUp} className="md:col-span-5">
           <GlassCard style={{ minHeight: 340, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 32, background: `linear-gradient(160deg, ${C.glass}, rgba(217,119,6,0.04))` }}>
             <div>
               <div style={{ width: 52, height: 52, borderRadius: 18, background: 'rgba(217,119,6,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -428,7 +428,7 @@ function BentoFeatures() {
         </motion.div>
 
         {/* AXE 2 : Marche A2A */}
-        <motion.div variants={fadeUp} style={{ gridColumn: 'span 12' }}>
+        <motion.div variants={fadeUp} className="md:col-span-12">
           <GlassCard style={{ padding: 32, minHeight: 200 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 20, marginBottom: 12 }}>
               <div>
@@ -477,7 +477,7 @@ function BentoFeatures() {
         </motion.div>
 
         {/* AXE 3a : Souverainete */}
-        <motion.div variants={fadeUp} style={{ gridColumn: 'span 5' }}>
+        <motion.div variants={fadeUp} className="md:col-span-5">
           <GlassCard style={{ minHeight: 280, padding: 32 }}>
             <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(244,63,94,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
               <ShieldCheck size={22} color={C.statRose} />
@@ -503,48 +503,50 @@ function BentoFeatures() {
         </motion.div>
 
         {/* AXE 3b : Capteurs & Financement */}
-        <motion.div variants={fadeUp} style={{ gridColumn: 'span 7' }}>
-          <GlassCard style={{ minHeight: 280, padding: 32, display: 'flex', gap: 32, overflow: 'hidden' }}>
-            <div style={{ flex: '1 1 55%' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 100, background: 'rgba(132,204,22,0.1)', marginBottom: 14 }}>
-                <Leaf size={14} color={C.lime} />
-                <span style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: C.lime, textTransform: 'uppercase' }}>{"Axe 3 \u2014 Futur"}</span>
-              </div>
-              <h3 style={{ fontFamily: F.heading, fontSize: '1.3rem', fontWeight: 800, color: C.forest, marginBottom: 8 }}>{"Capteurs & Micro-Cr\u00e9dit"}</h3>
-              <p style={{ fontFamily: F.body, color: C.muted, fontSize: '0.92rem', lineHeight: 1.6 }}>
-                {"Capteurs Edge discrets int\u00e9gr\u00e9s \u00e0 la nature. Ils g\u00e9n\u00e8rent un historique de confiance qui d\u00e9bloque automatiquement des financements."}
-              </p>
-              <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap' }}>
-                {[
-                  { icon: Thermometer, label: '28\u00b0C', sub: 'Temp\u00e9rature' },
-                  { icon: Droplets, label: '22%', sub: 'Humidit\u00e9' },
-                  { icon: Sun, label: '6.2h', sub: 'Ensoleillement' },
-                ].map((s, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(16,185,129,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <s.icon size={16} color={C.emerald} />
+        <motion.div variants={fadeUp} className="md:col-span-7">
+          <GlassCard style={{ minHeight: 280, padding: 32, overflow: 'hidden' }}>
+            <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+              <div className="flex-1">
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 100, background: 'rgba(132,204,22,0.1)', marginBottom: 14 }}>
+                  <Leaf size={14} color={C.lime} />
+                  <span style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: C.lime, textTransform: 'uppercase' }}>{"Axe 3 \u2014 Futur"}</span>
+                </div>
+                <h3 style={{ fontFamily: F.heading, fontSize: '1.3rem', fontWeight: 800, color: C.forest, marginBottom: 8 }}>{"Capteurs & Micro-Cr\u00e9dit"}</h3>
+                <p style={{ fontFamily: F.body, color: C.muted, fontSize: '0.92rem', lineHeight: 1.6 }}>
+                  {"Capteurs Edge discrets int\u00e9gr\u00e9s \u00e0 la nature. Ils g\u00e9n\u00e8rent un historique de confiance qui d\u00e9bloque automatiquement des financements."}
+                </p>
+                <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap' }}>
+                  {[
+                    { icon: Thermometer, label: '28\u00b0C', sub: 'Temp\u00e9rature' },
+                    { icon: Droplets, label: '22%', sub: 'Humidit\u00e9' },
+                    { icon: Sun, label: '6.2h', sub: 'Ensoleillement' },
+                  ].map((s, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(16,185,129,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <s.icon size={16} color={C.emerald} />
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 800, color: C.forest }}>{s.label}</div>
+                        <div style={{ fontSize: 10, color: C.muted, fontFamily: F.body }}>{s.sub}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 800, color: C.forest }}>{s.label}</div>
-                      <div style={{ fontSize: 10, color: C.muted, fontFamily: F.body }}>{s.sub}</div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div style={{ flex: '1 1 40%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-              <motion.div
-                animate={{ borderRadius: ['60% 40% 30% 70%/60% 30% 70% 40%', '30% 60% 70% 40%/50% 60% 30% 60%', '60% 40% 30% 70%/60% 30% 70% 40%'] }}
-                transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ width: 180, height: 180, background: `linear-gradient(135deg, rgba(16,185,129,0.12), rgba(132,204,22,0.08))`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
-              >
-                <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 4, repeat: Infinity }} style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(16,185,129,0.2)', position: 'absolute' }} />
-                <Cpu size={36} color={C.emerald} style={{ opacity: 0.4 }} />
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 12, repeat: Infinity, ease: 'linear' }} style={{ position: 'absolute', width: 160, height: 160, border: `1px dashed ${C.border}`, borderRadius: '50%' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 8, background: C.emerald, position: 'absolute', top: -4, left: '50%', transform: 'translateX(-50%)' }} />
+              <div className="flex-1 flex items-center justify-center relative">
+                <motion.div
+                  animate={{ borderRadius: ['60% 40% 30% 70%/60% 30% 70% 40%', '30% 60% 70% 40%/50% 60% 30% 60%', '60% 40% 30% 70%/60% 30% 70% 40%'] }}
+                  transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: 180, height: 180, background: `linear-gradient(135deg, rgba(16,185,129,0.12), rgba(132,204,22,0.08))`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                >
+                  <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 4, repeat: Infinity }} style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(16,185,129,0.2)', position: 'absolute' }} />
+                  <Cpu size={36} color={C.emerald} style={{ opacity: 0.4 }} />
+                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 12, repeat: Infinity, ease: 'linear' }} style={{ position: 'absolute', width: 160, height: 160, border: `1px dashed ${C.border}`, borderRadius: '50%' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 8, background: C.emerald, position: 'absolute', top: -4, left: '50%', transform: 'translateX(-50%)' }} />
+                  </motion.div>
                 </motion.div>
-              </motion.div>
+              </div>
             </div>
           </GlassCard>
         </motion.div>
@@ -604,7 +606,7 @@ function ImpactSection() {
       viewport={{ once: true, margin: '-60px' }}
       style={{ padding: '60px 6%', maxWidth: 1280, margin: '0 auto' }}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, alignItems: 'center' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
 
         <motion.div variants={fadeUp}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 100, background: 'rgba(217,119,6,0.08)', marginBottom: 20 }}>

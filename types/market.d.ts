@@ -1,4 +1,4 @@
-// types/catalogue.d.ts
+// types/market.d.ts — Types spécifiques au Marketplace
 
 import { Location } from './auth'; 
 

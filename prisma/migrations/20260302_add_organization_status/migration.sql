@@ -4,7 +4,8 @@
 -- 1) Create enum type if missing
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'orgstatus') THEN
+  -- Check both unquoted (lowercase) and quoted (exact case) typnames
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'orgstatus' OR typname = 'OrgStatus') THEN
     CREATE TYPE "OrgStatus" AS ENUM ('PENDING','ACTIVE','SUSPENDED');
   END IF;
 END$$;

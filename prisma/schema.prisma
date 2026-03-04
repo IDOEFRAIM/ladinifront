@@ -99,6 +99,13 @@ enum OrgStatus {
   SUSPENDED
 }
 
+enum AuctionStatus {
+  OPEN
+  CLOSED
+  AWARDED
+  CANCELLED
+}
+
 
 // --------------------------------------------------------
 // ORGANISATION & MULTI-TENANCY
@@ -212,6 +219,9 @@ model Zone {
   workZones       WorkZone[]
   metrics         ZoneMetric[]
 
+  standardPrices  StandardPrice[]
+  auctions        Auction[]
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -324,6 +334,10 @@ model User {
   verifiedProducts Product[] @relation("ProductVerifier")
   verifiedStocks   Stock[]   @relation("StockVerifier")
 
+  trustScore       TrustScore?
+  auctions         Auction[]          @relation("BuyerAuctions")
+  updatedPrices    StandardPrice[]    @relation("PriceUpdater")
+
   deletedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -417,6 +431,7 @@ model Producer {
   products Product[]
 
   clients Client[]
+  bids    Bid[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -580,6 +595,8 @@ model Product {
   name            String   @default("Produit")
 
   categoryLabel   String
+  subCategoryId   String?
+  subCategory     SubCategory? @relation(fields: [subCategoryId], references: [id])
   localNames      Json?    
   description     String?
   price           Float
@@ -604,6 +621,7 @@ model Product {
 
   @@index([producerId])
   @@index([categoryLabel])
+  @@index([subCategoryId])
   @@index([price])
   @@index([createdAt])
   @@index([verifiedById])
@@ -903,4 +921,148 @@ model ZoneSetting {
   @@unique([zoneId, key])
   @@index([zoneId])
   @@map("zone_settings")
+}
+
+// --------------------------------------------------------
+// GOUVERNANCE DR & PRIX STANDARDS
+// --------------------------------------------------------
+
+model Category {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  description   String?
+  subCategories SubCategory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model SubCategory {
+  id           String   @id @default(cuid())
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name         String
+
+  // Zone IDs où cette sous-catégorie est bloquée par la DR
+  blockedZoneIds String[]
+
+  standardPrices StandardPrice[]
+  products       Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, name])
+  @@map("sub_categories")
+}
+
+model StandardPrice {
+  id            String      @id @default(cuid())
+  subCategoryId String
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+  zoneId        String
+  zone          Zone        @relation(fields: [zoneId], references: [id])
+
+  pricePerUnit  Float
+  unit          Unit        @default(KG)
+
+  updatedById   String
+  updatedBy     User        @relation("PriceUpdater", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subCategoryId, zoneId])
+  @@index([zoneId])
+  @@map("standard_prices")
+}
+
+// --------------------------------------------------------
+// SYSTÈME DE RÉPUTATION AGENTIQUE (IA)
+// --------------------------------------------------------
+
+model TrustScore {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  globalScore      Float    @default(0.0)
+  reliabilityIndex Float    @default(0.0)
+  qualityIndex     Float    @default(0.0)
+  complianceIndex  Float    @default(0.0)
+  resilienceBonus  Float    @default(0.0)
+
+  reasoning        AIRatingReasoning[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("trust_scores")
+}
+
+model AIRatingReasoning {
+  id            String     @id @default(cuid())
+  trustScoreId  String
+  trustScore    TrustScore @relation(fields: [trustScoreId], references: [id], onDelete: Cascade)
+  agentName     String
+  justification String     @db.Text
+  dataPoints    Json
+
+  createdAt DateTime @default(now())
+
+  @@index([trustScoreId])
+  @@index([agentName])
+  @@map("ai_rating_reasonings")
+}
+
+// --------------------------------------------------------
+// ENCHÈRES INVERSÉES (B2B)
+// --------------------------------------------------------
+
+model Auction {
+  id              String        @id @default(cuid())
+  buyerId         String
+  buyer           User          @relation("BuyerAuctions", fields: [buyerId], references: [id])
+  subCategoryId   String
+  quantity        Float
+  unit            Unit          @default(TONNE)
+  maxPricePerUnit Float
+  deadline        DateTime
+  status          AuctionStatus @default(OPEN)
+
+  targetZoneId    String?
+  targetZone      Zone?         @relation(fields: [targetZoneId], references: [id])
+
+  // Version optimiste pour concurrence
+  version         Int           @default(0)
+
+  bids            Bid[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([targetZoneId])
+  @@index([deadline])
+  @@map("auctions")
+}
+
+model Bid {
+  id           String   @id @default(cuid())
+  auctionId    String
+  auction      Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  producerId   String
+  producer     Producer @relation(fields: [producerId], references: [id])
+
+  offeredPrice Float
+  isWinner     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([auctionId, producerId])
+  @@index([auctionId])
+  @@index([producerId])
+  @@map("bids")
 }

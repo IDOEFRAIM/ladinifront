@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import AudioPlayer from './AudioPlayer';
-import Waveform from './waveForm'; 
+import React, { useEffect, useRef, useState } from "react";
+import AudioPlayer from "./AudioPlayer";
+import Waveform from "./waveForm";
 
 const THEME = {
-    record: '#D32F2F',
-    stop: '#333333',
-    bg: '#F5F5F5'
+    record: "#D32F2F",
+    stop: "#333333",
+    bg: "#F5F5F5",
 };
 
 interface VoiceRecorderProps {
@@ -19,40 +19,42 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     const [audioURL, setAudioURL] = useState<string | null>(null);
     const [timer, setTimer] = useState(0);
     const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [permissionState, setPermissionState] = useState<"granted" | "denied" | "prompt" | null>(null);
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timerIntervalRef = useRef<number | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const isMounted = useRef(true);
 
-    // 1. Nettoyage global à la destruction du composant
     useEffect(() => {
         isMounted.current = true;
         return () => {
             isMounted.current = false;
-            if (mediaRecorderRef.current?.state === "recording") {
-                mediaRecorderRef.current.stop();
-            }
-            // Fermeture physique du micro et des flux audio
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-            }
-            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close();
-            }
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+            if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+            if (audioContextRef.current && audioContextRef.current.state !== "closed") audioContextRef.current.close();
+            if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current);
         };
     }, []);
 
     const startRecording = async () => {
         try {
+            setError(null);
+            try {
+                if ((navigator as any).permissions?.query) {
+                    const p = await (navigator as any).permissions.query({ name: "microphone" });
+                    setPermissionState(p.state);
+                    p.onchange = () => setPermissionState(p.state);
+                }
+            } catch (_) {}
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            // 2. Configuration Visualizer (Web Audio API)
-            const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+            const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as any;
             const ctx = new AudioCtx();
             audioContextRef.current = ctx;
 
@@ -60,14 +62,9 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
             source.connect(analyser);
-            
-            // Re-démarrer le contexte si suspendu (obligatoire sur certains navigateurs)
-            if (ctx.state === 'suspended') {
-                await ctx.resume();
-            }
+            if (ctx.state === "suspended") await ctx.resume();
             setAnalyserNode(analyser);
 
-            // 3. Configuration de l'Enregistreur
             const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
             chunksRef.current = [];
@@ -77,39 +74,36 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
             };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                const blob = new Blob(chunksRef.current, { type: "audio/webm" });
                 onRecordingComplete(blob);
-
-                if (isMounted.current) {
-                    const url = URL.createObjectURL(blob);
-                    setAudioURL(url);
-                }
-
-                // Couper physiquement le voyant du micro
-                streamRef.current?.getTracks().forEach(track => track.stop());
+                if (isMounted.current) setAudioURL(URL.createObjectURL(blob));
+                streamRef.current?.getTracks().forEach((t) => t.stop());
                 streamRef.current = null;
             };
 
             mediaRecorder.start();
             setIsRecording(true);
-            
             setTimer(0);
-            timerIntervalRef.current = setInterval(() => {
-                setTimer(prev => prev + 1);
-            }, 1000);
-
-        } catch (err) {
+            timerIntervalRef.current = window.setInterval(() => setTimer((p) => p + 1), 1000);
+        } catch (err: any) {
             console.error("Erreur accès micro:", err);
-            alert("Impossible d'accéder au micro. Vérifiez vos permissions.");
+            const name = err?.name;
+            if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
+                setError("Permission refusée. Autorisez le micro depuis les paramètres du navigateur.");
+                setPermissionState("denied");
+            } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+                setError("Aucun périphérique micro trouvé.");
+                setPermissionState("denied");
+            } else {
+                setError(err?.message || "Erreur lors de l'accès au micro");
+            }
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        }
+        if (mediaRecorderRef.current && isRecording) mediaRecorderRef.current.stop();
+        setIsRecording(false);
+        if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current);
     };
 
     const deleteRecording = () => {
@@ -122,43 +116,52 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
     };
 
     return (
         <div className="mt-4 p-4 rounded-lg border border-dashed border-slate-300 text-center" style={{ backgroundColor: THEME.bg }}>
-            <label className="block font-bold mb-3 text-sm text-slate-500 uppercase tracking-tight">
-                🎤 Ajouter une note vocale
-            </label>
+            <label className="block font-bold mb-3 text-sm text-slate-500 uppercase tracking-tight">🎤 Ajouter une note vocale</label>
+
+            {error && !audioURL && (
+                <div style={{ marginBottom: 12, color: "#B91C1C", fontWeight: 700 }}>
+                    <div>{error}</div>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 500, marginTop: 8 }}>
+                        Vérifiez : paramètres du site → Microphone, ou Paramètres système → Confidentialité → Microphone.
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                        <button
+                            onClick={() => {
+                                setError(null);
+                                startRecording();
+                            }}
+                            style={{ padding: "8px 12px", borderRadius: 8, background: "#D32F2F", color: "white", border: "none" }}
+                        >
+                            Réessayer
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {!audioURL ? (
                 <div className="flex flex-col items-center gap-4">
-                    
-                    {/* Visualiseur temps réel */}
                     <div className="w-full max-w-[300px] h-12 flex items-center justify-center">
                         <Waveform analyser={analyserNode} isRecording={isRecording} />
                     </div>
 
                     {isRecording ? (
-                         <div className="text-red-600 font-bold animate-pulse text-sm">
-                            ENREGISTREMENT... {formatTime(timer)}
-                        </div>
+                        <div className="text-red-600 font-bold animate-pulse text-sm">ENREGISTREMENT... {formatTime(timer)}</div>
                     ) : (
-                        <div className="text-xs text-slate-400">
-                            (Appuyez pour commencer)
-                        </div>
+                        <div className="text-xs text-slate-400">(Appuyez pour commencer)</div>
                     )}
 
                     <button
                         type="button"
                         onClick={isRecording ? stopRecording : startRecording}
-                        style={{
-                            backgroundColor: isRecording ? THEME.stop : THEME.record,
-                            transition: 'all 0.2s ease'
-                        }}
+                        style={{ backgroundColor: isRecording ? THEME.stop : THEME.record, transition: "all 0.2s ease" }}
                         className="w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center text-2xl active:scale-90"
                     >
-                        {isRecording ? '⏹' : '🎙'}
+                        {isRecording ? "⏹" : "🎙"}
                     </button>
                 </div>
             ) : (
