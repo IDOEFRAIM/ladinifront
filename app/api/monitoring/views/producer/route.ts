@@ -4,7 +4,9 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, count, avg } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
@@ -19,51 +21,43 @@ export async function GET(req: NextRequest): Promise<Response | void> {
       myActions,
       myConversations,
       agentSuggestions,
-      totalInteractions,
-      avgResponseTime,
+      totalInteractionsResult,
+      avgResponseTimeResult,
     ] = await Promise.all([
       // Dernières actions liées à ce user
-      prisma.agentAction.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-        include: {
+      db.query.agentActions.findMany({
+        where: eq(schema.agentActions.userId, user.id),
+        orderBy: (t, { desc: d }) => [d(t.createdAt)],
+        limit: 20,
+        with: {
           order: {
-            select: { id: true, totalAmount: true, status: true, customerName: true },
+            columns: { id: true, totalAmount: true, status: true, customerName: true },
           },
         },
       }),
 
       // Dernières conversations
-      prisma.conversation.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' },
-        take: 15,
-        include: {
-          zone: { select: { id: true, name: true, code: true } },
+      db.query.conversations.findMany({
+        where: eq(schema.conversations.userId, user.id),
+        orderBy: (t, { desc: d }) => [d(t.createdAt)],
+        limit: 15,
+        with: {
+          zone: { columns: { id: true, name: true, code: true } },
         },
       }),
 
       // Suggestions d'agents en attente
-      prisma.agentAction.findMany({
-        where: {
-          userId: user.id,
-          status: 'PENDING',
-        },
-        orderBy: { priority: 'desc' },
-        take: 10,
+      db.query.agentActions.findMany({
+        where: eq(schema.agentActions.userId, user.id),
+        orderBy: (t, { desc: d }) => [d(t.priority)],
+        limit: 10,
       }),
 
       // Total interactions
-      prisma.conversation.count({
-        where: { userId: user.id },
-      }),
+      db.select({ value: count() }).from(schema.conversations).where(eq(schema.conversations.userId, user.id)),
 
       // Temps de réponse moyen
-      prisma.conversation.aggregate({
-        where: { userId: user.id },
-        _avg: { responseTimeMs: true },
-      }),
+      db.select({ avgMs: avg(schema.conversations.responseTimeMs) }).from(schema.conversations).where(eq(schema.conversations.userId, user.id)),
     ]);
 
     // Déterminer l'agent le plus utilisé
@@ -82,8 +76,8 @@ export async function GET(req: NextRequest): Promise<Response | void> {
       myConversations,
       agentSuggestions,
       performanceMetrics: {
-        totalInteractions,
-        avgResponseTime: Math.round(avgResponseTime._avg.responseTimeMs || 0),
+        totalInteractions: Number(totalInteractionsResult[0]?.value ?? 0),
+        avgResponseTime: Math.round(Number(avgResponseTimeResult[0]?.avgMs) || 0),
         topAgentUsed,
       },
     });

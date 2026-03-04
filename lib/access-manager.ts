@@ -173,63 +173,75 @@ export const AccessManager = {
     return ctx.managedZoneIds.has(zoneId);
   },
 
-  // ── Filtres Prisma "Zero-Trust" ──────────────────────────────────────────
+  // ── Filtres Drizzle "Zero-Trust" ────────────────────────────────────────
 
   /**
-   * Retourne un filtre Prisma `where` restreignant par organisation.
-   * OBLIGATOIRE sur toute query multi-tenant (ne jamais faire findMany() sans filtre).
+   * Retourne une condition Drizzle restreignant par organisation.
+   * OBLIGATOIRE sur toute query multi-tenant (ne jamais faire select() sans filtre).
+   *
+   * @param ctx  - AccessContext de l'utilisateur
+   * @param col  - Colonne Drizzle (ex: schema.products.organizationId)
+   * @returns    SQL condition ou undefined (admin global)
    *
    * @example
-   *   const where = { ...AccessManager.orgFilter(ctx), status: 'ACTIVE' };
-   *   prisma.product.findMany({ where });
+   *   import { schema } from '@/src/db';
+   *   db.select().from(schema.products).where(
+   *     and(AccessManager.orgFilter(ctx, schema.products.organizationId), eq(schema.products.status, 'ACTIVE'))
+   *   );
    */
   orgFilter(
     ctx: AccessContext,
-    field = 'organizationId'
-  ): Record<string, unknown> {
-    if (ctx.isGlobalAdmin) return {};
+    col: any
+  ): any {
+    const { eq, inArray } = require('drizzle-orm');
+    if (ctx.isGlobalAdmin) return undefined;
     if (ctx.organizationIds.length === 0) {
       // Aucune org → ne retourner aucune donnée (sécurité par défaut)
-      return { [field]: '__NO_ORG__' };
+      return eq(col, '__NO_ORG__');
     }
     if (ctx.organizationIds.length === 1) {
-      return { [field]: ctx.organizationIds[0] };
+      return eq(col, ctx.organizationIds[0]);
     }
-    return { [field]: { in: ctx.organizationIds } };
+    return inArray(col, ctx.organizationIds);
   },
 
   /**
-   * Retourne un filtre Prisma `where` restreignant par zone.
-   * Si l'utilisateur n'a aucune zone managée, retourne {} (pas de restriction).
+   * Retourne une condition Drizzle restreignant par zone.
+   * Si l'utilisateur n'a aucune zone managée, retourne undefined (pas de restriction).
    *
-   * @example
-   *   const where = {
-   *     ...AccessManager.orgFilter(ctx),
-   *     ...AccessManager.zoneFilter(ctx),
-   *   };
+   * @param ctx  - AccessContext de l'utilisateur
+   * @param col  - Colonne Drizzle (ex: schema.orders.zoneId)
+   * @returns    SQL condition ou undefined
    */
   zoneFilter(
     ctx: AccessContext,
-    field = 'zoneId'
-  ): Record<string, unknown> {
-    if (ctx.isGlobalAdmin) return {};
-    if (ctx.managedZoneIds.size === 0) return {};
+    col: any
+  ): any {
+    const { eq, inArray } = require('drizzle-orm');
+    if (ctx.isGlobalAdmin) return undefined;
+    if (ctx.managedZoneIds.size === 0) return undefined;
     const ids = Array.from(ctx.managedZoneIds);
-    if (ids.length === 1) return { [field]: ids[0] };
-    return { [field]: { in: ids } };
+    if (ids.length === 1) return eq(col, ids[0]);
+    return inArray(col, ids);
   },
 
   /**
-   * Filtre Prisma combiné org + zone. Raccourci pour les queries courantes.
+   * Condition Drizzle combinée org + zone. Raccourci pour les queries courantes.
+   *
+   * @example
+   *   db.select().from(schema.products).where(
+   *     AccessManager.scopeFilter(ctx, schema.products.organizationId, schema.products.zoneId)
+   *   );
    */
   scopeFilter(
     ctx: AccessContext,
-    orgField = 'organizationId',
-    zoneField = 'zoneId'
-  ): Record<string, unknown> {
-    return {
-      ...AccessManager.orgFilter(ctx, orgField),
-      ...AccessManager.zoneFilter(ctx, zoneField),
-    };
+    orgCol: any,
+    zoneCol: any
+  ): any {
+    const { and } = require('drizzle-orm');
+    const orgCond = AccessManager.orgFilter(ctx, orgCol);
+    const zoneCond = AccessManager.zoneFilter(ctx, zoneCol);
+    if (orgCond && zoneCond) return and(orgCond, zoneCond);
+    return orgCond || zoneCond || undefined;
   },
 } as const;

@@ -5,7 +5,9 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, gte, count, avg } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/api-guard';
 
 export async function GET(req: NextRequest) {
@@ -17,54 +19,58 @@ export async function GET(req: NextRequest) {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
     // Récupérer tous les agents actifs
-    const agentNames = await prisma.agentAction.groupBy({
-      by: ['agentName'],
-      _count: { agentName: true },
-    });
+    const agentNames = await db.select({
+      agentName: schema.agentActions.agentName,
+      agentCount: count(),
+    }).from(schema.agentActions).groupBy(schema.agentActions.agentName);
 
     const healthStatuses = await Promise.all(
       agentNames.map(async (agent) => {
         const agentName = agent.agentName;
 
         const [
-          actionsLast24h,
-          failedLast24h,
+          actionsLast24hResult,
+          failedLast24hResult,
           lastAction,
-          avgResponseTime,
+          avgResponseTimeResult,
         ] = await Promise.all([
           // Actions dans les 24h
-          prisma.agentAction.count({
-            where: {
-              agentName,
-              createdAt: { gte: twentyFourHoursAgo },
-            },
-          }),
+          db.select({ value: count() }).from(schema.agentActions).where(
+            and(
+              eq(schema.agentActions.agentName, agentName),
+              gte(schema.agentActions.createdAt, twentyFourHoursAgo),
+            )
+          ),
 
           // Erreurs dans les 24h
-          prisma.agentAction.count({
-            where: {
-              agentName,
-              status: 'FAILED',
-              createdAt: { gte: twentyFourHoursAgo },
-            },
-          }),
+          db.select({ value: count() }).from(schema.agentActions).where(
+            and(
+              eq(schema.agentActions.agentName, agentName),
+              eq(schema.agentActions.status, 'FAILED'),
+              gte(schema.agentActions.createdAt, twentyFourHoursAgo),
+            )
+          ),
 
           // Dernière activité
-          prisma.agentAction.findFirst({
-            where: { agentName },
-            orderBy: { createdAt: 'desc' },
-            select: { createdAt: true },
+          db.query.agentActions.findFirst({
+            where: eq(schema.agentActions.agentName, agentName),
+            orderBy: (t, { desc: d }) => [d(t.createdAt)],
+            columns: { createdAt: true },
           }),
 
           // Temps de réponse moyen (via conversations)
-          prisma.conversation.aggregate({
-            where: {
-              agentType: agentName.toLowerCase().replace('agent', ''),
-              createdAt: { gte: twentyFourHoursAgo },
-            },
-            _avg: { responseTimeMs: true },
-          }),
+          db.select({
+            avgMs: avg(schema.conversations.responseTimeMs),
+          }).from(schema.conversations).where(
+            and(
+              eq(schema.conversations.agentType, agentName.toLowerCase().replace('agent', '')),
+              gte(schema.conversations.createdAt, twentyFourHoursAgo),
+            )
+          ),
         ]);
+
+        const actionsLast24h = Number(actionsLast24hResult[0]?.value ?? 0);
+        const failedLast24h = Number(failedLast24hResult[0]?.value ?? 0);
 
         // Calculer l'état de santé
         const errorRate = actionsLast24h > 0 ? failedLast24h / actionsLast24h : 0;
@@ -88,7 +94,7 @@ export async function GET(req: NextRequest) {
           lastActivityAt: lastActivityAt?.toISOString(),
           actionsLast24h,
           errorRate: Math.round(errorRate * 100) / 100,
-          avgResponseTimeMs: Math.round(avgResponseTime._avg.responseTimeMs || 0),
+          avgResponseTimeMs: Math.round(Number(avgResponseTimeResult[0]?.avgMs) || 0),
         };
       })
     );

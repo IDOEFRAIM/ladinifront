@@ -4,19 +4,22 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
+import { getAccessContext } from '@/lib/api-guard';
 import { userHasPermission } from '@/services/role.service';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<Response | void> {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) {
     if (error) return error;
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
+  const user: any = { id: ctx.userId, role: ctx.role };
 
   // Permission check: allow users with explicit approver permission
   const canApprove = await userHasPermission(user.id, 'AGENT_ACTION_APPROVE');
@@ -37,7 +40,7 @@ export async function PATCH(
       );
     }
 
-    const action = await prisma.agentAction.findUnique({ where: { id } });
+    const action = await db.query.agentActions.findFirst({ where: eq(schema.agentActions.id, id) });
     if (!action) {
       return NextResponse.json({ error: 'Action introuvable.' }, { status: 404 });
     }
@@ -49,24 +52,29 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.agentAction.update({
-      where: { id },
-      data: {
+    const [updated] = await db.update(schema.agentActions)
+      .set({
         status: decision,
         adminNotes: adminNotes || null,
         validatedById: user.id,
-      },
-      include: {
+      })
+      .where(eq(schema.agentActions.id, id))
+      .returning();
+
+    // Fetch with relations for the response
+    const updatedWithRelations = await db.query.agentActions.findFirst({
+      where: eq(schema.agentActions.id, id),
+      with: {
         order: {
-          select: { id: true, totalAmount: true, status: true, customerName: true },
+          columns: { id: true, totalAmount: true, status: true, customerName: true },
         },
         user: {
-          select: { id: true, name: true, role: true },
+          columns: { id: true, name: true, role: true },
         },
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(updatedWithRelations);
   } catch (err) {
     console.error('[API] /monitoring/actions/[id]/approve error:', err);
     return NextResponse.json(

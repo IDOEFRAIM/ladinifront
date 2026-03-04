@@ -5,17 +5,19 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, gte, lte, or, ilike, count } from 'drizzle-orm';
+import { getAccessContext } from '@/lib/api-guard';
 import { userHasPermission } from '@/services/role.service';
-import { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) {
     if (error) return error;
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
+  const user: any = { id: ctx.userId, role: ctx.role };
 
   const params = req.nextUrl.searchParams;
   const cursor = params.get('cursor') || undefined;
@@ -33,45 +35,48 @@ export async function GET(req: NextRequest): Promise<Response | void> {
   const search = params.get('search');
 
   try {
-    // Build WHERE clause based on role
-    const where: Prisma.AgentActionWhereInput = {};
+    // Build WHERE conditions
+    const conditions: ReturnType<typeof eq>[] = [];
 
     // Permission-based scoping: prefer explicit permission over system-role checks
     const canViewAll = await userHasPermission(user.id, 'AGENT_ACTION_VIEW_ALL');
     if (!canViewAll) {
-      where.userId = user.id;
+      conditions.push(eq(schema.agentActions.userId, user.id));
     }
 
     // Filtres
-    if (agentName) where.agentName = agentName;
-    if (actionType) where.actionType = actionType;
-    if (status) where.status = status as Prisma.EnumAgentActionStatusFilter;
-    if (priority) where.priority = priority as Prisma.EnumValidationPriorityFilter;
-    if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) where.createdAt.lte = new Date(dateTo);
-    }
+    if (agentName) conditions.push(eq(schema.agentActions.agentName, agentName));
+    if (actionType) conditions.push(eq(schema.agentActions.actionType, actionType));
+    if (status) conditions.push(eq(schema.agentActions.status, status as any));
+    if (priority) conditions.push(eq(schema.agentActions.priority, priority as any));
+    if (dateFrom) conditions.push(gte(schema.agentActions.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(schema.agentActions.createdAt, new Date(dateTo)));
     if (search) {
-      where.OR = [
-        { agentName: { contains: search, mode: 'insensitive' } },
-        { actionType: { contains: search, mode: 'insensitive' } },
-        { aiReasoning: { contains: search, mode: 'insensitive' } },
-      ];
+      conditions.push(
+        or(
+          ilike(schema.agentActions.agentName, `%${search}%`),
+          ilike(schema.agentActions.actionType, `%${search}%`),
+          ilike(schema.agentActions.aiReasoning, `%${search}%`),
+        )!
+      );
     }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Total count (cached pour la session)
-    const totalCount = await prisma.agentAction.count({ where });
+    const [{ value: totalCount }] = await db.select({ value: count() }).from(schema.agentActions).where(whereClause);
 
     // Cursor-based pagination
-    const actions = await prisma.agentAction.findMany({
-      where,
-      take: limit + 1, // +1 pour savoir s'il y a plus
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      orderBy: { [sortBy]: sortOrder },
-      include: {
+    const actions = await db.query.agentActions.findMany({
+      where: whereClause,
+      limit: limit + 1, // +1 pour savoir s'il y a plus
+      offset: cursor ? 1 : 0,
+      orderBy: sortOrder === 'asc'
+        ? (t, ops) => [ops.asc(t[sortBy as keyof typeof t] as any)]
+        : (t, ops) => [ops.desc(t[sortBy as keyof typeof t] as any)],
+      with: {
         order: {
-          select: {
+          columns: {
             id: true,
             totalAmount: true,
             status: true,
@@ -79,7 +84,7 @@ export async function GET(req: NextRequest): Promise<Response | void> {
           },
         },
         user: {
-          select: {
+          columns: {
             id: true,
             name: true,
             role: true,

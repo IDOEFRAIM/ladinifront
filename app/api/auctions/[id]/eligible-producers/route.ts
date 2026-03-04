@@ -4,12 +4,12 @@ import { getAccessContext } from '@/lib/api-guard';
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const { ctx, error } = await getAccessContext();
   if (error) return error;
 
-  const { id } = params;
+  const { id } = await context.params;
   try {
     const res = await getEligibleProducers({ auctionId: id });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });

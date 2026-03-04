@@ -1,7 +1,10 @@
 ﻿import React from 'react';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
 import ProducerSettingsForm from '@/components/ProducerSettingsForm';
+import ZoneSelector from '@/components/ZoneSelector';
 import { Settings } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -42,10 +45,17 @@ export default async function SettingsPage() {
   if (error || !user) return renderRestrictedAccess();
 
   const producerId = (user.producerId as string) || user.id;
-  const producer = await prisma.producer.findUnique({
-    where: { id: producerId },
-    select: { id: true, businessName: true, region: true, province: true, commune: true, user: { select: { id: true, name: true, email: true, phone: true } } }
+  const producer = await db.query.producers.findFirst({
+    where: eq(schema.producers.id, producerId),
+    columns: { id: true, businessName: true, region: true, province: true, commune: true },
+    with: { user: { columns: { id: true, name: true, email: true, phone: true } } },
   });
+
+  // current user's zone
+  const me = await db.query.users.findFirst({ where: eq(schema.users.id, user.id), columns: { zoneId: true } });
+
+  // load active zones for selection
+  const zones = await db.query.zones.findMany({ columns: { id: true, name: true } });
 
   if (!producer) return renderProducerNotFound();
   const initialData = getInitialData(producer);
@@ -63,7 +73,16 @@ export default async function SettingsPage() {
       <div style={{ padding: 24 }}>
         <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, padding: 28 }}>
           <h2 style={{ fontFamily: F.heading, fontSize: '1.15rem', fontWeight: 800, color: C.text, marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>Informations du Compte</h2>
-          <ProducerSettingsForm initialData={initialData} producerId={producer.id} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24 }}>
+            <div>
+              <ProducerSettingsForm initialData={initialData} producerId={producer.id} />
+            </div>
+            <div>
+              <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
+                <ZoneSelector zones={zones} currentZoneId={me?.zoneId || null} />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

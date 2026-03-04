@@ -1,5 +1,7 @@
 ﻿import React from 'react';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, desc } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
 import OrdersTabs from './OrderTable';
 
@@ -47,13 +49,16 @@ export default async function OrdersPage() {
   if (error || !user) return <UnauthorizedScreen />;
   const producerId = user.producerId as string;
 
-  const orderItems = await prisma.orderItem.findMany({
-    where: { product: { producerId } },
-    include: {
-      order: { select: { id: true, status: true, createdAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, buyer: { select: { name: true, phone: true } } } },
-      product: { select: { name: true, unit: true } }
+  const orderItems = await db.query.orderItems.findMany({
+    where: eq(schema.products.producerId, producerId),
+    with: {
+      order: {
+        columns: { id: true, status: true, createdAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true },
+        with: { buyer: { columns: { name: true, phone: true } } },
+      },
+      product: { columns: { name: true, unit: true } },
     },
-    orderBy: { order: { createdAt: 'desc' } }
+    orderBy: (t, ops) => [ops.desc(t.orderId)],
   });
 
   const allOrders = transformOrderItems(orderItems);

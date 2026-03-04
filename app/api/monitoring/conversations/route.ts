@@ -5,17 +5,19 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, gte, lte, or, ilike, desc, asc, count } from 'drizzle-orm';
+import { getAccessContext } from '@/lib/api-guard';
 import { userHasPermission } from '@/services/role.service';
-import { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) {
     if (error) return error;
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
+  const user: any = { id: ctx.userId, role: ctx.role };
 
   const params = req.nextUrl.searchParams;
   const cursor = params.get('cursor') || undefined;
@@ -33,47 +35,51 @@ export async function GET(req: NextRequest): Promise<Response | void> {
   const waitingOnly = params.get('waitingOnly') === 'true';
 
   try {
-    const where: Prisma.ConversationWhereInput = {};
+    // Build WHERE conditions
+    const conditions: ReturnType<typeof eq>[] = [];
 
     // Permission-based scoping
     const canViewAll = await userHasPermission(user.id, 'CONVERSATION_VIEW_ALL');
     if (canViewAll && userId) {
-      where.userId = userId; // utilisateur avec permission peut filtrer par utilisateur
+      conditions.push(eq(schema.conversations.userId, userId));
     } else if (!canViewAll) {
-      where.userId = user.id; // les autres ne voient que les leurs
+      conditions.push(eq(schema.conversations.userId, user.id));
     }
 
-    if (agentType) where.agentType = agentType;
-    if (zoneId) where.zoneId = zoneId;
-    if (mode) where.mode = mode;
-    if (waitingOnly) where.isWaitingForInput = true;
+    if (agentType) conditions.push(eq(schema.conversations.agentType, agentType));
+    if (zoneId) conditions.push(eq(schema.conversations.zoneId, zoneId));
+    if (mode) conditions.push(eq(schema.conversations.mode, mode));
+    if (waitingOnly) conditions.push(eq(schema.conversations.isWaitingForInput, true));
 
-    if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) where.createdAt.lte = new Date(dateTo);
-    }
+    if (dateFrom) conditions.push(gte(schema.conversations.createdAt, new Date(dateFrom)));
+    if (dateTo) conditions.push(lte(schema.conversations.createdAt, new Date(dateTo)));
 
     if (search) {
-      where.OR = [
-        { crop: { contains: search, mode: 'insensitive' } },
-        { agentType: { contains: search, mode: 'insensitive' } },
-      ];
+      conditions.push(
+        or(
+          ilike(schema.conversations.crop, `%${search}%`),
+          ilike(schema.conversations.agentType, `%${search}%`),
+        )!
+      );
     }
 
-    const totalCount = await prisma.conversation.count({ where });
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const conversations = await prisma.conversation.findMany({
-      where,
-      take: limit + 1,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      orderBy: { createdAt: sortOrder },
-      include: {
+    const [{ value: totalCount }] = await db.select({ value: count() }).from(schema.conversations).where(whereClause);
+
+    const conversations = await db.query.conversations.findMany({
+      where: whereClause,
+      limit: limit + 1,
+      offset: cursor ? 1 : 0,
+      orderBy: sortOrder === 'asc'
+        ? (t, ops) => [ops.asc(t.createdAt)]
+        : (t, ops) => [ops.desc(t.createdAt)],
+      with: {
         user: {
-          select: { id: true, name: true, role: true },
+          columns: { id: true, name: true, role: true },
         },
         zone: {
-          select: { id: true, name: true, code: true },
+          columns: { id: true, name: true, code: true },
         },
       },
     });

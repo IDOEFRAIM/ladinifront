@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 
 export async function GET(
   req: Request,
@@ -8,14 +10,13 @@ export async function GET(
   try {
     const { productId } = await params;
 
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      // On inclut les infos du producteur pour l'UI
-      include: {
+    const product = await db.query.products.findFirst({
+      where: eq(schema.products.id, productId),
+      with: {
         producer: {
-          include: {
+          with: {
             user: {
-              select: { name: true, image: true }
+              columns: { name: true, image: true }
             }
           }
         }

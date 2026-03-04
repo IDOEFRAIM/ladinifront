@@ -29,8 +29,7 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/admin':         ['ORG_MANAGE'],
   '/org':           [],                   // authenticated + active org (checked in layout)
   '/market':        [],
-  '/checkout':      ['ORDER_CREATE'],
-  '/orders':        ['ORDER_VIEW'],
+  //'/orders':        ['ORDER_VIEW'],
   '/conversations': [],
 };
 
@@ -45,6 +44,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/agents':     ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
   '/admin':      ['ADMIN', 'SUPERADMIN'],
   '/org':        ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
+  '/checkout':   ['BUYER', 'PRODUCER', 'ADMIN', 'SUPERADMIN'],
 };
 
 function parsePermissions(raw: string | undefined): string[] {
@@ -60,6 +60,9 @@ export async function middleware(request: NextRequest) {
   const userIdFromToken = session?.userId;
   const roleFromToken = session?.role;
   const userId    = userIdFromToken;
+  // Use role from session token as fallback if cookie is missing or stale
+  const sessionRoleUpper = roleFromToken ? String(roleFromToken).toUpperCase() : undefined;
+  const effectiveRole = normalizedUserRole || sessionRoleUpper;
   // L'utilisateur est authentifié si le JWT session-token contient un userId valide
   const isAuthenticated = !!userId;
   // Active organization (must be set for any org-scoped route)
@@ -83,7 +86,7 @@ export async function middleware(request: NextRequest) {
   const permsRaw  = request.cookies.get(COOKIE_NAMES.USER_PERMISSIONS)?.value;
   const perms     = parsePermissions(permsRaw);
   const { pathname } = request.nextUrl;
-  const isAdmin   = normalizedUserRole === 'ADMIN' || normalizedUserRole === 'SUPERADMIN';
+  const isAdmin   = effectiveRole === 'ADMIN' || effectiveRole === 'SUPERADMIN';
 
   // Routes considered organization-scoped (require active org)
   // Routes that truly require an active organization. Dashboard and orders
@@ -112,19 +115,19 @@ export async function middleware(request: NextRequest) {
 
     // 2. Vérifier le rôle de haut-niveau si défini
     const allowedRoles = ROUTE_ROLES[prefix];
-    // Si la route a une restriction de rôle, n'appliquer la vérification
-    // que si nous avons déjà un rôle normalisé (évite de re-rediriger
-    // des requêtes non authentifiées plusieurs fois).
-    if (allowedRoles && normalizedUserRole && !allowedRoles.includes(normalizedUserRole) && !isAdmin) {
+    // Si la route a une restriction de rôle, appliquer la vérification en utilisant
+    // le rôle effectif (cookie ou token). On évite ainsi les faux positifs lorsque
+    // le cookie `user-role` est absent ou obsolète.
+    if (allowedRoles && effectiveRole && !allowedRoles.includes(effectiveRole) && !isAdmin) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('forbidden', '1');
       return NextResponse.redirect(loginUrl);
     }
 
-    // Si le rôle est explicitement autorisé pour cette route, le rôle suffit
+    // Si le rôle effectif est explicitement autorisé pour cette route, le rôle suffit
     // (bypass des permissions dynamiques côté middleware). Les API routes
     // devront quand même re-valider via getAccessContext() / AccessManager.
-    if (allowedRoles && normalizedUserRole && allowedRoles.includes(normalizedUserRole)) {
+    if (allowedRoles && effectiveRole && allowedRoles.includes(effectiveRole)) {
       break;
     }
 
@@ -223,10 +226,10 @@ export const config = {
     '/admin/:path*',
     '/market/:path*',
     '/checkout/:path*',
-    '/orders/:path*',
+    //'/orders/:path*',
     '/conversations/:path*',
     '/org/:path*',
     '/signup',
     '/login',
-  ],
+    ],
 };

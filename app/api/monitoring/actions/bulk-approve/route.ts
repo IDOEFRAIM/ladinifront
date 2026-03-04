@@ -4,7 +4,9 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/api-guard';
 
 export async function PATCH(req: NextRequest): Promise<Response | void> {
@@ -39,19 +41,20 @@ export async function PATCH(req: NextRequest): Promise<Response | void> {
       );
     }
 
-    const result = await prisma.agentAction.updateMany({
-      where: {
-        id: { in: actionIds },
-        status: 'PENDING', // Only update pending actions
-      },
-      data: {
+    const result = await db.update(schema.agentActions)
+      .set({
         status: decision,
         adminNotes: adminNotes || null,
         validatedById: user.id,
-      },
-    });
+      })
+      .where(
+        and(
+          inArray(schema.agentActions.id, actionIds),
+          eq(schema.agentActions.status, 'PENDING'),
+        )
+      );
 
-    return NextResponse.json({ updated: result.count });
+    return NextResponse.json({ updated: result.length });
   } catch (err) {
     console.error('[API] /monitoring/actions/bulk-approve error:', err);
     return NextResponse.json(

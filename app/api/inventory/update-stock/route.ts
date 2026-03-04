@@ -1,4 +1,6 @@
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { requireOrgAction, requireMembershipAndPermission } from '@/lib/api-guard';
 import { audit } from '@/lib/audit';
@@ -28,20 +30,15 @@ export async function POST(req: Request) {
   });
 
   // 3. Perform the business change in a transaction for safety
-  const result = await prisma.$transaction(async (tx) => {
-    const stock = await tx.stock.update({
-      where: { id: stockId },
-      data: { quantity: newQuantity }
-    });
+  const result = await db.transaction(async (tx) => {
+    const [stock] = await tx.update(schema.stocks).set({ quantity: newQuantity }).where(eq(schema.stocks.id, stockId)).returning();
 
-    await tx.auditLog.create({
-      data: {
-        actorId: session.userId,
-        action: 'UPDATE_STOCK',
-        entityId: stockId,
-        entityType: 'STOCK',
-        newValue: { quantity: newQuantity }
-      }
+    await tx.insert(schema.auditLogs).values({
+      actorId: session.userId,
+      action: 'UPDATE_STOCK',
+      entityId: stockId,
+      entityType: 'STOCK',
+      newValue: { quantity: newQuantity }
     });
 
     return stock;

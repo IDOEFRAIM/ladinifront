@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 
 // Local MovementType alias mirrors Prisma enum MovementType
 type MovementType = 'IN' | 'OUT' | 'WASTE';
@@ -20,9 +22,9 @@ export async function getFarms() {
     if (!userId) return { success: false, error: "Session expirée" };
 
     try {
-        const producer = await prisma.producer.findUnique({
-            where: { userId },
-            select: { farms: { orderBy: { createdAt: 'desc' } } }
+        const producer = await db.query.producers.findFirst({
+            where: eq(schema.producers.userId, userId),
+            with: { farms: { orderBy: (t, { desc }) => [desc(t.createdAt)] } }
         });
         return { success: true, data: producer?.farms || [] };
     } catch (error) {
@@ -51,33 +53,29 @@ export async function createFarm(data: {
     }
 
     try {
-        let producer = await prisma.producer.findUnique({ where: { userId } });
+        let producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId) });
 
         if (!producer) {
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { id: true, role: true, name: true }
+            const user = await db.query.users.findFirst({
+                where: eq(schema.users.id, userId),
+                columns: { id: true, role: true, name: true }
             });
 
             if (!user) {
                 return { success: false, error: "Utilisateur introuvable." };
             }
 
-            producer = await prisma.producer.create({
-                data: {
-                    userId: user.id,
-                    businessName: user.name || "Mon Agrobusiness",
-                }
-            });
+            [producer] = await db.insert(schema.producers).values({
+                userId: user.id,
+                businessName: user.name || "Mon Agrobusiness",
+            }).returning();
         }
 
-        const farm = await prisma.farm.create({
-            data: {
-                ...validation.data,
-                zoneId: data.zoneId || undefined,
-                producerId: producer.id
-            }
-        });
+        const [farm] = await db.insert(schema.farms).values({
+            ...validation.data,
+            zoneId: data.zoneId || undefined,
+            producerId: producer.id
+        }).returning();
         return { success: true, data: farm };
     } catch (error) {
         console.error("Erreur création ferme:", error);
@@ -96,15 +94,15 @@ export async function getStocks(farmId: string) {
     if (!farmId) return { success: false, error: "FarmId requis" };
 
     try {
-        const stocks = await prisma.stock.findMany({
-            where: { farmId },
-            include: {
+        const stocks = await db.query.stocks.findMany({
+            where: eq(schema.stocks.farmId, farmId),
+            with: {
                 movements: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 5
+                    orderBy: (t, { desc }) => [desc(t.createdAt)],
+                    limit: 5
                 }
             },
-            orderBy: { updatedAt: 'desc' }
+            orderBy: (t, { desc }) => [desc(t.updatedAt)]
         });
         return { success: true, data: stocks };
     } catch (error) {
@@ -130,23 +128,19 @@ export async function createStock(farmId: string, data: {
     }
 
     try {
-        const result = await prisma.$transaction(async (tx: Parameters<typeof prisma.$transaction>[0] extends (tx: infer T) => Promise<infer R> ? T : never) => {
-            const stock = await tx.stock.create({
-            data: {
-                farmId,
-                itemName: validation.data.itemName,
-                quantity: validation.data.quantity,
-                unit: validation.data.unit as any
-            }
-            });
+        const result = await db.transaction(async (tx) => {
+            const [stock] = await tx.insert(schema.stocks).values({
+            farmId,
+            itemName: validation.data.itemName,
+            quantity: validation.data.quantity,
+            unit: validation.data.unit as any
+            }).returning();
 
-            await tx.stockMovement.create({
-            data: {
-                stockId: stock.id,
-                type: 'IN' as MovementType,
-                quantity: validation.data.quantity,
-                reason: 'Inventaire initial'
-            }
+            await tx.insert(schema.stockMovements).values({
+            stockId: stock.id,
+            type: 'IN' as MovementType,
+            quantity: validation.data.quantity,
+            reason: 'Inventaire initial'
             });
 
             return stock;
@@ -180,9 +174,9 @@ export async function deleteStock(stockId: string) {
 
     try {
         // Sécurité : Vérifier que le stock appartient bien au producteur connecté
-        const stock = await prisma.stock.findUnique({
-            where: { id: stockId },
-            include: { farm: { select: { producer: { select: { userId: true } } } } }
+        const stock = await db.query.stocks.findFirst({
+            where: eq(schema.stocks.id, stockId),
+            with: { farm: { with: { producer: { columns: { userId: true } } } } }
         });
 
         if (!stock || stock.farm?.producer.userId !== userId) {
@@ -190,7 +184,7 @@ export async function deleteStock(stockId: string) {
         }
 
         const oldValue = await snapshot(stock);
-        await prisma.stock.delete({ where: { id: stockId } });
+        await db.delete(schema.stocks).where(eq(schema.stocks.id, stockId));
 
         // Audit : suppression de stock
         await audit({
@@ -223,14 +217,14 @@ function calculateNewQuantity(type: 'IN' | 'OUT' | 'WASTE', currentQuantity: num
  * Exécute la transaction de mouvement de stock
  */
 async function executeStockMovementTransaction(
-    prisma: any,
+    txOrDb: any,
     stockId: string,
     userId: string,
     validatedData: any
 ) {
-    const stock = await prisma.stock.findUnique({ 
-        where: { id: stockId },
-        include: { farm: { select: { producer: { select: { userId: true } } } } }
+    const stock = await txOrDb.query.stocks.findFirst({
+        where: eq(schema.stocks.id, stockId),
+        with: { farm: { with: { producer: { columns: { userId: true } } } } }
     });
 
     if (!stock) throw new Error("Stock introuvable");
@@ -241,19 +235,16 @@ async function executeStockMovementTransaction(
 
     if (newQuantity < 0) throw new Error("Stock insuffisant pour cette opération");
 
-    await prisma.stock.update({
-        where: { id: stockId },
-        data: { quantity: newQuantity }
-    });
+    await txOrDb.update(schema.stocks)
+        .set({ quantity: newQuantity })
+        .where(eq(schema.stocks.id, stockId));
 
-    const movement = await prisma.stockMovement.create({
-        data: {
-            stockId,
-            type: validatedData.type as MovementType,
-            quantity: validatedData.quantity,
-            reason: validatedData.reason
-        }
-    });
+    const [movement] = await txOrDb.insert(schema.stockMovements).values({
+        stockId,
+        type: validatedData.type as MovementType,
+        quantity: validatedData.quantity,
+        reason: validatedData.reason
+    }).returning();
 
     return { movement, oldQuantity, newQuantity };
 }
@@ -275,7 +266,7 @@ export async function addStockMovement(stockId: string, data: {
     }
 
     try {
-        const result = await prisma.$transaction((tx: any) =>
+        const result = await db.transaction((tx: any) =>
             executeStockMovementTransaction(tx, stockId, userId, validation.data)
         );
 

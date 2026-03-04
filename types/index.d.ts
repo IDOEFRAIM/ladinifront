@@ -1,13 +1,11 @@
 // types/index.d.ts
 
-import type { Role as PrismaSystemRole } from '@prisma/client';
-
 // --- 1. TYPES GÉNÉRAUX ET UTILISATEURS ---
 
-/** Re-export du SystemRole Prisma comme source de vérité */
-export type SystemRole = PrismaSystemRole;
+/** System-level roles matching auth.role enum in Drizzle schema */
+export type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
 /** @deprecated Use SystemRole instead */
-export type Role = PrismaSystemRole;
+export type Role = SystemRole;
 
 export interface Location {
   lat: number;

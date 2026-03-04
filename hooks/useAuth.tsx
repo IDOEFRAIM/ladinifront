@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { registerUser, loginUser, logoutUser } from '@/services/auth.service';
-import type { Role as SystemRole } from '@prisma/client';
+type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
 
 interface AuthUser {
   id?:string;

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, or, ilike, inArray } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 
 export async function GET(request: Request) {
     try {
@@ -9,46 +12,55 @@ export async function GET(request: Request) {
         const region = searchParams.get('region');
         const search = searchParams.get('search');
 
-        const where: any = {};
+        const conditions: (SQL | undefined)[] = [];
 
         // Filtre Category
         if (category && category !== 'all') {
-             where.categoryLabel = {
-                contains: category, 
-                mode: 'insensitive'
-             };
-        }
-
-        // Filtre par zone/region via producer.zone or producer.region
-        if (region && region !== 'all') {
-            where.producer = {
-                OR: [
-                  { zone: { name: { contains: region, mode: 'insensitive' } } },
-                  { region: { contains: region, mode: 'insensitive' } },
-                ],
-            };
+            conditions.push(ilike(schema.products.categoryLabel, `%${category}%`));
         }
 
         // Recherche
         if (search) {
-            where.OR = [
-                { categoryLabel: { contains: search, mode: 'insensitive' } },
-                { name: { contains: search, mode: 'insensitive' } },
-            ];
+            conditions.push(
+                or(
+                    ilike(schema.products.categoryLabel, `%${search}%`),
+                    ilike(schema.products.name, `%${search}%`),
+                )
+            );
+        }
+
+        // Filtre par zone/region via producer.zone or producer.region
+        if (region && region !== 'all') {
+            const matchingProducers = await db
+                .select({ id: schema.producers.id })
+                .from(schema.producers)
+                .leftJoin(schema.zones, eq(schema.producers.zoneId, schema.zones.id))
+                .where(
+                    or(
+                        ilike(schema.zones.name, `%${region}%`),
+                        ilike(schema.producers.region, `%${region}%`),
+                    )
+                );
+            const producerIds = matchingProducers.map(p => p.id);
+            if (producerIds.length > 0) {
+                conditions.push(inArray(schema.products.producerId, producerIds));
+            } else {
+                return NextResponse.json([]);
+            }
         }
 
         // Execution de la requete
-        const products = await prisma.product.findMany({
-            where,
-            include: {
+        const products = await db.query.products.findMany({
+            where: conditions.length > 0 ? and(...conditions) : undefined,
+            with: {
                 producer: {
-                    include: {
-                        user: { select: { name: true, phone: true } },
-                        zone: { select: { id: true, name: true, code: true } },
+                    with: {
+                        user: { columns: { name: true, phone: true } },
+                        zone: { columns: { id: true, name: true, code: true } },
                     }
                 },
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: (t, { desc: d }) => [d(t.createdAt)],
         });
 
         // Mapping Data

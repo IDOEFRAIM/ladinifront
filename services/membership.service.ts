@@ -1,6 +1,7 @@
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { audit } from "@/lib/audit";
-import { OrgRole, ProducerStatus } from "@prisma/client";
 
 /**
  * SERVICE DE GESTION DES MEMBRES (Multi-Tenant)
@@ -12,51 +13,52 @@ import { OrgRole, ProducerStatus } from "@prisma/client";
 
 // ─── 1. Demande d'adhésion (Producer Onboarding) ────────
 export async function requestOrganizationMembership(userId: string, organizationId: string) {
-  return await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } });
+  return await db.transaction(async (tx) => {
+    const user = await tx.query.users.findFirst({ where: eq(schema.users.id, userId) });
     if (!user) throw new Error("Utilisateur introuvable.");
     if (user.role !== "PRODUCER") throw new Error("Seul un profil PRODUCER peut faire cette demande via ce flux.");
 
-    const org = await tx.organization.findUnique({ where: { id: organizationId } });
+    const org = await tx.query.organizations.findFirst({ where: eq(schema.organizations.id, organizationId) });
     if (!org) throw new Error("Organisation introuvable.");
 
     // Créer ou mettre à jour le profil producteur avec le statut PENDING
-    const producer = await tx.producer.upsert({
-      where: { userId },
-      create: {
+    const [producer] = await tx.insert(schema.producers)
+      .values({
         userId,
         organizationId,
         businessName: user.name || "Nouveau Producteur",
-        status: ProducerStatus.PENDING,
-      },
-      update: {
-        organizationId,
-        status: ProducerStatus.PENDING,
-      },
-    });
+        status: 'PENDING',
+      })
+      .onConflictDoUpdate({
+        target: schema.producers.userId,
+        set: {
+          organizationId,
+          status: 'PENDING',
+        },
+      })
+      .returning();
 
     // Ajouter l'utilisateur à l'organisation avec un rôle par défaut basique
     // Il n'aura pas de permissions avancées tant que l'admin ne l'a pas validé.
-    await tx.userOrganization.upsert({
-      where: {
-        userId_organizationId: { userId, organizationId },
-      },
-      create: {
+    await tx.insert(schema.userOrganizations)
+      .values({
         userId,
         organizationId,
-        role: OrgRole.FIELD_AGENT,
-      },
-      update: {
-        role: OrgRole.FIELD_AGENT,
-      }
-    });
+        role: 'FIELD_AGENT',
+      })
+      .onConflictDoUpdate({
+        target: [schema.userOrganizations.userId, schema.userOrganizations.organizationId],
+        set: {
+          role: 'FIELD_AGENT',
+        },
+      });
 
     await audit({
       actorId: userId,
       action: "ORG_MEMBERSHIP_REQUESTED",
       entityId: organizationId,
       entityType: "ORGANIZATION",
-      newValue: { producerId: producer.id, status: ProducerStatus.PENDING },
+      newValue: { producerId: producer.id, status: 'PENDING' },
     });
 
     return producer;
@@ -65,29 +67,30 @@ export async function requestOrganizationMembership(userId: string, organization
 
 // ─── 2. Validation par l'Administrateur ─────────────────
 export async function validateProducerMembership(adminUserId: string, organizationId: string, producerUserId: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     // A. Vérification de l'isolation & des droits (Règle d'or)
-    const adminMembership = await tx.userOrganization.findUnique({
-      where: { userId_organizationId: { userId: adminUserId, organizationId } },
+    const adminMembership = await tx.query.userOrganizations.findFirst({
+      where: and(
+        eq(schema.userOrganizations.userId, adminUserId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ),
     });
 
-    if (!adminMembership || (adminMembership.role !== OrgRole.ADMIN && adminMembership.role !== OrgRole.ZONE_MANAGER)) {
+    if (!adminMembership || (adminMembership.role !== 'ADMIN' && adminMembership.role !== 'ZONE_MANAGER')) {
       throw new Error("Accès refusé. Droits d'administration requis pour cette organisation.");
     }
 
     // B. Vérification du producteur cible
-    const producer = await tx.producer.findUnique({ where: { userId: producerUserId } });
+    const producer = await tx.query.producers.findFirst({ where: eq(schema.producers.userId, producerUserId) });
     if (!producer || producer.organizationId !== organizationId) {
       throw new Error("Producteur introuvable dans cette organisation.");
     }
 
     // C. Validation (Passage à ACTIVE)
-    const updatedProducer = await tx.producer.update({
-      where: { id: producer.id },
-      data: {
-        status: ProducerStatus.ACTIVE,
-      },
-    });
+    const [updatedProducer] = await tx.update(schema.producers)
+      .set({ status: 'ACTIVE' })
+      .where(eq(schema.producers.id, producer.id))
+      .returning();
 
     await audit({
       actorId: adminUserId,
@@ -95,7 +98,7 @@ export async function validateProducerMembership(adminUserId: string, organizati
       entityId: producer.id,
       entityType: "PRODUCER",
       oldValue: { status: producer.status },
-      newValue: { status: ProducerStatus.ACTIVE },
+      newValue: { status: 'ACTIVE' },
     });
 
     return updatedProducer;
@@ -104,19 +107,25 @@ export async function validateProducerMembership(adminUserId: string, organizati
 
 // ─── 3. Assignation d'un Agent à une Zone de Travail ────
 export async function assignAgentToWorkZone(adminUserId: string, organizationId: string, agentUserId: string, zoneId: string, specificRole?: string) {
-  return await prisma.$transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     // Vérification droits administrateur (Isolation M-T)
-    const adminMembership = await tx.userOrganization.findUnique({
-      where: { userId_organizationId: { userId: adminUserId, organizationId } },
+    const adminMembership = await tx.query.userOrganizations.findFirst({
+      where: and(
+        eq(schema.userOrganizations.userId, adminUserId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ),
     });
 
-    if (!adminMembership || adminMembership.role !== OrgRole.ADMIN) {
+    if (!adminMembership || adminMembership.role !== 'ADMIN') {
       throw new Error("Accès refusé. Seul un Admin peut assigner des zones de travail.");
     }
 
     // Vérification que l'agent fait bien partie de l'organisation
-    const agentMembership = await tx.userOrganization.findUnique({
-      where: { userId_organizationId: { userId: agentUserId, organizationId } },
+    const agentMembership = await tx.query.userOrganizations.findFirst({
+      where: and(
+        eq(schema.userOrganizations.userId, agentUserId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ),
     });
 
     if (!agentMembership) {
@@ -124,27 +133,26 @@ export async function assignAgentToWorkZone(adminUserId: string, organizationId:
     }
 
     // Création ou Mise à jour de la WorkZone
-    const workZone = await tx.workZone.upsert({
-      where: {
-        organizationId_zoneId: { organizationId, zoneId }
-      },
-      create: {
+    const [workZone] = await tx.insert(schema.workZones)
+      .values({
         organizationId,
         zoneId,
         managerId: agentUserId,
         role: specificRole || "ZONE_AGENT"
-      },
-      update: {
-        managerId: agentUserId,
-        role: specificRole || "ZONE_AGENT"
-      }
-    });
+      })
+      .onConflictDoUpdate({
+        target: [schema.workZones.organizationId, schema.workZones.zoneId],
+        set: {
+          managerId: agentUserId,
+          role: specificRole || "ZONE_AGENT"
+        }
+      })
+      .returning();
 
     // Mettre à jour le managedZoneId de l'agent dans sa relation à l'org
-    await tx.userOrganization.update({
-      where: { id: agentMembership.id },
-      data: { managedZoneId: zoneId }
-    });
+    await tx.update(schema.userOrganizations)
+      .set({ managedZoneId: zoneId })
+      .where(eq(schema.userOrganizations.id, agentMembership.id));
 
     await audit({
       actorId: adminUserId,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
 
 export async function POST(req: Request) {
@@ -15,13 +17,10 @@ export async function POST(req: Request) {
     }
 
     // Update user contact info
-    await prisma.user.update({ where: { id: user.id }, data: { name: name ?? undefined, email: email ?? undefined, phone: phone ?? undefined } });
+    await db.update(schema.users).set({ name: name ?? undefined, email: email ?? undefined, phone: phone ?? undefined }).where(eq(schema.users.id, user.id));
 
     // Update producer business info (store location in region for now)
-    const updated = await prisma.producer.update({
-      where: { id: producerId },
-      data: { businessName: name ?? undefined, region: location ?? undefined }
-    });
+    const [updated] = await db.update(schema.producers).set({ businessName: name ?? undefined, region: location ?? undefined }).where(eq(schema.producers.id, producerId)).returning();
 
     return NextResponse.json({ ok: true, producer: updated });
   } catch (err) {

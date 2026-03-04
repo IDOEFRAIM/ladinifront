@@ -1,22 +1,28 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/api-guard';
-import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 import { VALID_SYSTEM_ROLES } from '@/lib/validators';
 import { cookies } from 'next/headers';
 import { COOKIE_NAMES, publicOpts } from '@/lib/cookie-helpers';
 
 export async function GET(req: NextRequest) {
-  const { user, error } = await getAuthenticatedUser(req);
+
+  const { user, error } = await requireAdmin(req);
   if (error || !user) return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
 
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true, name: true, role: true } });
+  const dbUser = await db.query.users.findFirst({
+    where: eq(schema.users.id, user.id),
+    columns: { id: true, name: true, role: true },
+  });
   return NextResponse.json({ success: true, data: dbUser });
 }
 
 export async function PATCH(req: NextRequest) {
   // Only ADMIN or SUPERADMIN may change roles
-  const { user, error } = await getAuthenticatedUser(req, ['ADMIN', 'SUPERADMIN']);
+  const { user, error } = await requireAdmin(req);
   if (error || !user) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
 
   try {
@@ -27,7 +33,10 @@ export async function PATCH(req: NextRequest) {
     }
     if (!targetUserId) return NextResponse.json({ success: false, error: 'targetUserId required' }, { status: 400 });
 
-    const updated = await prisma.user.update({ where: { id: targetUserId }, data: { role: role as any } });
+    const [updated] = await db.update(schema.users)
+      .set({ role: role as any })
+      .where(eq(schema.users.id, targetUserId))
+      .returning();
 
     // If admin changed their own role, update cookie
     if (targetUserId === user.id) {

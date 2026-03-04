@@ -1,26 +1,27 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { gt } from 'drizzle-orm';
 
 export async function GET() {
     try {
         // 1. Catégories uniques des produits actifs
-        const productsCategories = await prisma.product.findMany({
-            where: { quantityForSale: { gt: 0 } },
-            select: { categoryLabel: true },
-            distinct: ['categoryLabel']
-        });
+        const productsCategories = await db
+            .selectDistinct({ categoryLabel: schema.products.categoryLabel })
+            .from(schema.products)
+            .where(gt(schema.products.quantityForSale, 0));
 
         // 2. Locations actives
-        const activeLocations = await prisma.zone.findMany({
-            select: { id: true, name: true, code: true },
-            orderBy: { name: 'asc' },
-            take: 200
+        const activeLocations = await db.query.zones.findMany({
+            columns: { id: true, name: true, code: true },
+            orderBy: (t, { asc: a }) => [a(t.name)],
+            limit: 200,
         });
 
         // 3. Régions climatiques
-        const climaticRegions = await prisma.climaticRegion.findMany({
-            select: { id: true, name: true, description: true },
-            orderBy: { name: 'asc' }
+        const climaticRegionsData = await db.query.climaticRegions.findMany({
+            columns: { id: true, name: true, description: true },
+            orderBy: (t, { asc: a }) => [a(t.name)],
         });
 
         const categories = productsCategories
@@ -35,7 +36,7 @@ export async function GET() {
             categories,
             regions,
             locations: activeLocations,
-            climaticRegions,
+            climaticRegions: climaticRegionsData,
         });
 
     } catch (error) {

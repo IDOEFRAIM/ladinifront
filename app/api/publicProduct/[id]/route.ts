@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 
 export async function GET(
     request: Request,
@@ -12,13 +14,13 @@ export async function GET(
             return NextResponse.json({ error: "ID manquant" }, { status: 400 });
         }
 
-        const product = await prisma.product.findUnique({
-            where: { id: id },
-            include: {
+        const product = await db.query.products.findFirst({
+            where: eq(schema.products.id, id),
+            with: {
                 producer: {
-                    include: {
+                    with: {
                         user: {
-                            select: {
+                            columns: {
                                 name: true,
                                 phone: true
                             }
@@ -63,7 +65,7 @@ export async function GET(
         return NextResponse.json(formattedProduct);
 
     } catch (error) {
-        console.error("PRISMA ERROR:", error);
+        console.error("DB ERROR:", error);
         return NextResponse.json({ error: "Erreur interne serveur" }, { status: 500 });
     }
 }

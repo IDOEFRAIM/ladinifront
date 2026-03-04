@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Server-side RoleDef / Permission helpers
@@ -10,9 +12,9 @@ import { prisma } from '@/lib/prisma';
  */
 
 export async function getUserPermissions(userId: string) {
-  const memberships = await prisma.userOrganization.findMany({
-    where: { userId },
-    select: { dynRole: { select: { permissions: true } } },
+  const memberships = await db.query.userOrganizations.findMany({
+    where: eq(schema.userOrganizations.userId, userId),
+    with: { dynRole: { columns: { permissions: true } } },
   });
   const set = new Set<string>();
   memberships.forEach((m: any) => {
@@ -23,18 +25,21 @@ export async function getUserPermissions(userId: string) {
 
 export async function userHasPermission(userId: string, permission: string, organizationId?: string) {
   // Check system role first
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.id, userId),
+    columns: { role: true },
+  });
   if (!user) return false;
   const roleUpper = (user.role || '').toString().toUpperCase();
   if (roleUpper === 'ADMIN' || roleUpper === 'SUPERADMIN') return true;
 
   // If organizationId provided, verify membership exists
-  const where: any = { userId };
-  if (organizationId) where.organizationId = organizationId;
+  const conditions = [eq(schema.userOrganizations.userId, userId)];
+  if (organizationId) conditions.push(eq(schema.userOrganizations.organizationId, organizationId));
 
-  const membership = await prisma.userOrganization.findFirst({
-    where,
-    select: { dynRole: { select: { permissions: true } } },
+  const membership = await db.query.userOrganizations.findFirst({
+    where: and(...conditions),
+    with: { dynRole: { columns: { permissions: true } } },
   });
   if (!membership) return false;
   const perms = membership.dynRole?.permissions || [];
@@ -43,17 +48,20 @@ export async function userHasPermission(userId: string, permission: string, orga
 
 export async function userHasAnyPermission(userId: string, permissions: string[], organizationId?: string) {
   if (!permissions || permissions.length === 0) return false;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.id, userId),
+    columns: { role: true },
+  });
   if (!user) return false;
   const roleUpper = (user.role || '').toString().toUpperCase();
   if (roleUpper === 'ADMIN' || roleUpper === 'SUPERADMIN') return true;
 
-  const where: any = { userId };
-  if (organizationId) where.organizationId = organizationId;
+  const conditions = [eq(schema.userOrganizations.userId, userId)];
+  if (organizationId) conditions.push(eq(schema.userOrganizations.organizationId, organizationId));
 
-  const memberships = await prisma.userOrganization.findMany({
-    where,
-    select: { dynRole: { select: { permissions: true } } },
+  const memberships = await db.query.userOrganizations.findMany({
+    where: and(...conditions),
+    with: { dynRole: { columns: { permissions: true } } },
   });
 
   const set = new Set<string>();

@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, or } from 'drizzle-orm';
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { RegisterSchema, LoginSchema } from "@/lib/validators";
@@ -9,13 +11,15 @@ import { requestOrganizationMembership } from "./membership.service";
 
 // ─── Helper : Charge les memberships org et compile les permissions ───
 async function loadUserContext(userId: string) {
-    const memberships = await prisma.userOrganization.findMany({
-        where: { userId },
-        select: {
+    const memberships = await db.query.userOrganizations.findMany({
+        where: eq(schema.userOrganizations.userId, userId),
+        columns: {
             organizationId: true,
             role: true,
             managedZoneId: true,
-            dynRole: { select: { permissions: true } },
+        },
+        with: {
+            dynRole: { columns: { permissions: true } },
         },
     });
 
@@ -151,13 +155,10 @@ export async function registerUser(data: {
         }
 
         // Check uniqueness
-        const existingUser = await prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email },
-                    ...(phone ? [{ phone }] : []),
-                ],
-            },
+        const existingUser = await db.query.users.findFirst({
+            where: phone
+                ? or(eq(schema.users.email, email), eq(schema.users.phone, phone))
+                : eq(schema.users.email, email),
         });
         if (existingUser) {
             return { success: false, error: "Cet email ou numéro de téléphone est déjà utilisé." };
@@ -171,25 +172,23 @@ export async function registerUser(data: {
             pendingStatus = 'PENDING';
         }
 
-        const newUser = await prisma.user.create({
-            data: {
-                email,
-                password: hashedPassword,
-                name,
+        const [newUser] = await db.insert(schema.users).values({
+            email,
+            password: hashedPassword,
+            name,
             role: role as any,
-                phone: phone || undefined,
-                ...(data.isProducer ? {
-                    producer: {
-                        create: {
-                            businessName: name || "Nouveau Producteur",
-                            // new schema uses `status` enum and `zoneId` for location
-                            status: pendingStatus as any,
-                            zoneId: locationId || undefined,
-                        }
-                    }
-                } : {})
-            },
-        });
+            phone: phone || undefined,
+        }).returning();
+
+        // Create producer profile if needed
+        if (data.isProducer) {
+            await db.insert(schema.producers).values({
+                userId: newUser.id,
+                businessName: name || "Nouveau Producteur",
+                status: 'PENDING' as any,
+                zoneId: locationId || undefined,
+            });
+        }
 
         // Handle organization joining/creation for PRODUCER
         let createdOrg: any = null;
@@ -210,25 +209,24 @@ export async function registerUser(data: {
             } else if (data.wantsOrganization && data.orgName) {
                 // Creation of a new organization (User becomes ADMIN)
                 try {
-                    createdOrg = await prisma.$transaction(async (tx) => {
-                        const org = await tx.organization.create({ data: {
+                    createdOrg = await db.transaction(async (tx) => {
+                        const [org] = await tx.insert(schema.organizations).values({
                             name: data.orgName!,
                             type: data.orgType as any,
                             taxId: data.orgTaxId ?? null,
                             description: data.orgDescription ?? null,
-                        } });
+                        }).returning();
 
-                        await tx.userOrganization.create({ data: {
+                        await tx.insert(schema.userOrganizations).values({
                             userId: newUser.id,
                             organizationId: org.id,
-                            role: 'ADMIN',
-                        } });
+                            role: 'ADMIN' as any,
+                        });
 
                         if (data.isProducer) {
-                            await tx.producer.update({
-                                where: { userId: newUser.id },
-                                data: { organizationId: org.id }
-                            });
+                            await tx.update(schema.producers)
+                                .set({ organizationId: org.id })
+                                .where(eq(schema.producers.userId, newUser.id));
                         }
 
                         return org;
@@ -245,12 +243,12 @@ export async function registerUser(data: {
         }
 
         // Get user zone (was `location` previously)
-        let userLocation = null;
+        let userLocation: { id: string; name: string } | null = null;
         if (locationId) {
-            userLocation = await prisma.zone.findUnique({
-                where: { id: locationId },
-                select: { id: true, name: true }
-            });
+            userLocation = await db.query.zones.findFirst({
+                where: eq(schema.zones.id, locationId),
+                columns: { id: true, name: true }
+            }) ?? null;
         }
 
         const ctx = await loadUserContext(newUser.id);
@@ -280,7 +278,7 @@ export async function registerUser(data: {
 
     } catch (error: any) {
         console.error("❌ Erreur Inscription:", error);
-        if (error.code === 'P2002') {
+        if (error.code === '23505') {
             return { success: false, error: "L'email ou le numéro de téléphone est déjà utilisé." };
         }
         return { success: false, error: "Erreur lors de la création du compte." };
@@ -300,10 +298,10 @@ export async function loginUser(credentials: { email: string; password: string }
 
         const { email, password } = validation.data;
 
-        const user = await prisma.user.findUnique({
-            where: { email },
-            include: {
-                producer: { select: { id: true, status: true } },
+        const user = await db.query.users.findFirst({
+            where: eq(schema.users.email, email),
+            with: {
+                producer: { columns: { id: true, status: true } },
             }
         });
 
@@ -316,17 +314,17 @@ export async function loginUser(credentials: { email: string; password: string }
             return { success: false, error: "Identifiants invalides" };
         }
 
-        // Get first managed zone from org membership (schema uses `managedZoneId`)
-        const firstMembership = await prisma.userOrganization.findFirst({
-            where: { userId: user.id },
-            select: { managedZoneId: true },
+        // Get first managed zone from org membership
+        const firstMembership = await db.query.userOrganizations.findFirst({
+            where: eq(schema.userOrganizations.userId, user.id),
+            columns: { managedZoneId: true },
         });
-        let userLocation = null;
+        let userLocation: { id: string; name: string } | null = null;
         if (firstMembership?.managedZoneId) {
-            userLocation = await prisma.zone.findUnique({
-                where: { id: firstMembership.managedZoneId },
-                select: { id: true, name: true }
-            });
+            userLocation = await db.query.zones.findFirst({
+                where: eq(schema.zones.id, firstMembership.managedZoneId),
+                columns: { id: true, name: true }
+            }) ?? null;
         }
 
         const ctx = await loadUserContext(user.id);

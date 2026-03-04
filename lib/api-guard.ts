@@ -1,22 +1,13 @@
 /**
- * GUARD D'AUTHENTIFICATION — AgriConnect v2
+ * GUARD D'AUTHENTIFICATION — AgriConnect v3 (Drizzle)
  * ──────────────────────────────────────────────────────────────────────────
  * Protège les API Routes côté serveur.
- *
- * Deux niveaux d'API :
- *  1. getAccessContext()   → nouveau (recommandé) — retourne un AccessContext
- *     complet, compatible avec AccessManager.can(ctx)...
- *  2. getAuthenticatedUser() → legacy, conservé pour compatibilité ascendante.
- *
- * Règle Zero-Trust :
- *  - Toutes les données envoyées par le client (body, params) sont ignorées
- *    pour établir l'identité. On lit UNIQUEMENT le JWT signé `session-token`.
- *  - Le scope org/zone est TOUJOURS recalculé depuis la DB.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { headers } from 'next/headers';
-import { prisma } from '@/lib/prisma';
+import { cookies, headers } from 'next/headers';
+import { db } from '@/src/db';
+import { userOrganizations, zones } from '@/src/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { buildAccessContext, type AccessContext } from '@/lib/access-context';
 import { getSessionFromRequest } from '@/lib/session';
 
@@ -24,14 +15,12 @@ export type { AccessContext };
 
 export interface OrgMembership {
   organizationId: string;
-  role: string; // OrgRole as string
+  role: string;
   scopedLocationId?: string | null;
-  // legacy field used in tests and some services
   managedZoneId?: string | null;
   dynRolePermissions?: string[];
 }
 
-// Expand to match Prisma `Role` enum values and normalize handling
 export type SystemRole = 'SUPERADMIN' | 'ADMIN' | 'USER' | 'PRODUCER' | 'BUYER' | 'AGENT';
 
 export interface AuthenticatedUser {
@@ -40,40 +29,33 @@ export interface AuthenticatedUser {
   name: string | null;
   producerId?: string;
   organizations: OrgMembership[];
-  permissions: string[]; // effective permissions across orgs
+  permissions: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOUVEAU — getAccessContext (recommandé pour tout nouveau code)
+// getAccessContext
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Retourne l'AccessContext complet pour la requête courante.
- * Construit en une seule query DB ; toutes les vérifications ensuite en mémoire.
- *
- * @param requiredRoles  Si fourni, vérifie que le rôle système est dans la liste.
- * @param requiredPerms  Si fourni, vérifie au moins une permission (ADMIN bypass).
- *
- * @example
- *   const { ctx, error } = await getAccessContext(['ADMIN', 'SUPERADMIN']);
- *   if (error) return error;
- *   AccessManager.can(ctx).permission(PERMISSIONS.STOCK_EDIT).inOrg(orgId).assert();
+ * Retourne l'AccessContext complet. 
+ * Note : requiredPermissions vérifie que l'utilisateur possède TOUTES les permissions demandées.
  */
 export async function getAccessContext(
   requiredRoles?: SystemRole[],
   requiredPermissions?: string[]
 ): Promise<{ ctx: AccessContext | null; error: NextResponse | null }> {
   const cookieStore = await cookies();
+  const headerStore = await headers(); // Next.js 15 nécessite await
+
+  // Tentative de récupération de session (Cookie puis Header)
   let session = await getSessionFromRequest({ cookies: cookieStore } as any);
-  // If no session found via cookie, try Authorization header or x-session-token
+  
   if (!session?.userId) {
     try {
-      const hdrs = headers();
-      session = await getSessionFromRequest({ headers: hdrs } as any);
-    } catch (e) {
-      // ignore
-    }
+      session = await getSessionFromRequest({ headers: headerStore } as any);
+    } catch (e) { /* ignore */ }
   }
+
   const userId = session?.userId;
 
   if (!userId || userId.length < 10) {
@@ -89,10 +71,10 @@ export async function getAccessContext(
   try {
     const ctx = await buildAccessContext(userId);
 
-    // SUPERADMIN bypass
+    // 1. Bypass SUPERADMIN
     if (ctx.role === 'SUPERADMIN') return { ctx, error: null };
 
-    // Rôle requis
+    // 2. Vérification du Rôle Système
     if (requiredRoles && requiredRoles.length > 0) {
       if (!requiredRoles.includes(ctx.role as SystemRole)) {
         return {
@@ -102,10 +84,11 @@ export async function getAccessContext(
       }
     }
 
-    // Permission requise (ADMIN bypass)
+    // 3. Vérification des Permissions (ADMIN bypass)
     if (requiredPermissions && requiredPermissions.length > 0 && ctx.role !== 'ADMIN') {
-      const ok = requiredPermissions.every((p) => ctx.permissions.has(p as any));
-      if (!ok) {
+      // .every() pour exiger toutes les permissions, .some() si une seule suffit
+      const hasAllPerms = requiredPermissions.every((p) => ctx.permissions.has(p as any));
+      if (!hasAllPerms) {
         return {
           ctx: null,
           error: NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 }),
@@ -116,228 +99,104 @@ export async function getAccessContext(
     return { ctx, error: null };
   } catch (err) {
     if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
-      return {
-        ctx: null,
-        error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }),
-      };
+      return { ctx: null, error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }) };
     }
-    console.error('[getAccessContext]', err);
-    return {
-      ctx: null,
-      error: NextResponse.json({ error: "Erreur de vérification d'identité." }, { status: 500 }),
-    };
+    console.error('[getAccessContext] Fatal error:', err);
+    return { ctx: null, error: NextResponse.json({ error: "Erreur serveur d'authentification." }, { status: 500 }) };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEGACY — getAuthenticatedUser (conservé pour compatibilité)
+// HELPERS DE TRANSITION (Mappe AccessContext vers AuthenticatedUser)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Extrait et vérifie l'userId depuis le JWT signé, récupère les memberships
- * organisationnels et compile les permissions effectives.
- * @deprecated Utiliser getAccessContext() dans le nouveau code.
- */
-export async function getAuthenticatedUser(
-  req?: NextRequest,
-  requiredRoles?: SystemRole[],
-  requiredPermissions?: string[]
-): Promise<{ user: AuthenticatedUser | null; error: NextResponse | null }> {
-  const cookieStore = await cookies();
-  let session = await getSessionFromRequest({ cookies: cookieStore } as any);
-  if (!session?.userId) {
-    try {
-      const hdrs = headers();
-      session = await getSessionFromRequest({ headers: hdrs } as any);
-    } catch (e) {
-      // ignore
-    }
-  }
-  const userId = session?.userId;
-
-  if (!userId || userId.length < 10) {
-    return {
-      user: null,
-      error: NextResponse.json(
-        { error: 'Authentification requise. Veuillez vous connecter.' },
-        { status: 401 }
-      ),
-    };
-  }
-
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        role: true,
-        name: true,
-        producer: { select: { id: true } },
-        organizations: {
-          select: {
-            organizationId: true,
-            role: true,
-            managedZoneId: true,
-            dynRole: { select: { permissions: true } },
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      return {
-        user: null,
-        error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }),
-      };
-    }
-
-    const orgs: OrgMembership[] = (user.organizations || []).map((o: any) => ({
-      organizationId: o.organizationId,
-      role: o.role,
-      scopedLocationId: o.managedZoneId,
-      managedZoneId: o.managedZoneId,
-      dynRolePermissions: o.dynRole?.permissions || [],
-    }));
-
-    // Merge permissions from all org-level dynamic roles
-    const permissionsSet = new Set<string>();
-    orgs.forEach((o) => {
-      (o.dynRolePermissions || []).forEach((p) => permissionsSet.add(p));
-    });
-
-    const permissions = Array.from(permissionsSet);
-
-    // SUPERADMIN bypasses all checks
-    if (String(user.role) === 'SUPERADMIN') {
-      return {
-        user: {
-          id: user.id,
-          role: String(user.role),
-          name: user.name,
-          producerId: user.producer?.id,
-          organizations: orgs,
-          permissions,
-        },
-        error: null,
-      };
-    }
-
-    // Legacy role check (normalize to uppercase string to avoid mismatches)
-    const userRoleStr = String(user.role).toUpperCase();
-    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(userRoleStr as SystemRole)) {
-      return {
-        user: null,
-        error: NextResponse.json({ error: "Accès non autorisé pour votre rôle." }, { status: 403 }),
-      };
-    }
-
-    // Permission-based check (ADMIN bypass)
-    if (requiredPermissions && requiredPermissions.length > 0) {
-      if (String(user.role) !== 'ADMIN') {
-        const ok = requiredPermissions.every((p) => permissions.includes(p));
-        if (!ok) {
-          return {
-            user: null,
-            error: NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 }),
-          };
-        }
-      }
-    }
-
-    return {
-      user: {
-        id: user.id,
-        role: String(user.role).toUpperCase(),
-        name: user.name,
-        producerId: user.producer?.id,
-        organizations: orgs,
-        permissions,
-      },
-      error: null,
-    };
-  } catch (err) {
-    return {
-      user: null,
-      error: NextResponse.json({ error: 'Erreur de vérification d\'identité.' }, { status: 500 }),
-    };
-  }
+function mapCtxToUser(ctx: AccessContext): AuthenticatedUser {
+  return {
+    id: ctx.userId,
+    role: ctx.role,
+    name: null,
+    producerId: ctx.producerId,
+    organizations: (ctx.orgScopes || []).map((s) => ({
+      organizationId: s.organizationId,
+      role: s.orgRole,
+      scopedLocationId: s.managedZoneIds?.[0] || null,
+      managedZoneId: s.managedZoneIds?.[0] || null,
+      dynRolePermissions: Array.from(s.permissions || []),
+    })),
+    permissions: Array.from(ctx.permissions || []),
+  };
 }
 
-/**
- * Vérifie qu'un producteur est bien authentifié.
- */
 export async function requireProducer(req?: NextRequest) {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) return { user: null, error };
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) return { user: null, error };
 
-  if (!user.producerId) {
-    const isOrgProducer = user.organizations.some(o =>
-      ['OWNER', 'ADMIN', 'MANAGER'].includes(o.role)
-    );
-    if (!isOrgProducer && !['SUPERADMIN', 'ADMIN'].includes(user.role)) {
-      return {
-        user: null,
-        error: NextResponse.json({ error: 'Profil producteur requis.' }, { status: 403 }),
-      };
-    }
+  const user = mapCtxToUser(ctx);
+
+  // Un producteur est soit lié à un profil producerId, soit gestionnaire d'une org
+  const isOrgManager = user.organizations.some(o => 
+    ['OWNER', 'ADMIN', 'MANAGER'].includes(o.role.toUpperCase())
+  );
+
+  if (!user.producerId && !isOrgManager && !ctx.isGlobalAdmin) {
+    return { user: null, error: NextResponse.json({ error: 'Profil producteur requis.' }, { status: 403 }) };
   }
 
   return { user, error: null };
 }
 
-/**
- * Vérifie qu'un administrateur est bien authentifié.
- */
 export async function requireAdmin(req?: NextRequest) {
-  return getAuthenticatedUser(req, ['ADMIN', 'SUPERADMIN'] as SystemRole[]);
+  const { ctx, error } = await getAccessContext(['ADMIN', 'SUPERADMIN']);
+  if (error || !ctx) return { user: null, error };
+  return { user: mapCtxToUser(ctx), error: null };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDS D'ORGANISATION (Optimisés avec recherche en mémoire si possible)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Require that the current session (from request) belongs to the given organization.
- * Returns { membership, error } where error is a NextResponse when check fails.
+ * Vérifie l'appartenance à une organisation.
+ * Utilise la DB en fallback, mais l'AccessContext est privilégié pour la perf.
  */
-export async function requireMembershipFromRequest(req: Request | NextRequest, organizationId: string) : Promise<{ membership: any | null; error: NextResponse | null }> {
-  const session = await getSessionFromRequest(req as any);
-  if (!session?.userId) {
-    return { membership: null, error: NextResponse.json({ error: 'Authentification requise.' }, { status: 401 }) };
-  }
+export async function requireMembershipFromRequest(req: Request | NextRequest, organizationId: string) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) return { membership: null, error };
 
-  const membership = await prisma.userOrganization.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.userId,
-        organizationId,
-      }
-    },
-    include: { dynRole: { select: { permissions: true } } }
-  });
-
-  if (!membership) {
+  // Vérification rapide en mémoire via le context
+  const scope = ctx.orgScopes.find(s => s.organizationId === organizationId);
+  
+  if (!scope) {
     return { membership: null, error: NextResponse.json({ error: 'Accès interdit à cette organisation.' }, { status: 403 }) };
   }
 
-  return { membership, error: null };
+  return { membership: scope, error: null };
 }
 
 /**
- * Higher-level guard for organization-scoped actions.
- * - verifies membership
- * - optionally verifies territorial jurisdiction (zoneId)
+ * Guard pour actions scorées par organisation et zone géographique.
  */
 export async function requireOrgAction(req: Request | NextRequest, organizationId: string, zoneId?: string) {
   const { membership, error } = await requireMembershipFromRequest(req, organizationId);
   if (error || !membership) return { membership: null, error };
 
-  // If membership has a managedZoneId and action references a zone, ensure jurisdiction
-  const managed = membership.managedZoneId;
-  if (zoneId && managed) {
-    if (managed === zoneId) return { membership, error: null };
-    // Fallback: check materialized path (requires `path` field on zone)
-    // Fetch zone (path may not exist on all schemas — use any to be defensive)
-    const zone = await prisma.zone.findUnique({ where: { id: zoneId } });
+  const managedZones = membership.managedZoneIds || [];
+  
+  // Si l'action est liée à une zone et que l'utilisateur a une restriction géographique
+  if (zoneId && managedZones.length > 0) {
+    // 1. Accès direct
+    if (managedZones.includes(zoneId)) return { membership, error: null };
+
+    // 2. Vérification de la hiérarchie (si zoneId est un enfant d'une zone gérée)
+    const zone = await db.query.zones.findFirst({ where: eq(zones.id, zoneId) });
     if (!zone) return { membership: null, error: NextResponse.json({ error: 'Zone introuvable.' }, { status: 404 }) };
+
     const zonePath = (zone as any).path as string | undefined;
-    if (!zonePath || !zonePath.includes(managed)) {
+    // Sécurité : on découpe le path pour éviter que l'ID "1" match "10"
+    const pathIds = zonePath?.split('.') || []; 
+    const hasJurisdiction = managedZones.some(mId => pathIds.includes(mId));
+
+    if (!hasJurisdiction) {
       return { membership: null, error: NextResponse.json({ error: 'Hors juridiction territoriale.' }, { status: 403 }) };
     }
   }
@@ -353,8 +212,8 @@ export async function requireMembershipAndPermission(req: Request | NextRequest,
   const { membership, error } = await requireMembershipFromRequest(req, organizationId);
   if (error || !membership) return { membership: null, error };
 
-  // dynRole may include permissions
-  const perms: string[] = (membership.dynRole && membership.dynRole.permissions) || [];
+  // membership may include dynRole permissions in the AccessContext mapping
+  const perms: string[] = (membership as any).dynRole?.permissions || (membership as any).permissions || [];
   const ok = requiredPermissions.length === 0 || requiredPermissions.some(p => perms.includes(p));
   if (!ok) {
     return { membership: null, error: NextResponse.json({ error: 'Permissions insuffisantes pour cette action.' }, { status: 403 }) };

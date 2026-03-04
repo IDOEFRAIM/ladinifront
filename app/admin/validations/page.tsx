@@ -63,7 +63,7 @@ export default function AdminValidationsPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.sand, paddingBottom: 80 }}>
       {/* Header */}
-      <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderBottom: `1px solid ${C.border}`, padding: '20px 24px', position: 'sticky', top: 64, zIndex: 20 }}>
+      <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderBottom: `1px solid ${C.border}`, padding: '20px 24px', position: 'relative', zIndex: 10 }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
             <div style={{ width: 40, height: 40, borderRadius: 14, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

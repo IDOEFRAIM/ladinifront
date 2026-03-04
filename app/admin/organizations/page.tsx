@@ -1,11 +1,14 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function AdminOrganizationsList() {
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { userRole, isLoading: authLoading } = useAuth();
+  const isAdmin = (userRole || '').toString().toUpperCase() === 'ADMIN' || (userRole || '').toString().toUpperCase() === 'SUPERADMIN';
 
   useEffect(() => {
     (async () => {
@@ -38,7 +41,9 @@ export default function AdminOrganizationsList() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Organisations</h1>
-        <Link href="/admin/organizations/create" className="px-3 py-2 bg-blue-600 text-white rounded">Créer</Link>
+        {!authLoading && isAdmin && (
+          <Link href="/admin/organizations/create" className="px-3 py-2 bg-blue-600 text-white rounded">Créer</Link>
+        )}
       </div>
       {loading && <p>Chargement...</p>}
       {error && <p className="text-red-600">{error}</p>}
@@ -52,7 +57,6 @@ export default function AdminOrganizationsList() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => handleManage(o.id)} className="px-3 py-1 bg-green-600 text-white rounded">Gérer</button>
-                <button onClick={() => handleManage(o.id)} className="px-3 py-1 bg-gray-100 rounded">Modifier</button>
                 {o.status === 'PENDING' && (
                   <button onClick={async () => {
                     if (!confirm('Approuver cette organisation ?')) return;

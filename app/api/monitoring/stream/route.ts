@@ -5,20 +5,22 @@
 // =========================================================
 
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, gt, lt, desc } from 'drizzle-orm';
+import { getAccessContext } from '@/lib/api-guard';
 import { userHasPermission } from '@/services/role.service';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) {
     if (error) return error;
-    return new Response('Unauthorized', { status: 401 });
+    return new Response(JSON.stringify({ error: 'Non autorisé.' }), { status: 401, headers: { 'content-type': 'application/json' } });
   }
-
+  const user: any = { id: ctx.userId, role: ctx.role };
   const encoder = new TextEncoder();
   let isAborted = false;
 
@@ -56,36 +58,35 @@ export async function GET(req: NextRequest): Promise<Response | void> {
           const scope = canViewActionsAll ? {} : { userId: user.id };
 
           // Nouvelles actions depuis le dernier check
-          const newActions = await prisma.agentAction.findMany({
-            where: {
-              ...scope,
-              createdAt: { gt: lastCheckAt },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-            include: {
-              user: { select: { id: true, name: true, role: true } },
+          const newActionsWhere = scope.userId
+            ? and(eq(schema.agentActions.userId, scope.userId), gt(schema.agentActions.createdAt, lastCheckAt))
+            : gt(schema.agentActions.createdAt, lastCheckAt);
+          const newActions = await db.query.agentActions.findMany({
+            where: newActionsWhere,
+            orderBy: (t, ops) => [ops.desc(t.createdAt)],
+            limit: 10,
+            with: {
+              user: { columns: { id: true, name: true, role: true } },
             },
           });
 
           // Nouvelles conversations
-          const newConversations = await prisma.conversation.findMany({
-            where: {
-              ...(canViewConversationsAll ? {} : { userId: user.id }),
-              createdAt: { gt: lastCheckAt },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
+          const convWhere = canViewConversationsAll
+            ? gt(schema.conversations.createdAt, lastCheckAt)
+            : and(eq(schema.conversations.userId, user.id), gt(schema.conversations.createdAt, lastCheckAt));
+          const newConversations = await db.query.conversations.findMany({
+            where: convWhere,
+            orderBy: (t, ops) => [ops.desc(t.createdAt)],
+            limit: 10,
           });
 
           // Actions mises à jour (approuvées/rejetées)
-          const updatedActions = await prisma.agentAction.findMany({
-            where: {
-              ...scope,
-              updatedAt: { gt: lastCheckAt },
-              createdAt: { lt: lastCheckAt }, // Pas les nouvelles
-            },
-            take: 10,
+          const updatedWhere = scope.userId
+            ? and(eq(schema.agentActions.userId, scope.userId), gt(schema.agentActions.updatedAt, lastCheckAt), lt(schema.agentActions.createdAt, lastCheckAt))
+            : and(gt(schema.agentActions.updatedAt, lastCheckAt), lt(schema.agentActions.createdAt, lastCheckAt));
+          const updatedActions = await db.query.agentActions.findMany({
+            where: updatedWhere,
+            limit: 10,
           });
 
           lastCheckAt = new Date();

@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, ne, inArray, notInArray, gt } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
@@ -38,9 +40,9 @@ export async function getEligibleProducers(input: {
 
   try {
     // 1. Charger l'enchère
-    const auction = await prisma.auction.findUnique({
-      where: { id: auctionId },
-      include: { targetZone: true },
+    const auction = await db.query.auctions.findFirst({
+      where: eq(schema.auctions.id, auctionId),
+      with: { targetZone: true },
     });
     if (!auction) return { success: false, error: 'Enchère introuvable' };
 
@@ -50,15 +52,15 @@ export async function getEligibleProducers(input: {
     // 2. Résoudre le chemin de la zone cible pour le matching géographique
     let targetZone: { id: string; path: string | null; parentId: string | null; climaticRegionId: string } | null = null;
     if (zoneId) {
-      targetZone = await prisma.zone.findUnique({
-        where: { id: zoneId },
-        select: { id: true, path: true, parentId: true, climaticRegionId: true },
-      });
+      targetZone = await db.query.zones.findFirst({
+        where: eq(schema.zones.id, zoneId),
+        columns: { id: true, path: true, parentId: true, climaticRegionId: true },
+      }) as any;
     }
 
     // 3. Vérifier si la sous-catégorie est bloquée dans la zone
     if (subCatId && zoneId) {
-      const sub = await prisma.subCategory.findUnique({ where: { id: subCatId } });
+      const sub = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, subCatId) });
       if (sub?.blockedZoneIds.includes(zoneId)) {
         return { success: false, error: 'Cette sous-catégorie est bloquée dans la zone cible par la DR.' };
       }
@@ -73,9 +75,13 @@ export async function getEligibleProducers(input: {
 
       // Priorité 2 : zones sœurs (même parent)
       if (targetZone.parentId) {
-        const siblings = await prisma.zone.findMany({
-          where: { parentId: targetZone.parentId, id: { not: targetZone.id }, isActive: true },
-          select: { id: true },
+        const siblings = await db.query.zones.findMany({
+          where: and(
+            eq(schema.zones.parentId, targetZone.parentId),
+            ne(schema.zones.id, targetZone.id),
+            eq(schema.zones.isActive, true)
+          ),
+          columns: { id: true },
         });
         if (siblings.length > 0) {
           zonePriority.push({ priority: 2, zoneIds: siblings.map((z) => z.id) });
@@ -83,13 +89,17 @@ export async function getEligibleProducers(input: {
       }
 
       // Priorité 3 : même région climatique (fallback large)
-      const regionZones = await prisma.zone.findMany({
-        where: {
-          climaticRegionId: targetZone.climaticRegionId,
-          id: { notIn: zonePriority.flatMap((zp) => zp.zoneIds) },
-          isActive: true,
-        },
-        select: { id: true },
+      const excludeIds = zonePriority.flatMap((zp) => zp.zoneIds);
+      const regionConditions = [
+        eq(schema.zones.climaticRegionId, targetZone.climaticRegionId),
+        eq(schema.zones.isActive, true),
+      ];
+      if (excludeIds.length > 0) {
+        regionConditions.push(notInArray(schema.zones.id, excludeIds));
+      }
+      const regionZones = await db.query.zones.findMany({
+        where: and(...regionConditions),
+        columns: { id: true },
       });
       if (regionZones.length > 0) {
         zonePriority.push({ priority: 3, zoneIds: regionZones.map((z) => z.id) });
@@ -99,29 +109,42 @@ export async function getEligibleProducers(input: {
     // 5. Récupérer les producteurs par couche de priorité
     const allZoneIds = zonePriority.flatMap((zp) => zp.zoneIds);
 
-    const producers = await prisma.producer.findMany({
-      where: {
-        status: 'ACTIVE',
-        ...(allZoneIds.length > 0 ? { zoneId: { in: allZoneIds } } : {}),
-        // Exclure les producteurs qui ont déjà soumis un bid
-        bids: { none: { auctionId } },
-      },
-      include: {
+    // Exclude producers that already submitted a bid for this auction
+    const existingBids = await db
+      .select({ producerId: schema.bids.producerId })
+      .from(schema.bids)
+      .where(eq(schema.bids.auctionId, auctionId));
+    const excludeProducerIds = existingBids.map(b => b.producerId);
+
+    const producerConditions = [eq(schema.producers.status, 'ACTIVE')];
+    if (allZoneIds.length > 0) {
+      producerConditions.push(inArray(schema.producers.zoneId, allZoneIds));
+    }
+    if (excludeProducerIds.length > 0) {
+      producerConditions.push(notInArray(schema.producers.id, excludeProducerIds));
+    }
+
+    const producers = await db.query.producers.findMany({
+      where: and(...producerConditions),
+      with: {
         user: {
-          select: {
-            id: true,
-            name: true,
+          columns: { id: true, name: true },
+          with: {
             trustScore: {
-              select: { globalScore: true, reliabilityIndex: true, complianceIndex: true, resilienceBonus: true },
-            },
+              columns: { globalScore: true, reliabilityIndex: true, complianceIndex: true, resilienceBonus: true },
+            } as any,
           },
         },
         products: subCatId
-          ? { where: { subCategoryId: subCatId, quantityForSale: { gt: 0 } }, take: 1 }
+          ? {
+              where: (t: any, { and: andOp, eq: eqOp, gt: gtOp }: any) =>
+                andOp(eqOp(t.subCategoryId, subCatId), gtOp(t.quantityForSale, 0)),
+              limit: 1,
+            }
           : undefined,
       },
-      take: limit * 2, // prendre plus pour trier après
-    });
+      limit: limit * 2, // prendre plus pour trier après
+    }) as any;
 
     // 6. Annoter chaque producteur avec sa priorité géographique
     const zoneToP = new Map<string, number>();
@@ -136,7 +159,12 @@ export async function getEligibleProducers(input: {
       _trustGlobal: number;
     };
 
-    const scored: ScoredProducer[] = producers.map((p) => ({
+    interface ScoredProducerData {
+      _geoPriority: number;
+      _trustGlobal: number;
+    }
+
+    const scored: ScoredProducer[] = producers.map((p: typeof producers[number]): ScoredProducer => ({
       ...p,
       _geoPriority: p.zoneId ? zoneToP.get(p.zoneId) ?? 99 : 99,
       _trustGlobal: p.user.trustScore?.globalScore ?? 0,
@@ -157,7 +185,7 @@ export async function getEligibleProducers(input: {
         zoneId: p.zoneId,
         geoPriority: p._geoPriority,
         trustScore: p.user.trustScore,
-        hasMatchingProduct: subCatId ? (p.products?.length ?? 0) > 0 : null,
+        hasMatchingProduct: subCatId ? ((p.products as any)?.length ?? 0) > 0 : null,
       })),
     };
   } catch (e: any) {
@@ -187,7 +215,7 @@ export async function createAuction(input: {
     if (isNaN(dl.getTime()) || dl <= new Date()) return { success: false, error: 'Deadline invalide' };
 
     // Verify subCategory exists
-    const sub = await prisma.subCategory.findUnique({ where: { id: input.subCategoryId } });
+    const sub = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, input.subCategoryId) });
     if (!sub) return { success: false, error: 'Sous-catégorie introuvable' };
 
     // If targetZone provided, ensure subCategory not blocked
@@ -197,17 +225,15 @@ export async function createAuction(input: {
       }
     }
 
-    const created = await prisma.auction.create({
-      data: {
-        buyerId: userId,
-        subCategoryId: input.subCategoryId,
-        quantity: input.quantity,
-        unit: input.unit ?? 'TONNE',
-        maxPricePerUnit: input.maxPricePerUnit,
-        deadline: dl,
-        targetZoneId: input.targetZoneId ?? null,
-      },
-    });
+    const [created] = await db.insert(schema.auctions).values({
+      buyerId: userId,
+      subCategoryId: input.subCategoryId,
+      quantity: input.quantity,
+      unit: input.unit ?? 'TONNE',
+      maxPricePerUnit: input.maxPricePerUnit,
+      deadline: dl,
+      targetZoneId: input.targetZoneId ?? null,
+    }).returning();
 
     await audit({
       action: 'CREATE_AUCTION',
@@ -234,10 +260,10 @@ export async function submitBid(input: {
   if (!userId) return { success: false, error: 'Session expirée' };
 
   try {
-    const producer = await prisma.producer.findUnique({ where: { userId } });
+    const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId) });
     if (!producer) return { success: false, error: 'Profil producteur introuvable' };
 
-    const auction = await prisma.auction.findUnique({ where: { id: input.auctionId } });
+    const auction = await db.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
     if (!auction || auction.status !== 'OPEN') {
       return { success: false, error: 'Enchère fermée ou introuvable' };
     }
@@ -254,22 +280,19 @@ export async function submitBid(input: {
       return { success: false, error: `Le prix ne peut dépasser le plafond de ${auction.maxPricePerUnit}` };
     }
 
-    const bid = await prisma.bid.upsert({
-      where: {
-        auctionId_producerId: {
-          auctionId: input.auctionId,
-          producerId: producer.id,
-        },
-      },
-      create: {
+    const [bid] = await db.insert(schema.bids)
+      .values({
         auctionId: input.auctionId,
         producerId: producer.id,
         offeredPrice: input.offeredPrice,
-      },
-      update: {
-        offeredPrice: input.offeredPrice,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [schema.bids.auctionId, schema.bids.producerId],
+        set: {
+          offeredPrice: input.offeredPrice,
+        },
+      })
+      .returning();
 
     await audit({
       action: 'SUBMIT_BID',
@@ -311,36 +334,39 @@ export async function awardAuction(input: {
   if (!userId) return { success: false, error: 'Session expirée' };
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // 1. Lire l'enchère avec verrou partagé
-      const auction = await tx.auction.findUnique({ where: { id: input.auctionId } });
+      const auction = await tx.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
       if (!auction) throw new Error('Enchère introuvable');
       if (auction.status !== 'OPEN') throw new Error('Enchère déjà attribuée ou fermée');
 
       // 2. Tentative d'attribution avec optimistic lock
       //    On incrémente la version ET on passe le statut à AWARDED
       //    SEULEMENT si la version n'a pas changé entre-temps.
-      const updated = await tx.$executeRaw`
-        UPDATE "auctions"
-        SET "status" = 'AWARDED',
-            "version" = "version" + 1,
-            "updatedAt" = NOW()
-        WHERE "id" = ${input.auctionId}
-          AND "version" = ${auction.version}
-          AND "status" = 'OPEN'
-      `;
+      const updated = await tx.update(schema.auctions)
+        .set({
+          status: 'AWARDED',
+          version: auction.version + 1,
+        })
+        .where(
+          and(
+            eq(schema.auctions.id, input.auctionId),
+            eq(schema.auctions.version, auction.version),
+            eq(schema.auctions.status, 'OPEN')
+          )
+        )
+        .returning({ id: schema.auctions.id });
 
-      if (updated === 0) {
+      if (updated.length === 0) {
         throw new Error(
           'Conflit de concurrence : l\'enchère a été modifiée par un autre processus. Réessayez.'
         );
       }
 
       // 3. Marquer le bid gagnant
-      await tx.bid.update({
-        where: { id: input.winnerBidId },
-        data: { isWinner: true },
-      });
+      await tx.update(schema.bids)
+        .set({ isWinner: true })
+        .where(eq(schema.bids.id, input.winnerBidId));
 
       // 4. Audit (via helper standard)
       await audit({

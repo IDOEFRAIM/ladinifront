@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, inArray, count } from 'drizzle-orm';
 import getUserIdFromSession  from "@/lib/get-userId";
 import { audit, snapshot } from "@/lib/audit";
 
@@ -10,12 +12,12 @@ export async function getMyProducts() {
     if (!userId) return { success: false, error: "Session expirée. Veuillez vous reconnecter." };
 
     try {
-        const producer = await prisma.producer.findUnique({
-            where: { userId },
-            select: {
+        const producer = await db.query.producers.findFirst({
+            where: eq(schema.producers.userId, userId),
+            with: {
                 products: {
-                    orderBy: { updatedAt: 'desc' },
-                    select: {
+                    orderBy: (t, { desc }) => [desc(t.updatedAt)],
+                    columns: {
                         id: true,
                         name: true,
                         categoryLabel: true,
@@ -48,9 +50,9 @@ export async function deleteProduct(productId: string) {
 
     try {
         // Vérification que le produit appartient bien au producteur connecté
-        const product = await prisma.product.findUnique({
-            where: { id: productId },
-            select: { producer: { select: { userId: true } } }
+        const product = await db.query.products.findFirst({
+            where: eq(schema.products.id, productId),
+            with: { producer: { columns: { userId: true } } }
         });
 
         // Sécurité critique : on compare l'ID du cookie avec l'ID du propriétaire
@@ -59,20 +61,20 @@ export async function deleteProduct(productId: string) {
         }
 
         // Vérifier qu'il n'y a pas de commandes en cours
-        const activeOrders = await prisma.orderItem.count({
-            where: {
-                productId,
-                order: {
-                    status: { in: ['PENDING', 'CONFIRMED', 'SHIPPED'] }
-                }
-            }
-        });
+        const [{ value: activeOrders }] = await db
+            .select({ value: count() })
+            .from(schema.orderItems)
+            .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+            .where(and(
+                eq(schema.orderItems.productId, productId),
+                inArray(schema.orders.status, ['PENDING', 'CONFIRMED', 'SHIPPED'])
+            ));
 
         if (activeOrders > 0) {
             return { success: false, error: "Impossible de supprimer : commandes en cours sur ce produit." };
         }
 
-        await prisma.product.delete({ where: { id: productId } });
+        await db.delete(schema.products).where(eq(schema.products.id, productId));
 
         // Audit : suppression de produit
         await audit({
@@ -95,13 +97,13 @@ export async function toggleProductAvailability(productId: string) {
     if (!productId || !userId) return { success: false, error: "Paramètres manquants" };
 
     try {
-        const product = await prisma.product.findUnique({
-            where: { id: productId },
-            select: {
+        const product = await db.query.products.findFirst({
+            where: eq(schema.products.id, productId),
+            columns: {
                 id: true,
                 quantityForSale: true,
-                producer: { select: { userId: true } }
-            }
+            },
+            with: { producer: { columns: { userId: true } } }
         });
 
         if (!product || product.producer.userId !== userId) {
@@ -110,10 +112,9 @@ export async function toggleProductAvailability(productId: string) {
 
         const newQuantity = product.quantityForSale > 0 ? 0 : 1;
 
-        await prisma.product.update({
-            where: { id: productId },
-            data: { quantityForSale: newQuantity }
-        });
+        await db.update(schema.products)
+            .set({ quantityForSale: newQuantity })
+            .where(eq(schema.products.id, productId));
 
         // Audit : toggle disponibilité
         await audit({

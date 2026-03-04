@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser, requireProducer } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
+import { requireProducer } from '@/lib/api-guard';
 import { AgrobusinessAsset } from '@/types/dashboard.index';
 
 export const dynamic = 'force-dynamic';
@@ -14,10 +16,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json([]);
     }
 
-    const producer = await prisma.producer.findUnique({
-      where: { id: user.producerId },
-      include: {
-        farms: { include: { inventory: true } },
+    const producer = await db.query.producers.findFirst({
+      where: eq(schema.producers.id, user.producerId),
+      with: {
+        farms: { with: { inventory: true } },
         products: true,
       },
     });

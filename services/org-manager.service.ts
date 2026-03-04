@@ -12,7 +12,9 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and, or, count } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { audit, snapshot } from '@/lib/audit';
@@ -27,7 +29,6 @@ import {
   AssignWorkZoneSchema,
   UpdateWorkZoneSchema,
 } from '@/lib/validators';
-import type { OrgRole } from '@prisma/client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -97,12 +98,15 @@ async function getOrgContext(): Promise<{ ctx: OrgContext | null; error: string 
 
   // 3. Verify membership in DB (NEVER trust client)
   const [membership, user] = await Promise.all([
-    prisma.userOrganization.findUnique({
-      where: { userId_organizationId: { userId, organizationId: orgId } },
+    db.query.userOrganizations.findFirst({
+      where: and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.organizationId, orgId),
+      ),
     }),
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
+    db.query.users.findFirst({
+      where: eq(schema.users.id, userId),
+      columns: { role: true },
     }),
   ]);
 
@@ -179,7 +183,7 @@ export async function createOrganization(data: {
   const userId = session?.userId;
   if (!userId) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { role: true } });
   if (!user) return { success: false, error: 'Utilisateur introuvable.' };
   const systemRole = String(user.role).toUpperCase();
   if (systemRole !== 'SUPERADMIN' && systemRole !== 'ADMIN') {
@@ -187,19 +191,19 @@ export async function createOrganization(data: {
   }
 
   try {
-    const created = await prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({ data: {
+    const created = await db.transaction(async (tx) => {
+      const [org] = await tx.insert(schema.organizations).values({
         name: validation.data.name,
         type: validation.data.type as any,
         taxId: validation.data.taxId ?? null,
         description: validation.data.description ?? null,
-      } });
+      }).returning();
 
-      await tx.userOrganization.create({ data: {
+      await tx.insert(schema.userOrganizations).values({
         userId,
         organizationId: org.id,
-        role: 'ADMIN' as OrgRole,
-      } });
+        role: 'ADMIN',
+      });
 
       return org;
     });
@@ -215,7 +219,7 @@ export async function createOrganization(data: {
     return { success: true, data: created };
   } catch (err: any) {
     console.error('[OrgManager] createOrganization:', err);
-    if (err?.code === 'P2002') return { success: false, error: "Une organisation avec ce nom existe déjà." };
+    if (err?.code === '23505') return { success: false, error: "Une organisation avec ce nom existe déjà." };
     return { success: false, error: 'Impossible de créer l\'organisation.' };
   }
 }
@@ -232,9 +236,9 @@ export async function getOrgSettings(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const org = await prisma.organization.findUnique({
-      where: { id: ctx.orgId },
-      select: { id: true, name: true, type: true, taxId: true, description: true, createdAt: true, status: true },
+    const org = await db.query.organizations.findFirst({
+      where: eq(schema.organizations.id, ctx.orgId),
+      columns: { id: true, name: true, type: true, taxId: true, description: true, createdAt: true, status: true },
     });
 
     if (!org) return { success: false, error: 'Organisation introuvable.' };
@@ -264,18 +268,18 @@ export async function updateOrgSettings(data: {
   }
 
   try {
-    const oldOrg = await prisma.organization.findUnique({ where: { id: ctx.orgId } });
+    const oldOrg = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, ctx.orgId) });
     const oldValue = await snapshot(oldOrg as Record<string, unknown> | null);
 
-    const updated = await prisma.organization.update({
-      where: { id: ctx.orgId },
-      data: {
+    const [updated] = await db.update(schema.organizations)
+      .set({
         name: validation.data.name,
         type: validation.data.type as any,
         taxId: validation.data.taxId ?? null,
         description: validation.data.description ?? null,
-      },
-    });
+      })
+      .where(eq(schema.organizations.id, ctx.orgId))
+      .returning();
 
     await audit({
       actorId: ctx.userId,
@@ -305,19 +309,27 @@ export async function getOrgRoles(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const roles = await prisma.roleDef.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { userOrgs: true } },
-      },
+    const roles = await db.query.roleDefs.findMany({
+      orderBy: (t, { desc }) => [desc(t.createdAt)],
     });
+
+    // Separate count queries for _count replacement
+    const roleCounts = await Promise.all(
+      roles.map(async (r) => {
+        const [{ value }] = await db.select({ value: count() })
+          .from(schema.userOrganizations)
+          .where(eq(schema.userOrganizations.roleId, r.id));
+        return { id: r.id, count: value };
+      })
+    );
+    const countMap = Object.fromEntries(roleCounts.map(rc => [rc.id, rc.count]));
 
     const formatted = roles.map(r => ({
       id: r.id,
       name: r.name,
       description: r.description,
       permissions: r.permissions,
-      membersCount: r._count.userOrgs,
+      membersCount: countMap[r.id] ?? 0,
       createdAt: r.createdAt.toISOString(),
     }));
 
@@ -351,13 +363,11 @@ export async function createOrgRole(data: {
   }
 
   try {
-    const role = await prisma.roleDef.create({
-      data: {
-        name: validation.data.name,
-        description: validation.data.description ?? null,
-        permissions: validation.data.permissions,
-      },
-    });
+    const [role] = await db.insert(schema.roleDefs).values({
+      name: validation.data.name,
+      description: validation.data.description ?? null,
+      permissions: validation.data.permissions,
+    }).returning();
 
     await audit({
       actorId: ctx.userId,
@@ -369,7 +379,7 @@ export async function createOrgRole(data: {
 
     return { success: true, data: role };
   } catch (err: any) {
-    if (err?.code === 'P2002') {
+    if (err?.code === '23505') {
       return { success: false, error: 'Un rôle avec ce nom existe déjà.' };
     }
     console.error('[OrgManager] createOrgRole:', err);
@@ -403,7 +413,7 @@ export async function updateOrgRole(roleId: string, data: {
   }
 
   try {
-    const oldRole = await prisma.roleDef.findUnique({ where: { id: roleId } });
+    const oldRole = await db.query.roleDefs.findFirst({ where: eq(schema.roleDefs.id, roleId) });
     if (!oldRole) return { success: false, error: 'Rôle introuvable.' };
     const oldValue = await snapshot(oldRole as unknown as Record<string, unknown>);
 
@@ -412,10 +422,10 @@ export async function updateOrgRole(roleId: string, data: {
     if (validation.data.description !== undefined) updateData.description = validation.data.description;
     if (validation.data.permissions !== undefined) updateData.permissions = validation.data.permissions;
 
-    const updated = await prisma.roleDef.update({
-      where: { id: roleId },
-      data: updateData as any,
-    });
+    const [updated] = await db.update(schema.roleDefs)
+      .set(updateData as any)
+      .where(eq(schema.roleDefs.id, roleId))
+      .returning();
 
     await audit({
       actorId: ctx.userId,
@@ -428,7 +438,7 @@ export async function updateOrgRole(roleId: string, data: {
 
     return { success: true, data: updated };
   } catch (err: any) {
-    if (err?.code === 'P2002') {
+    if (err?.code === '23505') {
       return { success: false, error: 'Un rôle avec ce nom existe déjà.' };
     }
     console.error('[OrgManager] updateOrgRole:', err);
@@ -446,18 +456,22 @@ export async function deleteOrgRole(roleId: string): Promise<ServiceResult> {
   if (!roleId) return { success: false, error: 'ID du rôle requis.' };
 
   try {
-    const role = await prisma.roleDef.findUnique({
-      where: { id: roleId },
-      include: { _count: { select: { userOrgs: true } } },
+    const role = await db.query.roleDefs.findFirst({
+      where: eq(schema.roleDefs.id, roleId),
     });
     if (!role) return { success: false, error: 'Rôle introuvable.' };
 
-    if (role._count.userOrgs > 0) {
-      return { success: false, error: `Impossible de supprimer : ${role._count.userOrgs} membre(s) utilisent ce rôle.` };
+    // Count members using this role
+    const [{ value: userOrgsCount }] = await db.select({ value: count() })
+      .from(schema.userOrganizations)
+      .where(eq(schema.userOrganizations.roleId, roleId));
+
+    if (userOrgsCount > 0) {
+      return { success: false, error: `Impossible de supprimer : ${userOrgsCount} membre(s) utilisent ce rôle.` };
     }
 
     const oldValue = await snapshot(role as unknown as Record<string, unknown>);
-    await prisma.roleDef.delete({ where: { id: roleId } });
+    await db.delete(schema.roleDefs).where(eq(schema.roleDefs.id, roleId));
 
     await audit({
       actorId: ctx.userId,
@@ -486,14 +500,13 @@ export async function getOrgMembers(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const members = await prisma.userOrganization.findMany({
-      where: { organizationId: ctx.orgId },
-      include: {
-        user: { select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true } },
-        dynRole: { select: { id: true, name: true, permissions: true } },
-        zone: { select: { id: true, name: true } },
+    const members = await db.query.userOrganizations.findMany({
+      where: eq(schema.userOrganizations.organizationId, ctx.orgId),
+      with: {
+        user: { columns: { id: true, name: true, email: true, phone: true, role: true, createdAt: true } },
+        dynRole: { columns: { id: true, name: true, permissions: true } },
+        zone: { columns: { id: true, name: true } },
       },
-      orderBy: { user: { createdAt: 'desc' } },
     });
 
     const formatted = members.map(m => ({
@@ -539,14 +552,12 @@ export async function inviteOrgMember(data: {
 
   try {
     // Find user by email or phone
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: identifier },
-          { phone: identifier },
-        ],
-      },
-      select: { id: true, name: true, email: true },
+    const user = await db.query.users.findFirst({
+      where: or(
+        eq(schema.users.email, identifier),
+        eq(schema.users.phone, identifier),
+      ),
+      columns: { id: true, name: true, email: true },
     });
 
     if (!user) {
@@ -554,8 +565,11 @@ export async function inviteOrgMember(data: {
     }
 
     // Check not already a member
-    const existing = await prisma.userOrganization.findUnique({
-      where: { userId_organizationId: { userId: user.id, organizationId: ctx.orgId } },
+    const existing = await db.query.userOrganizations.findFirst({
+      where: and(
+        eq(schema.userOrganizations.userId, user.id),
+        eq(schema.userOrganizations.organizationId, ctx.orgId),
+      ),
     });
     if (existing) {
       return { success: false, error: 'Cet utilisateur est déjà membre de l\'organisation.' };
@@ -563,32 +577,35 @@ export async function inviteOrgMember(data: {
 
     // Validate roleDefId exists if provided
     if (roleDefId) {
-      const roleDef = await prisma.roleDef.findUnique({ where: { id: roleDefId } });
+      const roleDef = await db.query.roleDefs.findFirst({ where: eq(schema.roleDefs.id, roleDefId) });
       if (!roleDef) return { success: false, error: 'Rôle personnalisé introuvable.' };
     }
 
     // Validate zone if provided
     if (managedZoneId) {
-      const zone = await prisma.zone.findUnique({ where: { id: managedZoneId } });
+      const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, managedZoneId) });
       if (!zone) return { success: false, error: 'Zone introuvable.' };
     }
 
     // Atomic creation
-    const membership = await prisma.$transaction(async (tx) => {
-      const created = await tx.userOrganization.create({
-        data: {
-          userId: user.id,
-          organizationId: ctx.orgId,
-          role: orgRole as OrgRole,
-          roleId: roleDefId ?? undefined,
-          managedZoneId: managedZoneId ?? undefined,
-        },
-        include: {
-          user: { select: { id: true, name: true, email: true } },
-          dynRole: { select: { id: true, name: true } },
+    const membership = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(schema.userOrganizations).values({
+        userId: user.id,
+        organizationId: ctx.orgId,
+        role: orgRole as any,
+        roleId: roleDefId ?? undefined,
+        managedZoneId: managedZoneId ?? undefined,
+      }).returning();
+
+      // Fetch with relations
+      const full = await db.query.userOrganizations.findFirst({
+        where: eq(schema.userOrganizations.id, created.id),
+        with: {
+          user: { columns: { id: true, name: true, email: true } },
+          dynRole: { columns: { id: true, name: true } },
         },
       });
-      return created;
+      return full!;
     });
 
     await audit({
@@ -606,7 +623,7 @@ export async function inviteOrgMember(data: {
 
     return { success: true, data: { membershipId: membership.id, userName: user.name, userEmail: user.email } };
   } catch (err: any) {
-    if (err?.code === 'P2002') {
+    if (err?.code === '23505') {
       return { success: false, error: 'Cet utilisateur est déjà membre.' };
     }
     console.error('[OrgManager] inviteOrgMember:', err);
@@ -633,8 +650,8 @@ export async function updateOrgMember(membershipId: string, data: {
   }
 
   try {
-    const existing = await prisma.userOrganization.findUnique({
-      where: { id: membershipId },
+    const existing = await db.query.userOrganizations.findFirst({
+      where: eq(schema.userOrganizations.id, membershipId),
     });
     if (!existing) return { success: false, error: 'Membre introuvable.' };
     if (existing.organizationId !== ctx.orgId) {
@@ -644,16 +661,20 @@ export async function updateOrgMember(membershipId: string, data: {
     const oldValue = await snapshot(existing as unknown as Record<string, unknown>);
 
     const updateData: Record<string, unknown> = {};
-    if (validation.data.orgRole !== undefined) updateData.role = validation.data.orgRole as OrgRole;
+    if (validation.data.orgRole !== undefined) updateData.role = validation.data.orgRole;
     if (validation.data.roleDefId !== undefined) updateData.roleId = validation.data.roleDefId;
     if (validation.data.managedZoneId !== undefined) updateData.managedZoneId = validation.data.managedZoneId;
 
-    const updated = await prisma.userOrganization.update({
-      where: { id: membershipId },
-      data: updateData as any,
-      include: {
-        user: { select: { id: true, name: true } },
-        dynRole: { select: { id: true, name: true } },
+    await db.update(schema.userOrganizations)
+      .set(updateData as any)
+      .where(eq(schema.userOrganizations.id, membershipId));
+
+    // Fetch the updated record with relations
+    const updated = await db.query.userOrganizations.findFirst({
+      where: eq(schema.userOrganizations.id, membershipId),
+      with: {
+        user: { columns: { id: true, name: true } },
+        dynRole: { columns: { id: true, name: true } },
       },
     });
 
@@ -684,9 +705,9 @@ export async function removeOrgMember(membershipId: string): Promise<ServiceResu
   if (!membershipId) return { success: false, error: 'ID du membre requis.' };
 
   try {
-    const existing = await prisma.userOrganization.findUnique({
-      where: { id: membershipId },
-      include: { user: { select: { id: true, name: true } } },
+    const existing = await db.query.userOrganizations.findFirst({
+      where: eq(schema.userOrganizations.id, membershipId),
+      with: { user: { columns: { id: true, name: true } } },
     });
     if (!existing) return { success: false, error: 'Membre introuvable.' };
     if (existing.organizationId !== ctx.orgId) {
@@ -699,12 +720,15 @@ export async function removeOrgMember(membershipId: string): Promise<ServiceResu
     const oldValue = await snapshot(existing as unknown as Record<string, unknown>);
 
     // Also remove associated work zones for this user in this org
-    await prisma.$transaction([
-      prisma.workZone.deleteMany({
-        where: { organizationId: ctx.orgId, managerId: existing.userId },
-      }),
-      prisma.userOrganization.delete({ where: { id: membershipId } }),
-    ]);
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.workZones).where(
+        and(
+          eq(schema.workZones.organizationId, ctx.orgId),
+          eq(schema.workZones.managerId, existing.userId),
+        ),
+      );
+      await tx.delete(schema.userOrganizations).where(eq(schema.userOrganizations.id, membershipId));
+    });
 
     await audit({
       actorId: ctx.userId,
@@ -733,13 +757,13 @@ export async function getOrgWorkZones(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const workZones = await prisma.workZone.findMany({
-      where: { organizationId: ctx.orgId },
-      include: {
-        zone: { select: { id: true, name: true, code: true, path: true } },
-        manager: { select: { id: true, name: true, email: true } },
+    const workZones = await db.query.workZones.findMany({
+      where: eq(schema.workZones.organizationId, ctx.orgId),
+      with: {
+        zone: { columns: { id: true, name: true, code: true, path: true } },
+        manager: { columns: { id: true, name: true, email: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: (t, { desc }) => [desc(t.createdAt)],
     });
 
     const formatted = workZones.map(wz => ({
@@ -768,19 +792,28 @@ export async function getOrganizationDetails(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const org = await prisma.organization.findUnique({
-      where: { id: ctx.orgId },
-      select: { id: true, name: true, description: true, createdAt: true },
+    const org = await db.query.organizations.findFirst({
+      where: eq(schema.organizations.id, ctx.orgId),
+      columns: { id: true, name: true, description: true, createdAt: true },
     });
     if (!org) return { success: false, error: 'Organisation introuvable.' };
 
-    const [membersCount, zonesCount, roleDefsCount] = await Promise.all([
-      prisma.userOrganization.count({ where: { organizationId: ctx.orgId } }),
-      prisma.workZone.count({ where: { organizationId: ctx.orgId } }),
-      // RoleDef is a global table; count role definitions that are referenced
-      // by UserOrganization records for this organization.
-      prisma.roleDef.count({ where: { userOrgs: { some: { organizationId: ctx.orgId } } } }),
+    const [membersCountResult, zonesCountResult] = await Promise.all([
+      db.select({ value: count() }).from(schema.userOrganizations)
+        .where(eq(schema.userOrganizations.organizationId, ctx.orgId)),
+      db.select({ value: count() }).from(schema.workZones)
+        .where(eq(schema.workZones.organizationId, ctx.orgId)),
     ]);
+    const membersCount = membersCountResult[0].value;
+    const zonesCount = zonesCountResult[0].value;
+
+    // Count role definitions referenced by UserOrganization records for this org
+    const orgMembersWithRoles = await db.query.userOrganizations.findMany({
+      where: eq(schema.userOrganizations.organizationId, ctx.orgId),
+      columns: { roleId: true },
+    });
+    const uniqueRoleIds = new Set(orgMembersWithRoles.map(m => m.roleId).filter(Boolean));
+    const roleDefsCount = uniqueRoleIds.size;
 
     return {
       success: true,
@@ -821,13 +854,16 @@ export async function assignWorkZone(data: {
 
   try {
     // Validate zone exists
-    const zone = await prisma.zone.findUnique({ where: { id: zoneId }, select: { id: true, name: true } });
+    const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, zoneId), columns: { id: true, name: true } });
     if (!zone) return { success: false, error: 'Zone introuvable.' };
 
     // Validate manager is a member of this org (if provided)
     if (managerId) {
-      const membership = await prisma.userOrganization.findUnique({
-        where: { userId_organizationId: { userId: managerId, organizationId: ctx.orgId } },
+      const membership = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(schema.userOrganizations.userId, managerId),
+          eq(schema.userOrganizations.organizationId, ctx.orgId),
+        ),
       });
       if (!membership) {
         return { success: false, error: 'Le manager sélectionné n\'est pas membre de l\'organisation.' };
@@ -835,23 +871,25 @@ export async function assignWorkZone(data: {
     }
 
     // Upsert work zone (unique on [organizationId, zoneId])
-    const workZone = await prisma.workZone.upsert({
-      where: {
-        organizationId_zoneId: { organizationId: ctx.orgId, zoneId },
-      },
-      create: {
-        organizationId: ctx.orgId,
-        zoneId,
-        managerId: managerId ?? undefined,
-        role: role ?? undefined,
-      },
-      update: {
+    const [workZone] = await db.insert(schema.workZones).values({
+      organizationId: ctx.orgId,
+      zoneId,
+      managerId: managerId ?? undefined,
+      role: role ?? undefined,
+    }).onConflictDoUpdate({
+      target: [schema.workZones.organizationId, schema.workZones.zoneId],
+      set: {
         managerId: managerId ?? null,
         role: role ?? null,
       },
-      include: {
-        zone: { select: { id: true, name: true } },
-        manager: { select: { id: true, name: true } },
+    }).returning();
+
+    // Fetch with relations
+    const workZoneWithRelations = await db.query.workZones.findFirst({
+      where: eq(schema.workZones.id, workZone.id),
+      with: {
+        zone: { columns: { id: true, name: true } },
+        manager: { columns: { id: true, name: true } },
       },
     });
 
@@ -863,7 +901,7 @@ export async function assignWorkZone(data: {
       newValue: { zoneId, zoneName: zone.name, managerId: managerId ?? null, role: role ?? null },
     });
 
-    return { success: true, data: workZone };
+    return { success: true, data: workZoneWithRelations };
   } catch (err: any) {
     console.error('[OrgManager] assignWorkZone:', err);
     return { success: false, error: 'Impossible d\'assigner la zone.' };
@@ -888,7 +926,7 @@ export async function updateWorkZone(workZoneId: string, data: {
   }
 
   try {
-    const existing = await prisma.workZone.findUnique({ where: { id: workZoneId } });
+    const existing = await db.query.workZones.findFirst({ where: eq(schema.workZones.id, workZoneId) });
     if (!existing) return { success: false, error: 'Zone de travail introuvable.' };
     if (existing.organizationId !== ctx.orgId) {
       return { success: false, error: 'Cette zone n\'appartient pas à votre organisation.' };
@@ -898,8 +936,11 @@ export async function updateWorkZone(workZoneId: string, data: {
 
     // Validate manager membership if provided
     if (validation.data.managerId) {
-      const membership = await prisma.userOrganization.findUnique({
-        where: { userId_organizationId: { userId: validation.data.managerId, organizationId: ctx.orgId } },
+      const membership = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(schema.userOrganizations.userId, validation.data.managerId),
+          eq(schema.userOrganizations.organizationId, ctx.orgId),
+        ),
       });
       if (!membership) {
         return { success: false, error: 'Le manager sélectionné n\'est pas membre de l\'organisation.' };
@@ -910,12 +951,16 @@ export async function updateWorkZone(workZoneId: string, data: {
     if (validation.data.managerId !== undefined) updateData.managerId = validation.data.managerId;
     if (validation.data.role !== undefined) updateData.role = validation.data.role;
 
-    const updated = await prisma.workZone.update({
-      where: { id: workZoneId },
-      data: updateData as any,
-      include: {
-        zone: { select: { id: true, name: true } },
-        manager: { select: { id: true, name: true } },
+    await db.update(schema.workZones)
+      .set(updateData as any)
+      .where(eq(schema.workZones.id, workZoneId));
+
+    // Fetch updated record with relations
+    const updated = await db.query.workZones.findFirst({
+      where: eq(schema.workZones.id, workZoneId),
+      with: {
+        zone: { columns: { id: true, name: true } },
+        manager: { columns: { id: true, name: true } },
       },
     });
 
@@ -945,9 +990,9 @@ export async function removeWorkZone(workZoneId: string): Promise<ServiceResult>
   if (!workZoneId) return { success: false, error: 'ID requis.' };
 
   try {
-    const existing = await prisma.workZone.findUnique({
-      where: { id: workZoneId },
-      include: { zone: { select: { name: true } } },
+    const existing = await db.query.workZones.findFirst({
+      where: eq(schema.workZones.id, workZoneId),
+      with: { zone: { columns: { name: true } } },
     });
     if (!existing) return { success: false, error: 'Zone introuvable.' };
     if (existing.organizationId !== ctx.orgId) {
@@ -955,7 +1000,7 @@ export async function removeWorkZone(workZoneId: string): Promise<ServiceResult>
     }
 
     const oldValue = await snapshot(existing as unknown as Record<string, unknown>);
-    await prisma.workZone.delete({ where: { id: workZoneId } });
+    await db.delete(schema.workZones).where(eq(schema.workZones.id, workZoneId));
 
     await audit({
       actorId: ctx.userId,
@@ -984,10 +1029,10 @@ export async function getAvailableZones(): Promise<ServiceResult> {
   if (error || !ctx) return { success: false, error: error || 'Accès refusé' };
 
   try {
-    const zones = await prisma.zone.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, code: true, path: true, depth: true },
-      orderBy: [{ depth: 'asc' }, { name: 'asc' }],
+    const zones = await db.query.zones.findMany({
+      where: eq(schema.zones.isActive, true),
+      columns: { id: true, name: true, code: true, path: true, depth: true },
+      orderBy: (t, { asc }) => [asc(t.depth), asc(t.name)],
     });
     return { success: true, data: zones };
   } catch (err) {

@@ -43,6 +43,7 @@ export default function OrgMembersPage() {
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [canInvite, setCanInvite] = useState<boolean | null>(null);
 
   // Search & pagination
   const [search, setSearch] = useState('');
@@ -78,6 +79,32 @@ export default function OrgMembersPage() {
     } catch (e) {
       // ignore
     }
+
+    // Determine whether current user may invite members (is org ADMIN or system ADMIN)
+    try {
+      const resp = await fetch('/api/me');
+      if (resp.ok) {
+        const payload = await resp.json();
+        const user = payload?.user;
+        const cookieName = 'active-org-id';
+        const match = document.cookie.split('; ').find(c => c.startsWith(cookieName + '='));
+        const activeOrgId = match ? decodeURIComponent(match.split('=')[1]) : null;
+        let allowed = false;
+        if (user) {
+          const sysRole = (user.role || '').toUpperCase();
+          if (sysRole === 'SUPERADMIN' || sysRole === 'ADMIN') allowed = true;
+          if (Array.isArray(user.organizations) && activeOrgId) {
+            const org = user.organizations.find((o: any) => String(o.organizationId) === String(activeOrgId));
+            if (org && String(org.role) === 'ADMIN') allowed = true;
+          }
+        }
+        setCanInvite(allowed);
+      } else {
+        setCanInvite(false);
+      }
+    } catch (e) {
+      setCanInvite(false);
+    }
     setLoading(false);
   }, []);
 
@@ -101,6 +128,13 @@ export default function OrgMembersPage() {
     setInviteSaving(true);
     setMessage(null);
 
+    // Prevent client-side invite attempts when not allowed
+    if (canInvite === false) {
+      setMessage({ type: 'error', text: 'Vous n\'êtes pas administrateur de cette organisation.' });
+      setInviteSaving(false);
+      return;
+    }
+
     const result = await inviteOrgMember({
       identifier: inviteId.trim(),
       orgRole: inviteOrgRole,
@@ -115,7 +149,13 @@ export default function OrgMembersPage() {
       setInviteRoleDefId('');
       load();
     } else {
-      setMessage({ type: 'error', text: result.error || 'Erreur.' });
+      // Improve permission-related error messaging
+      const err = (result.error || '').toString();
+      if (/admin|droits insuffisants|accès refusé|autorisé/i.test(err)) {
+        setMessage({ type: 'error', text: 'Permission refusée : vous devez être administrateur de l\'organisation.' });
+      } else {
+        setMessage({ type: 'error', text: err || 'Erreur.' });
+      }
     }
     setInviteSaving(false);
   }
@@ -183,10 +223,15 @@ export default function OrgMembersPage() {
             <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Membres</h1>
           </div>
           <p className="text-sm text-stone-500">{members.length} membre{members.length > 1 ? 's' : ''} dans l&apos;organisation</p>
+          {canInvite === false && (
+            <div className="mt-2 text-xs text-stone-500">Seuls les administrateurs peuvent inviter des membres.</div>
+          )}
         </div>
         <button
           onClick={() => setShowInvite(true)}
-          className="inline-flex items-center gap-2 bg-emerald-700 text-white py-2.5 px-5 rounded-full text-sm font-bold hover:bg-emerald-800 transition-colors"
+          disabled={canInvite === false}
+          title={canInvite === false ? 'Vous n\'êtes pas administrateur de cette organisation' : undefined}
+          className={`inline-flex items-center gap-2 py-2.5 px-5 rounded-full text-sm font-bold transition-colors ${canInvite === false ? 'bg-stone-200 text-stone-400 cursor-not-allowed' : 'bg-emerald-700 text-white hover:bg-emerald-800'}`}
         >
           <Plus size={16} /> Inviter un membre
         </button>

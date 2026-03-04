@@ -1,5 +1,7 @@
 'use server'
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, sql } from 'drizzle-orm';
 import { audit, snapshot } from "@/lib/audit";
 import getUserIdFromSession from "@/lib/get-userId";
 
@@ -62,9 +64,9 @@ function mapPaymentMethodCode(method?: string): string {
  */
 async function validateInventory(tx: any, items: CreateOrderParams['items']): Promise<void> {
   for (const item of items) {
-    const product: ProductInventoryCheck | null = await tx.product.findUnique({
-      where: { id: item.productId },
-      select: { id: true, quantityForSale: true, name: true }
+    const product: ProductInventoryCheck | null = await tx.query.products.findFirst({
+      where: eq(schema.products.id, item.productId),
+      columns: { id: true, quantityForSale: true, name: true }
     });
 
     if (!product) {
@@ -81,31 +83,41 @@ async function validateInventory(tx: any, items: CreateOrderParams['items']): Pr
  */
 async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethodCode: string): Promise<OrderCreated> {
   // Look up ref IDs for status and payment method
-  return await tx.order.create({
-    data: {
-      buyerId: data.buyerId,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      totalAmount: data.totalAmount,
-      paymentMethod: paymentMethodCode,
-      city: data.city || "Ouagadougou",
-      gpsLat: data.gpsLat,
-      gpsLng: data.gpsLng,
-      deliveryDesc: data.deliveryDesc || "",
-      audioUrl: data.audioUrl,
-      zoneId: data.zoneId || data.locationId || undefined,
-      organizationId: data.organizationId || undefined,
-      status: 'PENDING',
-      items: {
-        create: data.items.map((item): OrderItem => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          priceAtSale: item.price,
-        }))
-      }
-    },
-    select: { id: true, totalAmount: true, status: true, buyerId: true, organizationId: true }
+  const [order] = await tx.insert(schema.orders).values({
+    buyerId: data.buyerId,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    totalAmount: data.totalAmount,
+    paymentMethod: paymentMethodCode as any,
+    city: data.city || "Ouagadougou",
+    gpsLat: data.gpsLat,
+    gpsLng: data.gpsLng,
+    deliveryDesc: data.deliveryDesc || "",
+    audioUrl: data.audioUrl,
+    zoneId: data.zoneId || data.locationId || undefined,
+    organizationId: data.organizationId || undefined,
+    status: 'PENDING' as const,
+  }).returning({
+    id: schema.orders.id,
+    totalAmount: schema.orders.totalAmount,
+    status: schema.orders.status,
+    buyerId: schema.orders.buyerId,
+    organizationId: schema.orders.organizationId,
   });
+
+  // Insert order items
+  if (data.items.length > 0) {
+    await tx.insert(schema.orderItems).values(
+      data.items.map((item): { orderId: string; productId: string; quantity: number; priceAtSale: number } => ({
+        orderId: order.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        priceAtSale: item.price,
+      }))
+    );
+  }
+
+  return order;
 }
 
 /**
@@ -113,10 +125,9 @@ async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethod
  */
 async function decrementStock(tx: any, items: CreateOrderParams['items']): Promise<void> {
   for (const item of items) {
-    await tx.product.update({
-      where: { id: item.productId },
-      data: { quantityForSale: { decrement: item.quantity } }
-    });
+    await tx.update(schema.products)
+      .set({ quantityForSale: sql`${schema.products.quantityForSale} - ${item.quantity}` })
+      .where(eq(schema.products.id, item.productId));
   }
 }
 
@@ -129,7 +140,7 @@ async function decrementStock(tx: any, items: CreateOrderParams['items']): Promi
 export async function createOrderService(data: CreateOrderParams) {
   const mappedPayment = mapPaymentMethodCode(data.paymentMethod);
 
-  const order: OrderCreated = await prisma.$transaction(async (tx: any) => {
+  const order: OrderCreated = await db.transaction(async (tx: any) => {
     await validateInventory(tx, data.items);
     const created = await createOrderRecord(tx, data, mappedPayment);
     await decrementStock(tx, data.items);
@@ -157,9 +168,9 @@ export async function getOrderDetails(orderId: string) {
   if (!orderId) return null;
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: {
+    const order = await db.query.orders.findFirst({
+      where: eq(schema.orders.id, orderId),
+      columns: {
         id: true,
         customerName: true,
         customerPhone: true,
@@ -175,13 +186,17 @@ export async function getOrderDetails(orderId: string) {
         buyerId: true,
         organizationId: true,
         zoneId: true,
+      },
+      with: {
         items: {
-          select: {
+          columns: {
             id: true,
             quantity: true,
             priceAtSale: true,
+          },
+          with: {
             product: {
-              select: {
+              columns: {
                 id: true,
                 name: true,
                 price: true,

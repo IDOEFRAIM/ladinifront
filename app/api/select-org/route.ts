@@ -1,4 +1,6 @@
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { cookies } from 'next/headers';
 import { COOKIE_NAMES, publicOpts } from '@/lib/cookie-helpers';
@@ -11,17 +13,15 @@ export async function POST(req: Request) {
   const { organizationId } = body;
   if (!organizationId) return new Response('Bad Request', { status: 400 });
 
-  const membership = await prisma.userOrganization.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.userId,
-        organizationId,
-      }
-    },
-    include: { dynRole: { select: { permissions: true } } }
+  const membership = await db.query.userOrganizations.findFirst({
+    where: and(
+      eq(schema.userOrganizations.userId, session.userId),
+      eq(schema.userOrganizations.organizationId, organizationId),
+    ),
+    with: { dynRole: { columns: { permissions: true } } },
   });
   // Allow system admins to select any org even without explicit membership
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { role: true } });
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, session.userId), columns: { role: true } });
   const systemRole = String(user?.role || '').toUpperCase();
   if (!membership && systemRole !== 'SUPERADMIN' && systemRole !== 'ADMIN') return new Response('Forbidden', { status: 403 });
 

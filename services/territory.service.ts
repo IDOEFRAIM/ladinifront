@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from "@/lib/prisma";
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, count } from 'drizzle-orm';
 import { CreateClimaticRegionSchema, CreateLocationSchema } from "@/lib/validators";
 import { audit } from "@/lib/audit";
 import getUserIdFromSession from "@/lib/get-userId";
@@ -11,17 +13,23 @@ import getUserIdFromSession from "@/lib/get-userId";
 
 export async function getClimaticRegions() {
   try {
-    const regions = await prisma.climaticRegion.findMany({
-      include: {
-        zones: {
-          select: { id: true, name: true, code: true, isActive: true },
-          orderBy: { name: 'asc' }
-        },
-        _count: { select: { zones: true } }
-      },
-      orderBy: { name: 'asc' }
+    // Fetch regions and compute zones count in a separate grouped query to avoid using `.with`
+    const regions = await db.query.climaticRegions.findMany({
+      columns: { id: true, name: true, description: true },
+      orderBy: (t, { asc }) => [asc(t.name)]
     });
-    return { success: true, data: regions };
+
+    const zoneCounts = await db.select({ regionId: schema.zones.climaticRegionId, value: count() })
+      .from(schema.zones)
+      .groupBy(schema.zones.climaticRegionId);
+
+    const zMap = new Map(zoneCounts.map(c => [c.regionId, c.value]));
+    const regionsWithCount = regions.map((r: any) => ({
+      ...r,
+      _count: { zones: zMap.get(r.id) || 0 }
+    }));
+
+    return { success: true, data: regionsWithCount };
   } catch (error) {
     console.error("Erreur chargement régions:", error);
     return { success: false, error: "Impossible de charger les régions." };
@@ -35,10 +43,10 @@ export async function createClimaticRegion(data: { name: string; description?: s
   }
 
   try {
-    const existing = await prisma.climaticRegion.findUnique({ where: { name: validation.data.name } });
+    const existing = await db.query.climaticRegions.findFirst({ where: eq(schema.climaticRegions.name, validation.data.name) });
     if (existing) return { success: false, error: "Cette région existe déjà." };
 
-    const region = await prisma.climaticRegion.create({ data: validation.data });
+    const [region] = await db.insert(schema.climaticRegions).values(validation.data).returning();
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -66,11 +74,11 @@ export async function updateClimaticRegion(id: string, data: { name?: string; de
   if (idError) return idError;
 
   try {
-    const oldRegion = await prisma.climaticRegion.findUnique({ where: { id }, select: { name: true, description: true } });
-    const region = await prisma.climaticRegion.update({
-      where: { id },
-      data: { name: data.name, description: data.description }
-    });
+    const oldRegion = await db.query.climaticRegions.findFirst({ where: eq(schema.climaticRegions.id, id), columns: { name: true, description: true } });
+    const [region] = await db.update(schema.climaticRegions)
+      .set({ name: data.name, description: data.description })
+      .where(eq(schema.climaticRegions.id, id))
+      .returning();
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -94,13 +102,13 @@ export async function deleteClimaticRegion(id: string) {
   if (idError) return idError;
 
   try {
-    const locationsCount = await prisma.zone.count({ where: { climaticRegionId: id } });
+    const [{ value: locationsCount }] = await db.select({ value: count() }).from(schema.zones).where(eq(schema.zones.climaticRegionId, id));
     if (locationsCount > 0) {
       return { success: false, error: `Impossible : ${locationsCount} lieu(x) rattaché(s) à cette région.` };
     }
 
-    const oldRegion = await prisma.climaticRegion.findUnique({ where: { id }, select: { name: true } });
-    await prisma.climaticRegion.delete({ where: { id } });
+    const oldRegion = await db.query.climaticRegions.findFirst({ where: eq(schema.climaticRegions.id, id), columns: { name: true } });
+    await db.delete(schema.climaticRegions).where(eq(schema.climaticRegions.id, id));
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -124,18 +132,32 @@ export async function deleteClimaticRegion(id: string) {
 
 export async function getLocations(climaticRegionId?: string) {
   try {
-    const where = climaticRegionId ? { climaticRegionId } : undefined;
-    const locations = await prisma.zone.findMany({
+    const where = climaticRegionId ? eq(schema.zones.climaticRegionId, climaticRegionId) : undefined;
+    const locations = await db.query.zones.findMany({
       where,
-      include: {
-        climaticRegion: { select: { id: true, name: true } },
-        _count: {
-          select: { producers: true, orders: true, farms: true }
-        }
-      },
-      orderBy: { name: 'asc' }
+      columns: { id: true, name: true, code: true, isActive: true, climaticRegionId: true },
+      orderBy: (t, { asc }) => [asc(t.name)]
     });
-    return { success: true, data: locations };
+    // Compute _count via separate queries
+    const [producerCounts, orderCounts, farmCounts] = await Promise.all([
+      db.select({ zoneId: schema.producers.zoneId, value: count() }).from(schema.producers).groupBy(schema.producers.zoneId),
+      db.select({ zoneId: schema.orders.zoneId, value: count() }).from(schema.orders).groupBy(schema.orders.zoneId),
+      db.select({ zoneId: schema.farms.zoneId, value: count() }).from(schema.farms).groupBy(schema.farms.zoneId),
+    ]);
+    const pMap = new Map(producerCounts.map(c => [c.zoneId, c.value]));
+    const oMap = new Map(orderCounts.map(c => [c.zoneId, c.value]));
+    const fMap = new Map(farmCounts.map(c => [c.zoneId, c.value]));
+    // Fetch climatic region names for mapping
+    // Fetch all regions and map by id (avoids using `.in` which can be unsupported in runtime here)
+    const regions = await db.query.climaticRegions.findMany({ columns: { id: true, name: true } });
+    const regionMap = new Map(regions.map((r: any) => [r.id, r.name]));
+
+    const locationsWithCounts = locations.map((l: any) => ({
+      ...l,
+      climaticRegion: { name: regionMap.get(l.climaticRegionId) || '' },
+      _count: { producers: pMap.get(l.id) || 0, orders: oMap.get(l.id) || 0, farms: fMap.get(l.id) || 0 }
+    }));
+    return { success: true, data: locationsWithCounts };
   } catch (error) {
     console.error("Erreur chargement locations:", error);
     return { success: false, error: "Impossible de charger les locations." };
@@ -144,13 +166,20 @@ export async function getLocations(climaticRegionId?: string) {
 
 export async function getLocationTree() {
   try {
-    const locations = await prisma.zone.findMany({
-      include: {
-        _count: { select: { producers: true, farms: true } }
-      },
-      orderBy: { name: 'asc' }
+    const locations = await db.query.zones.findMany({
+      orderBy: (t, { asc }) => [asc(t.name)]
     });
-    return { success: true, data: locations };
+    const [pCounts, fCounts] = await Promise.all([
+      db.select({ zoneId: schema.producers.zoneId, value: count() }).from(schema.producers).groupBy(schema.producers.zoneId),
+      db.select({ zoneId: schema.farms.zoneId, value: count() }).from(schema.farms).groupBy(schema.farms.zoneId),
+    ]);
+    const pMap2 = new Map(pCounts.map(c => [c.zoneId, c.value]));
+    const fMap2 = new Map(fCounts.map(c => [c.zoneId, c.value]));
+    const locationsTree = locations.map((l: any) => ({
+      ...l,
+      _count: { producers: pMap2.get(l.id) || 0, farms: fMap2.get(l.id) || 0 }
+    }));
+    return { success: true, data: locationsTree };
   } catch (error) {
     console.error("Erreur chargement arbre:", error);
     return { success: false, error: "Impossible de charger l'arbre territorial." };
@@ -168,13 +197,18 @@ export async function createLocation(data: {
     return { success: false, error: validation.error.issues.map((e: any) => e.message).join(', ') };
   }
 
+  // Ensure climatic region is provided because DB schema requires it
+  if (!validation.data.climaticRegionId) {
+    return { success: false, error: 'La région climatique est requise pour créer une localité.' };
+  }
+
   try {
     const payload: any = {
       name: validation.data.name,
       code: validation.data.code,
-      climaticRegionId: validation.data.climaticRegionId || undefined,
+      climaticRegionId: validation.data.climaticRegionId,
     };
-    const location = await prisma.zone.create({ data: payload });
+    const [location] = await db.insert(schema.zones).values(payload).returning();
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -187,7 +221,7 @@ export async function createLocation(data: {
 
     return { success: true, data: location };
   } catch (error: any) {
-    if (error.code === 'P2002') {
+    if (error.code === 'P2002' || (error as any).code === '23505') {
       return { success: false, error: "Ce nom ou code de location existe déjà." };
     }
     console.error("Erreur création location:", error);
@@ -206,11 +240,11 @@ export async function updateLocation(id: string, data: Partial<{
   if (idError) return idError;
 
   try {
-    const oldLocation = await prisma.zone.findUnique({
-      where: { id },
-      select: { name: true, code: true, isActive: true }
+    const oldLocation = await db.query.zones.findFirst({
+      where: eq(schema.zones.id, id),
+      columns: { name: true, code: true, isActive: true }
     });
-    const location = await prisma.zone.update({ where: { id }, data: data as any });
+    const [location] = await db.update(schema.zones).set(data as any).where(eq(schema.zones.id, id)).returning();
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -224,7 +258,7 @@ export async function updateLocation(id: string, data: Partial<{
 
     return { success: true, data: location };
   } catch (error: any) {
-    if (error.code === 'P2002') {
+    if (error.code === 'P2002' || (error as any).code === '23505') {
       return { success: false, error: "Ce code de location existe déjà." };
     }
     console.error("Erreur mise à jour location:", error);
@@ -237,13 +271,13 @@ export async function toggleLocationActive(id: string) {
   if (idError) return idError;
 
   try {
-    const location = await prisma.zone.findUnique({ where: { id } });
+    const location = await db.query.zones.findFirst({ where: eq(schema.zones.id, id) });
     if (!location) return { success: false, error: "Location introuvable." };
 
-    const updated = await prisma.zone.update({
-      where: { id },
-      data: { isActive: !location.isActive }
-    });
+    const [updated] = await db.update(schema.zones)
+      .set({ isActive: !location.isActive })
+      .where(eq(schema.zones.id, id))
+      .returning();
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -264,17 +298,18 @@ export async function toggleLocationActive(id: string) {
 
 export async function deleteLocation(id: string) {
   try {
-    const counts = await prisma.zone.findUnique({
-      where: { id },
-      include: { _count: { select: { producers: true, orders: true, farms: true } } }
-    });
-    const total = (counts?._count.producers || 0) + (counts?._count.orders || 0) + (counts?._count.farms || 0);
+    const [[{ value: pCount }], [{ value: oCount }], [{ value: fCount }]] = await Promise.all([
+      db.select({ value: count() }).from(schema.producers).where(eq(schema.producers.zoneId, id)),
+      db.select({ value: count() }).from(schema.orders).where(eq(schema.orders.zoneId, id)),
+      db.select({ value: count() }).from(schema.farms).where(eq(schema.farms.zoneId, id)),
+    ]);
+    const total = pCount + oCount + fCount;
     if (total > 0) {
       return { success: false, error: `Impossible : ${total} entité(s) liée(s) à cette location.` };
     }
 
-    const oldLoc = await prisma.zone.findUnique({ where: { id }, select: { name: true, code: true } });
-    await prisma.zone.delete({ where: { id } });
+    const oldLoc = await db.query.zones.findFirst({ where: eq(schema.zones.id, id), columns: { name: true, code: true } });
+    await db.delete(schema.zones).where(eq(schema.zones.id, id));
 
     const userId = await getUserIdFromSession();
     await audit({
@@ -305,38 +340,48 @@ export async function deleteLocation(id: string) {
 export async function getTerritoryStats() {
   try {
     const [
-      totalLocations,
-      activeLocations,
-      totalRegions,
-      totalProducers,
-      totalOrders,
-      locationStats
+      [{ value: totalLocations }],
+      [{ value: activeLocations }],
+      [{ value: totalRegions }],
+      [{ value: totalProducers }],
+      [{ value: totalOrders }],
+      rawLocationStats,
+      statProducerCounts,
+      statOrderCounts,
+      statFarmCounts
     ] = await Promise.all([
-      prisma.zone.count(),
-      prisma.zone.count({ where: { isActive: true } }),
-      prisma.climaticRegion.count(),
-      prisma.producer.count(),
-      prisma.order.count(),
-      prisma.zone.findMany({
-        include: {
-          climaticRegion: { select: { name: true } },
-          _count: {
-            select: { producers: true, orders: true, farms: true }
-          }
-        },
-        orderBy: { name: 'asc' }
-      })
+      db.select({ value: count() }).from(schema.zones),
+      db.select({ value: count() }).from(schema.zones).where(eq(schema.zones.isActive, true)),
+      db.select({ value: count() }).from(schema.climaticRegions),
+      db.select({ value: count() }).from(schema.producers),
+      db.select({ value: count() }).from(schema.orders),
+      db.query.zones.findMany({
+        columns: { id: true, name: true, code: true, isActive: true, climaticRegionId: true },
+        orderBy: (t, { asc }) => [asc(t.name)]
+      }),
+      db.select({ zoneId: schema.producers.zoneId, value: count() }).from(schema.producers).groupBy(schema.producers.zoneId),
+      db.select({ zoneId: schema.orders.zoneId, value: count() }).from(schema.orders).groupBy(schema.orders.zoneId),
+      db.select({ zoneId: schema.farms.zoneId, value: count() }).from(schema.farms).groupBy(schema.farms.zoneId),
     ]);
 
-    const mappedStats = locationStats.map((l: any) => ({
+    const spMap = new Map(statProducerCounts.map(c => [c.zoneId, c.value]));
+    const soMap = new Map(statOrderCounts.map(c => [c.zoneId, c.value]));
+    const sfMap = new Map(statFarmCounts.map(c => [c.zoneId, c.value]));
+
+    // Resolve climatic region names
+    // Resolve climatic region names by fetching all regions (small table expected)
+    const regions = await db.query.climaticRegions.findMany({ columns: { id: true, name: true } });
+    const regionMap = new Map(regions.map((r: any) => [r.id, r.name]));
+
+    const mappedStats = rawLocationStats.map((l: any) => ({
       id: l.id,
       name: l.name,
       code: l.code,
       isActive: l.isActive,
-      climaticRegion: l.climaticRegion?.name || null,
-      producers: l._count.producers,
-      orders: l._count.orders,
-      farms: l._count.farms,
+      climaticRegion: regionMap.get(l.climaticRegionId) || null,
+      producers: spMap.get(l.id) || 0,
+      orders: soMap.get(l.id) || 0,
+      farms: sfMap.get(l.id) || 0,
     }));
 
     return {

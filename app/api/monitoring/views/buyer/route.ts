@@ -4,15 +4,18 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, desc, and, inArray } from 'drizzle-orm';
+import { getAccessContext } from '@/lib/api-guard';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
-  const { user, error } = await getAuthenticatedUser(req);
-  if (error || !user) {
+  const { ctx, error } = await getAccessContext();
+  if (error || !ctx) {
     if (error) return error;
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
+  const user: any = { id: ctx.userId, role: ctx.role };
 
   try {
     const [
@@ -21,38 +24,38 @@ export async function GET(req: NextRequest): Promise<Response | void> {
       waitingForInput,
     ] = await Promise.all([
       // Historique des conversations
-      prisma.conversation.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-        include: {
-          zone: { select: { id: true, name: true, code: true } },
+      db.query.conversations.findMany({
+        where: eq(schema.conversations.userId, user.id),
+        orderBy: (t, ops) => [ops.desc(t.createdAt)],
+        limit: 20,
+        with: {
+          zone: { columns: { id: true, name: true, code: true } },
         },
       }),
 
       // Commandes initiées par un agent
-      prisma.agentAction.findMany({
-        where: {
-          userId: user.id,
-          actionType: { in: ['PURCHASE', 'ORDER_CREATED'] },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-        include: {
+      db.query.agentActions.findMany({
+        where: and(
+          eq(schema.agentActions.userId, user.id),
+          inArray(schema.agentActions.actionType, ['PURCHASE', 'ORDER_CREATED']),
+        ),
+        orderBy: (t, ops) => [ops.desc(t.createdAt)],
+        limit: 10,
+        with: {
           order: {
-            select: { id: true, totalAmount: true, status: true, customerName: true },
+            columns: { id: true, totalAmount: true, status: true, customerName: true },
           },
         },
       }),
 
       // Conversations en attente d'input
-      prisma.conversation.findMany({
-        where: {
-          userId: user.id,
-          isWaitingForInput: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
+      db.query.conversations.findMany({
+        where: and(
+          eq(schema.conversations.userId, user.id),
+          eq(schema.conversations.isWaitingForInput, true),
+        ),
+        orderBy: (t, ops) => [ops.desc(t.createdAt)],
+        limit: 5,
       }),
     ]);
 

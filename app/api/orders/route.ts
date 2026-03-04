@@ -3,8 +3,11 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { OrderSchema } from '@/lib/validators';
 import { createOrderService } from '@/services/orders.service';
-import { prisma } from '@/lib/prisma';
-import { getAuthenticatedUser, requireProducer } from '@/lib/api-guard';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, inArray } from 'drizzle-orm';
+import { requireProducer } from '@/lib/api-guard';
+import { getSessionFromRequest } from '@/lib/session';
 
 const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -21,22 +24,26 @@ export async function GET(req: NextRequest) {
         // Le user est déjà récupéré via le cookie par getAuthenticatedUser
         const userId = user.id;
 
-        const producer = await prisma.producer.findUnique({
-            where: { userId: userId }, // On cherche par userId car c'est une relation one-to-one
-            select: { id: true } 
+        const producer = await db.query.producers.findFirst({
+            where: eq(schema.producers.userId, userId),
+            columns: { id: true } 
         });
 
         if (!producer) {
             return NextResponse.json({ error: "Profil producteur introuvable" }, { status: 404 });
         }
 
-        const orderItems = await prisma.orderItem.findMany({
-          where: {
-            product: { producerId: producer.id }
-          },
-          include: {
+        // Get product IDs for this producer
+        const producerProducts = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.producerId, producer.id));
+        const productIds = producerProducts.map(p => p.id);
+
+        if (productIds.length === 0) return NextResponse.json([]);
+
+        const orderItems = await db.query.orderItems.findMany({
+          where: inArray(schema.orderItems.productId, productIds),
+          with: {
             order: {
-              select: {
+              columns: {
                 id: true,
                 status: true,
                 createdAt: true,
@@ -45,13 +52,17 @@ export async function GET(req: NextRequest) {
                 city: true,
                 deliveryDesc: true,
                 buyerId: true,
-                buyer: { select: { name: true, phone: true } }
+              },
+              with: {
+                buyer: { columns: { name: true, phone: true } }
               }
             },
-            product: { select: { name: true, unit: true } }
+            product: { columns: { name: true, unit: true } }
           },
-          orderBy: { order: { createdAt: 'desc' } }
         });
+
+        // Sort by order.createdAt desc (Drizzle relational API doesn't support nested orderBy)
+        orderItems.sort((a, b) => new Date(b.order.createdAt).getTime() - new Date(a.order.createdAt).getTime());
 
         // Regrouper par commande
         const ordersMap = new Map();
@@ -96,8 +107,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // Try to resolve an authenticated user (optional). If present, link the order to them.
-    const { user } = await getAuthenticatedUser(req);
-    const buyerId = user?.id;
+    const session = await getSessionFromRequest(req as any);
+    const buyerId = session?.userId;
 
     const formData = await req.formData();
     const rawData = formData.get('data') as string;

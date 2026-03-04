@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq } from 'drizzle-orm';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import path from 'path';
-import { getAuthenticatedUser, requireProducer } from '@/lib/api-guard';
+import { requireProducer } from '@/lib/api-guard';
 import { CreateProductSchema } from '@/lib/validators';
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.webm'];
@@ -44,27 +46,27 @@ export async function GET(req: NextRequest) {
 
     // Si un utilisateur est connecté, on vérifie s'il est producteur
     if (userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { producer: { select: { id: true } } },
+      const user = await db.query.users.findFirst({
+        where: eq(schema.users.id, userId),
+        with: { producer: { columns: { id: true } } },
       });
 
       // Si c'est un producteur, on lui renvoie ses propres produits pour son dashboard
       if (user?.producer) {
-        const products = await prisma.product.findMany({
-          where: { producerId: user.producer.id },
-          orderBy: { createdAt: 'desc' },
+        const products = await db.query.products.findMany({
+          where: eq(schema.products.producerId, user.producer.id),
+          orderBy: (t, { desc: d }) => [d(t.createdAt)],
         });
         return NextResponse.json(products);
       }
     }
 
     // Sinon (Public), on renvoie tous les produits avec les infos des vendeurs
-    const allProducts = await prisma.product.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
+    const allProducts = await db.query.products.findMany({
+      orderBy: (t, { desc: d }) => [d(t.createdAt)],
+      with: {
         producer: {
-          include: { user: { select: { name: true, image: true } } },
+          with: { user: { columns: { name: true, image: true } } },
         },
       },
     });
@@ -119,16 +121,13 @@ export async function POST(req: NextRequest) {
     if (!user.producerId) {
       return NextResponse.json({ error: "ID producteur manquant" }, { status: 400 });
     }
-    const product = await prisma.product.create({
-      data: {
-        ...validation.data,
-        images: imageNames,
-        audioUrl: audioName,
-        producerId: user.producerId, // Récupéré de la session sécurisée
-        // Prisma expects `unit` as enum; cast from validation result
-        unit: validation.data.unit as any,
-      },
-    });
+    const [product] = await db.insert(schema.products).values({
+      ...validation.data,
+      images: imageNames,
+      audioUrl: audioName,
+      producerId: user.producerId, // Récupéré de la session sécurisée
+      unit: validation.data.unit as any,
+    }).returning();
 
     return NextResponse.json({ success: true, product }, { status: 201 });
   } catch (error) {
@@ -153,7 +152,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Vérification de propriété
-    const oldProduct = await prisma.product.findUnique({ where: { id: productId } });
+    const oldProduct = await db.query.products.findFirst({ where: eq(schema.products.id, productId) });
     if (!oldProduct) return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
     
     // Sécurité : Un producteur ne peut modifier que ses propres produits
@@ -190,19 +189,16 @@ export async function PUT(req: NextRequest) {
     }
 
     // Mise à jour
-    const updatedProduct = await prisma.product.update({
-      where: { id: productId },
-      data: {
-        name: formData.get('name') as string,
-        categoryLabel: formData.get('categoryLabel') as string,
-        description: (formData.get('description') as string) || null,
-        price: parseFloat(formData.get('price') as string),
-        quantityForSale: parseFloat(formData.get('quantity') as string),
-        unit: formData.get('unit') as any,
-        images: finalImages,
-        audioUrl: audioName,
-      },
-    });
+    const [updatedProduct] = await db.update(schema.products).set({
+      name: formData.get('name') as string,
+      categoryLabel: formData.get('categoryLabel') as string,
+      description: (formData.get('description') as string) || null,
+      price: parseFloat(formData.get('price') as string),
+      quantityForSale: parseFloat(formData.get('quantity') as string),
+      unit: formData.get('unit') as any,
+      images: finalImages,
+      audioUrl: audioName,
+    }).where(eq(schema.products.id, productId)).returning();
 
     return NextResponse.json({ success: true, product: updatedProduct });
   } catch (error) {

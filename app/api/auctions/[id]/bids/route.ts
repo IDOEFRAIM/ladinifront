@@ -4,12 +4,12 @@ import { getAccessContext } from '@/lib/api-guard';
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const { ctx, error } = await getAccessContext(['PRODUCER']);
   if (error) return error;
 
-  const { id } = params;
+  const { id } = await context.params;
   try {
     const body = await req.json();
     const { offeredPrice } = body;

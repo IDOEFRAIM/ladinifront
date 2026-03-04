@@ -58,7 +58,7 @@ export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
             const locations: { id: string, name: string, code: string }[] = data.locations || [];
             
             const mappedLocations = locations.map(l => ({
-                id: l.name, // On utilise le nom comme filtre (correspond au champ location.name dans l'API produits)
+                id: String(l.name || l.id).trim(), // Normaliser: utiliser le nom si présent, sinon l'id
                 name: l.name
             }));
 
@@ -75,9 +75,11 @@ export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
 export const getProducts = async (filters: ProductFilters = {}): Promise<Product[]> => {
     try {
         const params = new URLSearchParams();
-        if (filters.category && filters.category !== 'all') params.append('category', filters.category);
-        if (filters.region && filters.region !== 'all') params.append('region', filters.region);
-        if (filters.searchQuery) params.append('search', filters.searchQuery);
+        if ((filters as any).category && (filters as any).category !== 'all') params.append('category', (filters as any).category);
+        if ((filters as any).region && (filters as any).region !== 'all') params.append('region', (filters as any).region);
+        // Support both `searchQuery` (older code) and `search` (client uses `search` key)
+        const searchValue = (filters as any).searchQuery ?? (filters as any).search;
+        if (searchValue && String(searchValue).trim()) params.append('search', String(searchValue).trim());
 
         const response = await axios.get(`${getBaseUrl()}/api/publicProduct?${params.toString()}`);
         return response.data || [];

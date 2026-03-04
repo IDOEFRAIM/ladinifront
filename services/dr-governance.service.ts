@@ -1,6 +1,8 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { eq, count } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
@@ -14,27 +16,30 @@ import getUserIdFromSession from '@/lib/get-userId';
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 /** Vérifier que l'appelant est bien Chef de DR (PRODUCER certifié) ou SUPERADMIN */
-async function assertDRChief(userId: string, zoneId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { producer: true },
-  });
-
+async function assertDRChief(userId: string, zoneId: string): Promise<any> {
+  // Load user and producer explicitly to avoid relation metadata reliance
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
   if (!user) throw new Error('Utilisateur introuvable');
 
   // SUPERADMIN bypass
   if (user.role === 'SUPERADMIN') return user;
 
+  // If user is producer, fetch producer record
+  let producer: any = null;
+  if (user.role === 'PRODUCER') {
+    producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, user.id) });
+  }
+
   // Chef de DR = PRODUCER certifié rattaché à cette zone
-  if (user.role !== 'PRODUCER' || !user.producer?.isCertified) {
+  if (user.role !== 'PRODUCER' || !producer?.isCertified) {
     throw new Error('Seul un Chef de DR certifié ou un SUPERADMIN peut effectuer cette action.');
   }
 
-  if (user.producer.zoneId !== zoneId) {
+  if (producer.zoneId !== zoneId) {
     throw new Error('Vous n\'êtes pas rattaché à cette zone.');
   }
 
-  return user;
+  return { ...user, producer };
 }
 
 // ── Catégories ───────────────────────────────────────────────────────────
@@ -44,10 +49,10 @@ export async function createCategory(data: { name: string; description?: string 
   if (!userId) return { success: false, error: 'Session expirée' };
 
   try {
-    const existing = await prisma.category.findUnique({ where: { name: data.name } });
+    const existing = await db.query.categories.findFirst({ where: eq(schema.categories.name, data.name) });
     if (existing) return { success: false, error: 'Cette catégorie existe déjà.' };
 
-    const category = await prisma.category.create({ data });
+    const [category] = await db.insert(schema.categories).values(data).returning();
 
     await audit({
       action: 'CREATE_CATEGORY',
@@ -69,7 +74,7 @@ export async function createSubCategory(data: { categoryId: string; name: string
   if (!userId) return { success: false, error: 'Session expirée' };
 
   try {
-    const sub = await prisma.subCategory.create({ data });
+    const [sub] = await db.insert(schema.subCategories).values(data).returning();
 
     await audit({
       action: 'CREATE_SUBCATEGORY',
@@ -88,19 +93,107 @@ export async function createSubCategory(data: { categoryId: string; name: string
 
 export async function getCategories() {
   try {
-    const categories = await prisma.category.findMany({
-      include: {
-        subCategories: {
-          include: {
-            standardPrices: { include: { zone: { select: { id: true, name: true } } } },
-            _count: { select: { products: true } },
-          },
-          orderBy: { name: 'asc' },
-        },
-      },
-      orderBy: { name: 'asc' },
-    });
-    return { success: true, data: categories };
+    interface Zone {
+        id: string;
+        name: string;
+    }
+
+    interface StandardPrice {
+        id: string;
+        subCategoryId: string;
+        zoneId: string;
+        pricePerUnit: number;
+        unit: string;
+        updatedById: string;
+        updatedAt: Date;
+        zone: Zone;
+    }
+
+    interface SubCategory {
+        id: string;
+        categoryId: string;
+        name: string;
+        blockedZoneIds: string[];
+        standardPrices: StandardPrice[];
+    }
+
+    interface Category {
+        id: string;
+        name: string;
+        description?: string | null;
+        subCategories: SubCategory[];
+    }
+
+    // Load categories, subcategories, standard prices and zones explicitly
+    const cats = await db.query.categories.findMany({ orderBy: (t: any, helpers: any) => [helpers.asc(t.name)] });
+
+    const categoryIds = cats.map(c => c.id);
+    const subCategories = categoryIds.length > 0
+      ? await db.query.subCategories.findMany({
+          where: (t, { inArray }) => inArray(t.categoryId, categoryIds),
+          orderBy: (t: any, helpers: any) => [helpers.asc(t.name)],
+        })
+      : [];
+
+    const subCategoryIds = subCategories.map(sc => sc.id);
+    const standardPrices = subCategoryIds.length > 0
+      ? await db.query.standardPrices.findMany({ where: (t, { inArray }) => inArray(t.subCategoryId, subCategoryIds) })
+      : [];
+
+    // Resolve zones referenced by standard prices
+    const zoneIds = new Set<string>();
+    for (const p of standardPrices) if (p.zoneId) zoneIds.add(p.zoneId);
+    const zones = zoneIds.size > 0
+      ? await db.query.zones.findMany({ where: (t, { inArray }) => inArray(t.id, Array.from(zoneIds)) })
+      : [];
+    const zoneMap = new Map(zones.map(z => [z.id, { id: z.id, name: z.name }]));
+
+    // Attach zone objects to standard prices
+    const standardPricesBySub = new Map<string, StandardPrice[]>();
+    for (const p of standardPrices) {
+      const sp: StandardPrice = {
+        id: p.id,
+        subCategoryId: p.subCategoryId,
+        zoneId: p.zoneId,
+        pricePerUnit: p.pricePerUnit,
+        unit: p.unit,
+        updatedById: p.updatedById,
+        updatedAt: p.updatedAt,
+        zone: p.zoneId ? (zoneMap.get(p.zoneId) as Zone) : { id: p.zoneId ?? '', name: '' },
+      };
+      const arr = standardPricesBySub.get(p.subCategoryId) ?? [];
+      arr.push(sp);
+      standardPricesBySub.set(p.subCategoryId, arr);
+    }
+
+    const categories: Category[] = cats.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      description: cat.description,
+      subCategories: subCategories
+        .filter(sc => sc.categoryId === cat.id)
+        .map(sc => ({
+          id: sc.id,
+          categoryId: sc.categoryId,
+          name: sc.name,
+          blockedZoneIds: sc.blockedZoneIds,
+          standardPrices: standardPricesBySub.get(sc.id) ?? [],
+        })),
+    }));
+    // Compute _count.products per subcategory
+    const productCounts = await db
+      .select({ subCategoryId: schema.products.subCategoryId, value: count() })
+      .from(schema.products)
+      .groupBy(schema.products.subCategoryId);
+    const countMap = new Map(productCounts.map(c => [c.subCategoryId, c.value]));
+    const categoriesWithCounts = categories.map(cat => ({
+      ...cat,
+      subCategories: cat.subCategories.map(sub => ({
+        ...sub,
+        _count: { products: countMap.get(sub.id) || 0 }
+      }))
+    }));
+    return { success: true, data: categoriesWithCounts };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
@@ -128,26 +221,25 @@ export async function upsertStandardPrice(input: {
       return { success: false, error: 'Le prix doit être positif.' };
     }
 
-    const price = await prisma.standardPrice.upsert({
-      where: {
-        subCategoryId_zoneId: {
-          subCategoryId: input.subCategoryId,
-          zoneId: input.zoneId,
-        },
-      },
-      create: {
+    const updateSet: Record<string, any> = {
+      pricePerUnit: input.pricePerUnit,
+      updatedById: userId,
+    };
+    if (input.unit) updateSet.unit = input.unit;
+
+    const [price] = await db.insert(schema.standardPrices)
+      .values({
         subCategoryId: input.subCategoryId,
         zoneId: input.zoneId,
         pricePerUnit: input.pricePerUnit,
         unit: input.unit ?? 'KG',
         updatedById: userId,
-      },
-      update: {
-        pricePerUnit: input.pricePerUnit,
-        unit: input.unit ?? undefined,
-        updatedById: userId,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [schema.standardPrices.subCategoryId, schema.standardPrices.zoneId],
+        set: updateSet,
+      })
+      .returning();
 
     await audit({
       action: 'UPSERT_STANDARD_PRICE',
@@ -166,17 +258,41 @@ export async function upsertStandardPrice(input: {
 
 export async function getStandardPrices(zoneId: string) {
   try {
-    const prices = await prisma.standardPrice.findMany({
-      where: { zoneId },
-      include: {
-        subCategory: {
-          include: { category: { select: { id: true, name: true } } },
-        },
-        updatedBy: { select: { id: true, name: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
+    // Load prices and resolve related subcategories, categories and updater users explicitly
+    const prices = await db.query.standardPrices.findMany({
+      where: eq(schema.standardPrices.zoneId, zoneId),
+      orderBy: (t: any, helpers: any) => [helpers.desc(t.updatedAt)],
     });
-    return { success: true, data: prices };
+
+    const subIds = Array.from(new Set(prices.map(p => p.subCategoryId).filter(Boolean)));
+    const updatedByIds = Array.from(new Set(prices.map(p => p.updatedById).filter(Boolean)));
+
+    const subCategories = subIds.length > 0
+      ? await db.query.subCategories.findMany({ where: (t, { inArray }) => inArray(t.id, subIds) })
+      : [];
+    const categoryIds = Array.from(new Set(subCategories.map(s => s.categoryId).filter(Boolean)));
+    const categories = categoryIds.length > 0
+      ? await db.query.categories.findMany({ where: (t, { inArray }) => inArray(t.id, categoryIds) })
+      : [];
+    const users = updatedByIds.length > 0
+      ? await db.query.users.findMany({ where: (t, { inArray }) => inArray(t.id, updatedByIds) })
+      : [];
+
+    const subMap = new Map(subCategories.map(s => [s.id, s]));
+    const categoryMap = new Map(categories.map(c => [c.id, c]));
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    const enriched = prices.map(p => ({
+      ...p,
+      subCategory: p.subCategoryId ? {
+        id: p.subCategoryId,
+        name: subMap.get(p.subCategoryId)?.name ?? '',
+        category: subMap.get(p.subCategoryId)?.categoryId ? { id: subMap.get(p.subCategoryId)!.categoryId, name: categoryMap.get(subMap.get(p.subCategoryId)!.categoryId)?.name ?? '' } : null,
+      } : null,
+      updatedBy: p.updatedById ? userMap.get(p.updatedById) ?? null : null,
+    }));
+
+    return { success: true, data: enriched };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
@@ -199,8 +315,8 @@ export async function toggleSubCategoryBlock(input: {
   try {
     await assertDRChief(userId, input.zoneId);
 
-    const sub = await prisma.subCategory.findUnique({
-      where: { id: input.subCategoryId },
+    const sub = await db.query.subCategories.findFirst({
+      where: eq(schema.subCategories.id, input.subCategoryId),
     });
     if (!sub) return { success: false, error: 'Sous-catégorie introuvable' };
 
@@ -212,10 +328,10 @@ export async function toggleSubCategoryBlock(input: {
       updatedZones = updatedZones.filter((z) => z !== input.zoneId);
     }
 
-    const updated = await prisma.subCategory.update({
-      where: { id: input.subCategoryId },
-      data: { blockedZoneIds: updatedZones },
-    });
+    const [updated] = await db.update(schema.subCategories)
+      .set({ blockedZoneIds: updatedZones })
+      .where(eq(schema.subCategories.id, input.subCategoryId))
+      .returning();
 
     await audit({
       action: input.block ? 'BLOCK_SUBCATEGORY' : 'UNBLOCK_SUBCATEGORY',
@@ -237,11 +353,10 @@ export async function toggleSubCategoryBlock(input: {
  * Retourne false si la sous-catégorie est bloquée.
  */
 export async function isProductAllowedInZone(productId: string, zoneId: string): Promise<boolean> {
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    include: { subCategory: true },
-  });
-
-  if (!product?.subCategory) return true; // pas de sous-catégorie = autorisé
-  return !product.subCategory.blockedZoneIds.includes(zoneId);
+  const product = await db.query.products.findFirst({ where: eq(schema.products.id, productId) });
+  if (!product) return true;
+  if (!product.subCategoryId) return true;
+  const sub = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, product.subCategoryId) });
+  if (!sub) return true;
+  return !sub.blockedZoneIds.includes(zoneId);
 }

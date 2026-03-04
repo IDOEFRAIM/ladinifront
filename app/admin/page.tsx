@@ -42,21 +42,31 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const res = await axios.get('/api/admin/metrics', { withCredentials: true });
       const result = res.data;
-      if (result.success && result.data) {
+      if (result && result.success && result.data) {
         const d = result.data as DashboardData;
         if (d.recentActivity && Array.isArray(d.recentActivity)) {
           d.recentActivity = d.recentActivity.map((a: any) => ({ ...a, date: a.date ? new Date(a.date) : a.date }));
         }
         setData(d);
+        setErrorMsg(null);
+      } else {
+        // API returned non-success payload
+        console.warn('Dashboard API returned unexpected payload:', result);
+        setErrorMsg((result && result.error) ? String(result.error) : 'Réponse API inattendue');
       }
-    } catch (e) { /* UI error state */ }
-    finally { setLoading(false); setIsRefreshing(false); }
+    } catch (err: any) {
+      // Log axios/network error for debugging
+      console.error('Failed loading admin metrics:', err?.message || err, err?.response?.status, err?.response?.data);
+      const msg = err?.response?.data?.error || err?.message || 'Erreur réseau';
+      setErrorMsg(String(msg));
+    } finally { setLoading(false); setIsRefreshing(false); }
   }, []);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
@@ -72,7 +82,11 @@ export default function AdminDashboardPage() {
 
   if (!data) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand }}>
-      <p style={{ fontFamily: F.body, color: '#DC2626', fontWeight: 800, fontStyle: 'italic' }}>ERREUR DE SYNCHRONISATION API</p>
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ fontFamily: F.body, color: '#DC2626', fontWeight: 800, fontStyle: 'italic', marginBottom: 8 }}>ERREUR DE SYNCHRONISATION API</p>
+        {errorMsg && <p style={{ fontFamily: F.body, color: C.muted, fontSize: 13 }}>{errorMsg}</p>}
+        {!errorMsg && <p style={{ fontFamily: F.body, color: C.muted, fontSize: 13 }}>Aucune donnée reçue du serveur.</p>}
+      </div>
     </div>
   );
 
@@ -81,12 +95,12 @@ export default function AdminDashboardPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.sand, fontFamily: F.body, color: C.text, paddingBottom: 80, paddingTop: 72 }}>
 
-      {/* TOP BAR */}
+      {/* TOP BAR (not sticky - layout header already sticky) */}
       <div style={{
         background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         borderBottom: `1px solid ${C.border}`, padding: '0 24px', height: 68,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        position: 'sticky', top: '64px', zIndex: 40,
+        position: 'relative', zIndex: 10,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{

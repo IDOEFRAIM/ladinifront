@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { db } from '@/src/db';
+import * as schema from '@/src/db/schema';
+import { desc } from 'drizzle-orm';
 
 export async function GET() {
     try {
-        const clients = await prisma.client.findMany({
-            orderBy: { createdAt: 'desc' }
+        const clients = await db.query.clients.findMany({
+            orderBy: (t, ops) => [ops.desc(t.createdAt)],
         });
         return NextResponse.json({ clients });
     } catch (error) {
@@ -15,7 +17,7 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const data = await req.json();
-        const client = await prisma.client.create({ data });
+        const [client] = await db.insert(schema.clients).values(data).returning();
         return NextResponse.json({ client });
     } catch (error) {
         return NextResponse.json({ error: 'Erreur création client.' }, { status: 500 });
