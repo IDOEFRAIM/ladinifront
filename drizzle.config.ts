@@ -8,7 +8,8 @@ export default defineConfig({
     url: process.env.DATABASE_URL!,
   },
   // Multi-schema support
-  schemaFilter: ['auth', 'governance', 'marketplace', 'intelligence', 'public'],
+  // Exclude 'auth' from management to avoid conflict with Supabase Auth
+  schemaFilter: ['governance', 'marketplace', 'intelligence', 'public'],
   verbose: true,
   strict: true,
 });
