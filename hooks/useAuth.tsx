@@ -1,152 +1,151 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
-import { registerUser, loginUser, logoutUser } from '@/services/auth.service'; 
+import { registerUser, loginUser, logoutUser } from '@/services/auth.service';
 import type { Role as SystemRole } from '@prisma/client';
 
-interface AuthContextType {
-  user: any;
-  userRole: SystemRole | undefined;
+interface AuthUser {
+  id?:string;
+  name: string | null;
+  role: SystemRole;
+}
+
+interface AuthState {
+  user: AuthUser | null;
   userLocation: { id: string; name: string } | null;
   permissions: string[];
   activeOrg: { id: string; name: string; role: string } | null;
   organizations: Array<{ organizationId: string; role: string; name?: string }>;
+}
+
+interface AuthContextType extends AuthState {
+  userRole: SystemRole | undefined;
   isAuthenticated: boolean;
   isLoading: boolean;
   isActionLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<any>;
-  register: (data: { email: string; password: string; role: SystemRole; name: string; adminSecret?: string; locationId?: string }) => Promise<any>;
+  register: (data: any) => Promise<any>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isLoading, setIsLoading] = useState(true); 
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    userLocation: null,
+    permissions: [],
+    activeOrg: null,
+    organizations: [],
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<SystemRole | undefined>(undefined);
-  const [userLocation, setUserLocation] = useState<{ id: string; name: string } | null>(null);
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [activeOrg, setActiveOrg] = useState<{ id: string; name: string; role: string } | null>(null);
-  const [organizations, setOrganizations] = useState<Array<{ organizationId: string; role: string; name?: string }>>([]);
-  const router = useRouter();
 
-  // 1. Synchronisation initiale au chargement
+  const hydrateSession = useCallback((userData: any) => {
+    console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
+    Cookies.set(COOKIE_NAMES.USER_ROLE, userData.role, { expires: 7, sameSite: 'lax' });
+    Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
+
+    const orgs = Array.isArray(userData.organizations)
+      ? userData.organizations.map((o: any) => ({
+          organizationId: o.organizationId,
+          role: o.role,
+          name: o.name || undefined,
+        }))
+      : [];
+
+    setAuthState({
+      user: { id: userData.id ?? undefined, name: userData.name ?? null, role: userData.role },
+      userLocation: userData.location || null,
+      permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
+      organizations: orgs,
+      activeOrg: orgs.length > 0 ? { id: orgs[0].organizationId, name: orgs[0].name || '', role: orgs[0].role } : null,
+    });
+  }, []);
+
   useEffect(() => {
+    const controller = new AbortController();
+
     const checkSession = async () => {
+      const startMs = Date.now();
       try {
-        // Prefer server-derived session info (JWT / session-token).
-        // Wait for the server to indicate readiness via `session-ready` cookie
-        // to avoid race where the browser hasn't attached the httpOnly cookie yet.
-          const waitForSessionReady = async (timeout = 2000) => {
-          const start = Date.now();
-          while (Date.now() - start < timeout) {
-            const ready = Cookies.get(COOKIE_NAMES.SESSION_READY);
-            if (ready) {
-              Cookies.remove(COOKIE_NAMES.SESSION_READY);
-              return true;
-            }
-            await new Promise((r) => setTimeout(r, 100));
+        // Poll SESSION_READY
+        const pollStart = Date.now();
+        let sawReady = false;
+        while (Date.now() - pollStart < 2000) {
+          if (Cookies.get(COOKIE_NAMES.SESSION_READY)) {
+            sawReady = true;
+            Cookies.remove(COOKIE_NAMES.SESSION_READY);
+            console.debug('[Auth] SESSION_READY detected, cleaning and proceeding to /api/me');
+            break;
           }
-          return false;
-        };
-
-        await waitForSessionReady();
-
-        let res = await fetch('/api/me', { credentials: 'same-origin' });
-        // If the session cookie was just set by a previous navigation, the first
-        // request may race and return 401. Retry once after a short delay.
-        if (!res.ok && res.status === 401) {
-          await new Promise((r) => setTimeout(r, 300));
-          res = await fetch('/api/me', { credentials: 'same-origin' });
+          await delay(100);
         }
+        if (!sawReady) console.debug('[Auth] SESSION_READY not detected during poll, calling /api/me directly');
+
+        console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
+        let res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
+
+        if (!res.ok && res.status === 401) {
+          console.debug('[Auth] /api/me returned 401; retrying after delay');
+          await delay(300);
+          res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
+        }
+
+        console.debug('[Auth] /api/me response', { ok: res.ok, status: res.status, durationMs: Date.now() - startMs });
+
         if (res.ok) {
           const data = await res.json();
-          // new response shape: { success: true, user: { ... } }
           if (data?.success && data.user) {
-            const u = data.user;
-            setUser({ name: u.name ?? null, role: u.role });
-            setUserRole(u.role);
-            setPermissions(Array.isArray(u.permissions) ? u.permissions : []);
-            // normalize organizations from API: { organizationId, role } -> client shape
-            const orgs = Array.isArray(u.organizations)
-              ? u.organizations.map((o: any) => ({ organizationId: o.organizationId, role: o.role, name: o.name || undefined }))
-              : [];
-            setOrganizations(orgs);
-            if (orgs.length > 0) {
-              setActiveOrg({ id: orgs[0].organizationId, name: orgs[0].name || '', role: orgs[0].role });
-            } else {
-              setActiveOrg(null);
+            try {
+              const clientPv = Cookies.get(COOKIE_NAMES.PERMISSION_VERSION);
+              if (clientPv && data.user.permissionVersion && String(data.user.permissionVersion) !== String(clientPv)) {
+                console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.user.permissionVersion });
+              }
+            } catch (e) {
+              // ignore
             }
-          } else {
-            // treat as unauthenticated
-            // fallback to cookie hydration below
-          }
-        } else {
-          // Fallback: hydrate from client-visible cookies (role/name) for UX in dev
-          const savedRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
-          const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
-          const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
-          const savedPerms = Cookies.get(COOKIE_NAMES.USER_PERMISSIONS);
-          const savedOrg = Cookies.get(COOKIE_NAMES.USER_ORG);
 
-          if (savedRole) {
-            setUser({ name: savedName, role: savedRole });
-            setUserRole(savedRole);
-            if (savedLocation && savedLocation !== 'undefined') {
-              try { setUserLocation(JSON.parse(savedLocation)); } catch (e) { setUserLocation(null); }
-            }
-            if (savedPerms) { try { setPermissions(JSON.parse(savedPerms)); } catch { setPermissions([]); } }
-            if (savedOrg) { try { setActiveOrg(JSON.parse(savedOrg)); } catch { setActiveOrg(null); } }
+            hydrateSession(data.user);
+            return;
           }
         }
-      } catch (e) {
-        console.error('Failed to fetch /api/me:', e);
+
+        const savedRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
+        if (savedRole) {
+          const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
+          const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
+
+          console.debug('[Auth] Falling back to UI cookies', { savedRole, savedName });
+          setAuthState(prev => ({
+            ...prev,
+            user: { id: undefined, name: savedName || null, role: savedRole },
+            userLocation: savedLocation ? JSON.parse(savedLocation) : null,
+          }));
+        }
+      } catch (e: any) {
+        if (e.name !== 'AbortError') console.error('Initial check session failed:', e);
       } finally {
         setIsLoading(false);
       }
     };
+
     checkSession();
-  }, []);
+    return () => controller.abort();
+  }, [hydrateSession]);
 
-  // Fonction utilitaire pour sauvegarder la session dans les cookies
-  const saveSession = (userData: any) => {
-    // session-token est géré côté serveur (httpOnly JWT) — on ne le touche JAMAIS côté client
-    Cookies.set(COOKIE_NAMES.USER_ROLE, userData.role, { expires: 7 });
-    Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7 });
-    
-    const location = userData.location || null;
-    if (location) {
-      Cookies.set(COOKIE_NAMES.USER_ZONE, JSON.stringify(location), { expires: 7 });
-    } else {
-      Cookies.remove(COOKIE_NAMES.USER_ZONE);
-    }
-
-    // Permissions & Org are set server-side via httpOnly-adjacent cookies.
-    // We read them here to hydrate React state immediately.
-    const permsRaw = Cookies.get(COOKIE_NAMES.USER_PERMISSIONS);
-    if (permsRaw) {
-      try { setPermissions(JSON.parse(permsRaw)); } catch { setPermissions([]); }
-    }
-    const orgRaw = Cookies.get(COOKIE_NAMES.USER_ORG);
-    if (orgRaw) {
-      try { setActiveOrg(JSON.parse(orgRaw)); } catch { setActiveOrg(null); }
-    }
-
-    setUser(userData);
-    setUserRole(userData.role);
-    setUserLocation(location);
-    if (userData.organizations && Array.isArray(userData.organizations)) {
-      const orgs = userData.organizations.map((o: any) => ({ organizationId: o.organizationId, role: o.role, name: o.name || undefined }));
-      setOrganizations(orgs);
-      if (orgs.length > 0) setActiveOrg({ id: orgs[0].organizationId, name: orgs[0].name || '', role: orgs[0].role });
-    }
+  const handleRedirect = (userData: any) => {
+    const isAdmin = userData.role === 'ADMIN' || userData.role === 'SUPERADMIN';
+    const target = isAdmin ? '/admin' : '/dashboard';
+    if (typeof window !== 'undefined') window.location.href = target;
   };
 
   const login = async (email: string, password: string) => {
@@ -154,113 +153,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await loginUser({ email, password });
-      
       if (result.success && result.user) {
-        const userData = result.user as any;
-        saveSession(userData);
-
-        // Redirection basée sur le rôle après login
-        // Use full navigation to ensure server-set httpOnly cookies are sent on next request
-        if (typeof window !== 'undefined') {
-          if (userData.role === 'ADMIN' || userData.role === 'SUPERADMIN') window.location.href = '/admin';
-          else window.location.href = '/dashboard';
-        } else {
-          if (userData.role === 'ADMIN' || userData.role === 'SUPERADMIN') router.push('/admin');
-          else router.push('/dashboard');
-        }
-        
-        return result;
+        hydrateSession(result.user);
+        handleRedirect(result.user);
       } else {
-        setError(result.error || "Identifiants incorrects");
-        return result;
+        setError(result.error || 'Identifiants incorrects');
       }
-    } catch (err) { 
-      setError("Erreur de connexion"); 
-      return { success: false, error: "Erreur de connexion" };
-    } finally { 
-      setIsActionLoading(false); 
+      return result;
+    } catch (err) {
+      setError('Erreur de connexion');
+      return { success: false, error: 'Erreur technique' };
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const register = async (data: { email: string; password: string; role: SystemRole; name: string; adminSecret?: string; locationId?: string }) => {
+  const register = async (data: any) => {
     setIsActionLoading(true);
     setError(null);
     try {
       const result = await registerUser(data);
       if (result.success && result.user) {
-        const userData = result.user as any;
-        saveSession(userData);
-
-        // If registration created a pending organization, send user to dashboard
-        // so they can select the organization from the dashboard UI.
+        hydrateSession(result.user);
         if (result.pendingOrgCreated) {
-          if (typeof window !== 'undefined') {
-            window.location.href = '/dashboard';
-          } else {
-            router.push('/dashboard');
-          }
-          return result;
-        }
-
-        if (typeof window !== 'undefined') {
-          if (userData.role === 'ADMIN' || userData.role === 'SUPERADMIN') window.location.href = '/admin';
-          else window.location.href = '/dashboard';
+          window.location.href = '/dashboard';
         } else {
-          if (userData.role === 'ADMIN' || userData.role === 'SUPERADMIN') router.push('/admin');
-          else router.push('/dashboard');
+          handleRedirect(result.user);
         }
-
-        return result;
       } else {
         setError(result.error || "Erreur lors de l'inscription");
-        return result;
       }
-    } catch (err) { 
-      setError("Erreur technique lors de l'inscription"); 
-      return { success: false, error: "Erreur technique" };
-    } finally { 
-      setIsActionLoading(false); 
+      return result;
+    } catch (err) {
+      setError("Erreur technique lors de l'inscription");
+      return { success: false, error: 'Erreur technique' };
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const logout = async () => {
-    // 1. Suppression des cookies httpOnly côté serveur
-    try { await logoutUser(); } catch (e) { console.error('Erreur logout serveur:', e); }
-    
-    // 2. Nettoyage des cookies accessibles côté client
-    Cookies.remove(COOKIE_NAMES.USER_ROLE);
-    Cookies.remove(COOKIE_NAMES.USER_NAME);
-    Cookies.remove(COOKIE_NAMES.USER_ZONE);
-    Cookies.remove(COOKIE_NAMES.USER_PERMISSIONS);
-    Cookies.remove(COOKIE_NAMES.USER_ORG);
-    
-    // 3. Nettoyage de l'état React
-    setUser(null);
-    setUserRole(undefined);
-    setUserLocation(null);
-    setPermissions([]);
-    setActiveOrg(null);
-    
-    // 4. Redirection forcée avec reload complet pour purger tout le cache
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+
+    Object.values(COOKIE_NAMES).forEach(name => Cookies.remove(name));
+
+    setAuthState({
+      user: null,
+      userLocation: null,
+      permissions: [],
+      activeOrg: null,
+      organizations: [],
+    });
+
     window.location.href = '/login';
   };
 
+  const contextValue = useMemo(() => ({
+    ...authState,
+    userRole: authState.user?.role,
+    isAuthenticated: !!authState.user,
+    isLoading,
+    isActionLoading,
+    error,
+    login,
+    register,
+    logout,
+  }), [authState, isLoading, isActionLoading, error]);
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      userRole, 
-      userLocation, 
-      permissions,
-      activeOrg,
-      organizations,
-      isAuthenticated: !!user && !!userRole, 
-      isLoading, 
-      isActionLoading, 
-      error, 
-      login, 
-      register, 
-      logout 
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

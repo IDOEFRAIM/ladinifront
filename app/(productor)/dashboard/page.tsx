@@ -21,7 +21,7 @@ function LoadingView() {
     <div style={{ minHeight: '100vh', background: C.sand, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Loader2 size={40} color={C.emerald} className="animate-spin" style={{ marginBottom: 16 }} />
-        <p style={{ fontFamily: F.body, color: C.muted, fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase' as const, letterSpacing: 2 }}>Analyse de votre exploitation...</p>
+        <p style={{ fontFamily: F.body, color: C.muted, fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase' as const, letterSpacing: 2 }}>DASHBOARD:Analyse de votre exploitation...</p>
       </div>
     </div>
   );
@@ -124,11 +124,11 @@ function DashboardView({ activeUnit, setActiveUnit, healthScore, totalValue }: {
         window.location.reload();
       } else {
         const txt = await res.text().catch(() => 'Erreur');
-        alert('Impossible de sélectionner l\'organisation: ' + txt);
+
       }
     } catch (e) {
       console.error('selectOrg error', e);
-      alert('Erreur réseau lors de la sélection de l\'organisation');
+
     }
   }
 
@@ -152,6 +152,7 @@ function DashboardView({ activeUnit, setActiveUnit, healthScore, totalValue }: {
     );
   };
   if (assets.length === 0) return <EmptyView user={user} router={router} activeOrg={activeOrg} />;
+    console.log('Rendering DashboardView with', { activeUnit, healthScore, totalValue }); // For debugging; can be removed in production. 
   return (
     <>
       <OrgSelector />

@@ -19,9 +19,9 @@ function useProductorAccessControl(userRole: string | undefined, activeOrg: { id
     // SUPERADMIN and ADMIN bypass org check
     if (role === 'SUPERADMIN' || role === 'ADMIN') return;
     // Org members can access producer pages
-    if (!activeOrg) {
-      router.replace('/market');
-    }
+    //if (!activeOrg) {
+      //router.replace('/market');
+    //}
   }, [isLoading, isAuthenticated, userRole, activeOrg, router]);
 }
 
@@ -67,7 +67,7 @@ export default function ProductorLayout({ children }: { children: React.ReactNod
   }
 
   const role = userRole?.toUpperCase();
-  if (!isAuthenticated || (role !== 'SUPERADMIN' && role !== 'ADMIN' && !activeOrg)) {
+  if (!isAuthenticated) {
     return <p>not Authenticated</p>;
   }
 
