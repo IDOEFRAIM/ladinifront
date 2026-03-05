@@ -91,7 +91,7 @@ export default function Navbar() {
           {/* ACTIONS */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isAuthenticated ? (
-              <Link href={getUserDashboardPath()} style={{
+              <Link href={getUserDashboardPath()} className="hidden md:flex" style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 background: C.forest, color: '#fff', padding: '10px 20px', borderRadius: 100,
                 fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, textDecoration: 'none',
@@ -100,7 +100,7 @@ export default function Navbar() {
                 <LayoutDashboard size={16} /> Mon Espace
               </Link>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="hidden md:flex" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Link href="/login" style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600, color: C.forest, textDecoration: 'none', padding: '8px 16px', borderRadius: 100 }}>
                   Connexion
                 </Link>

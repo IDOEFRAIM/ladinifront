@@ -587,7 +587,7 @@ export async function inviteOrgMember(data: {
       if (!zone) return { success: false, error: 'Zone introuvable.' };
     }
 
-    // Atomic creation
+    // Atomic creation: use the transaction handle to read the inserted row
     const membership = await db.transaction(async (tx) => {
       const [created] = await tx.insert(schema.userOrganizations).values({
         userId: user.id,
@@ -597,16 +597,22 @@ export async function inviteOrgMember(data: {
         managedZoneId: managedZoneId ?? undefined,
       }).returning();
 
-      // Fetch with relations
-      const full = await db.query.userOrganizations.findFirst({
+      // Fetch with relations using the transaction (ensure we read the created row)
+      const full = await tx.query.userOrganizations.findFirst({
         where: eq(schema.userOrganizations.id, created.id),
         with: {
           user: { columns: { id: true, name: true, email: true } },
           dynRole: { columns: { id: true, name: true } },
         },
       });
-      return full!;
+
+      if (!full) throw new Error('Failed to create membership');
+      return full;
     });
+
+    if (!membership) {
+      return { success: false, error: 'Impossible de créer le membre.' };
+    }
 
     await audit({
       actorId: ctx.userId,

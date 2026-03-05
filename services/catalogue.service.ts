@@ -24,7 +24,7 @@ const getBaseUrl = () => {
 
 export const getCategories = async (): Promise<Category[]> => {
     try {
-        const res = await axios.get(`${getBaseUrl()}/api/publicproduct/filters`);
+        const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
         const data = res.data;
             const dbCategories: string[] = data.categories || [];
             
@@ -52,7 +52,7 @@ export const getCategories = async (): Promise<Category[]> => {
 
 export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
     try {
-        const res = await axios.get(`${getBaseUrl()}/api/publicproduct/filters`);
+        const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
         const data = res.data;
             // Utilise les locations dynamiques (id/name) depuis la DB
             const locations: { id: string, name: string, code: string }[] = data.locations || [];
@@ -81,7 +81,7 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
         const searchValue = (filters as any).searchQuery ?? (filters as any).search;
         if (searchValue && String(searchValue).trim()) params.append('search', String(searchValue).trim());
 
-        const response = await axios.get(`${getBaseUrl()}/api/publicproduct?${params.toString()}`);
+        const response = await axios.get(`${getBaseUrl()}/api/publicProduct?${params.toString()}`);
         return response.data || [];
     } catch (error) {
         console.error("Erreur getProducts:", error);
@@ -94,8 +94,65 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
  */
 export const getProductById = async (id: string): Promise<Product | null> => {
     try {
-        // Important: Utilisation de l'URL absolue via getBaseUrl() pour le serveur
-        const response = await axios.get(`${getBaseUrl()}/api/publicproduct/${id}`);
+        // Server-side: prefer direct DB query to avoid internal HTTP auth issues
+        if (typeof window === 'undefined') {
+            const { db } = await import('@/src/db');
+            const schema = await import('@/src/db/schema');
+            const drizzle = await import('drizzle-orm');
+
+            const product = await db.query.products.findFirst({
+                where: drizzle.eq(schema.products.id, id),
+                with: {
+                    producer: {
+                        with: {
+                            user: {
+                                columns: {
+                                    name: true,
+                                    phone: true,
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (!product) return null;
+
+            const producer = product.producer ?? null;
+            const producerUser = producer?.user ?? null;
+
+            const formattedProduct = {
+                id: product.id,
+                name: product.name || 'Produit',
+                category: product.categoryLabel || null,
+                categoryLabel: product.categoryLabel || null,
+                price: product.price ?? 0,
+                unit: product.unit ?? '',
+                quantity: product.quantityForSale ?? 0,
+                stock: product.quantityForSale ?? 0,
+                description: product.description || '',
+                images: Array.isArray(product.images) ? product.images : [],
+                audioUrl: product.audioUrl || null,
+                status: (product.quantityForSale ?? 0) > 0 ? 'active' : 'sold_out',
+                location: {
+                    address: producer ? [producer.commune, producer.region].filter(Boolean).join(', ') : 'Localisation inconnue',
+                    latitude: 0,
+                    longitude: 0
+                },
+                producer: {
+                    name: producer?.businessName || producerUser?.name || 'Producteur',
+                    location: producer ? [producer.commune, producer.region].filter(Boolean).join(', ') : '',
+                    phone: producerUser?.phone || null
+                },
+                createdAt: product.createdAt,
+                updatedAt: product.updatedAt
+            };
+
+            return formattedProduct as Product;
+        }
+
+        // Client-side fallback: call public API route
+        const response = await axios.get(`${getBaseUrl()}/api/publicProduct/${id}`);
         return response.data || null;
     } catch (error) {
         console.error(`Erreur getProductById (${id}):`, error);

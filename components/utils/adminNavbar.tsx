@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Bot, Map, Users, Warehouse, CheckCircle, Settings, LogOut, Eye } from 'lucide-react';
@@ -26,12 +26,13 @@ export default function AdminNavbar() {
   const pathname = usePathname();
   const { logout } = useAuth();
   const { userRole } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   // Build nav items and include admin-only actions
   const items = [...adminNavItems];
   const roleUpper = (userRole || '').toString().toUpperCase();
   if (roleUpper === 'ADMIN' || roleUpper === 'SUPERADMIN') {
-    items.push({ name: 'Créer Organisation', href: '/admin/organizations/create', icon: LayoutDashboard });
+    items.push({ name: 'Gérer les Organisation', href: '/admin/organizations/', icon: LayoutDashboard });
   }
 
   const handleLogout = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -40,16 +41,18 @@ export default function AdminNavbar() {
   };
 
   return (
-    <nav style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0,
-      background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-      borderTop: `1px solid ${C.border}`,
-      boxShadow: '0 -4px 24px rgba(6,78,59,0.04)',
-      zIndex: 40,
-    }} className="md:relative md:border-t-0 md:border-b md:shadow-none md:!bottom-auto">
-      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 64, maxWidth: 1280, margin: '0 auto' }}
-        className="md:!justify-start md:!gap-2 md:!h-auto md:!py-2 md:!px-0">
-        {items.map((item) => {
+    <>
+      {/* Desktop / medium+ nav (unchanged) */}
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+        borderTop: `1px solid ${C.border}`,
+        boxShadow: '0 -4px 24px rgba(6,78,59,0.04)',
+        zIndex: 40,
+      }} className="hidden md:block md:relative md:border-t-0 md:border-b md:shadow-none md:!bottom-auto">
+        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 64, maxWidth: 1280, margin: '0 auto' }}
+          className="md:!justify-start md:!gap-2 md:!h-auto md:!py-2 md:!px-0">
+          {items.map((item) => {
           const isActive = item.exact
             ? pathname === item.href
             : pathname.startsWith(item.href) && pathname !== '/admin';
@@ -75,17 +78,61 @@ export default function AdminNavbar() {
           );
         })}
 
-        <button onClick={handleLogout} style={{
-          display: 'none', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 12,
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 500,
-          color: '#DC2626', transition: 'all 0.2s',
-        }} className="md:!flex hover:!bg-red-50" aria-label="Deconnexion">
-          <LogOut size={16} />
-          <span>Quitter</span>
+          <button onClick={handleLogout} style={{
+            display: 'none', alignItems: 'center', gap: 8,
+            padding: '8px 14px', borderRadius: 12,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 500,
+            color: '#DC2626', transition: 'all 0.2s',
+          }} className="md:!flex hover:!bg-red-50" aria-label="Deconnexion">
+            <LogOut size={16} />
+            <span>Quitter</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile: small screen button toggles nav panel */}
+      <div className="md:hidden">
+        <button
+          onClick={() => setMobileOpen((s) => !s)}
+          aria-label="Ouvrir le menu admin"
+          style={{
+            position: 'fixed', bottom: 16, right: 16, zIndex: 50,
+            background: C.forest, color: 'white', border: 'none', borderRadius: 999, width: 56, height: 56,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 20px rgba(6,78,59,0.16)'
+          }}
+        >
+          {/* simple icon: use LayoutDashboard */}
+          <LayoutDashboard size={20} />
         </button>
+
+        {mobileOpen && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 45 }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} onClick={() => setMobileOpen(false)} />
+            <div style={{ position: 'absolute', left: 12, right: 12, bottom: 86, background: C.glass, borderRadius: 12, padding: 12, maxHeight: '60vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {items.map((item) => {
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname.startsWith(item.href) && pathname !== '/admin';
+                  return (
+                    <Link key={item.name} href={item.href} onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, background: isActive ? 'rgba(16,185,129,0.06)' : 'transparent' }}>
+                        <item.icon size={18} style={{ color: isActive ? C.forest : C.muted }} />
+                        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: isActive ? C.forest : C.muted, fontWeight: isActive ? 700 : 600 }}>{item.name}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+
+                <button onClick={(e) => { setMobileOpen(false); handleLogout(e); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'transparent', border: 'none', color: '#DC2626', marginTop: 6 }}>
+                  <LogOut size={18} /> <span style={{ fontWeight: 700 }}>Quitter</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </nav>
+    </>
   );
 }
