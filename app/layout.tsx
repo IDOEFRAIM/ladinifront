@@ -9,7 +9,7 @@ import { Toaster } from 'react-hot-toast';
 // Use system fonts / CSS fallbacks for now; font loading can be reintroduced later.
 
 export const metadata: Metadata = {
-  title: 'FrontAg — Marché Agricole du Burkina Faso',
+  title: 'Ladini — Marché Agricole du Burkina Faso',
   description: 'Plateforme de commerce agricole connectant producteurs et consommateurs au Burkina Faso.',
   manifest: '/manifest.json',
   appleWebApp: {
