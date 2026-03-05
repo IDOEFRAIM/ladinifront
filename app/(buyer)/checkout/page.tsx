@@ -22,8 +22,8 @@ const GlassCard = ({ children, style }: { children: React.ReactNode; style?: Rea
 interface CheckoutFormData { name: string; phone: string; city: string; paymentMethod: string; }
 interface GeoUpdateData { lat: number; lng: number; description: string; audioBlob?: Blob | null; }
 
-const validateAvailability = async (items: CartItem[]) => {
-  const results = await Promise.all(items.map(async (item) => { if (!item.id) return null; try { await axios.head(`/api/publicProduct/${item.id}`); return item; } catch { return null; } }));
+  const validateAvailability = async (items: CartItem[]) => {
+  const results = await Promise.all(items.map(async (item) => { if (!item.id) return null; try { await axios.head(`/api/publicproduct/${item.id}`); return item; } catch { return null; } }));
   const filtered = results.filter((i): i is CartItem => i !== null);
   if (filtered.length === 0) throw new Error('Produits indisponibles.');
   if (filtered.length !== items.length) throw new Error("Certains articles ne sont plus disponibles.");

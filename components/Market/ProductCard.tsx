@@ -14,7 +14,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     const router = useRouter();
 
     const handleViewProduct = () => {
-        router.push(`/publicProducts/${product.id}`);
+        router.push(`/publicproducts/${product.id}`);
     };
 
     const available = product.quantityForSale ?? product.stock ?? (product as any).quantity ?? 0;

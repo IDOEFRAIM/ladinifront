@@ -51,7 +51,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
     return (
         <motion.div whileHover={{ y: -6 }} transition={{ type:'spring', stiffness:300 }} style={{ height:'100%' }}>
             <Link
-                href={!isOutOfStock ? `/publicProducts/${product.id}` : '#'}
+                href={!isOutOfStock ? `/publicproducts/${product.id}` : '#'}
                 style={{ textDecoration:'none', color:'inherit', display:'block', height:'100%' }}
                 onClick={e => isOutOfStock && e.preventDefault()}
             >

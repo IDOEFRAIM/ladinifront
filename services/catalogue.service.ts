@@ -24,7 +24,7 @@ const getBaseUrl = () => {
 
 export const getCategories = async (): Promise<Category[]> => {
     try {
-        const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
+        const res = await axios.get(`${getBaseUrl()}/api/publicproduct/filters`);
         const data = res.data;
             const dbCategories: string[] = data.categories || [];
             
@@ -52,7 +52,7 @@ export const getCategories = async (): Promise<Category[]> => {
 
 export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
     try {
-        const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
+        const res = await axios.get(`${getBaseUrl()}/api/publicproduct/filters`);
         const data = res.data;
             // Utilise les locations dynamiques (id/name) depuis la DB
             const locations: { id: string, name: string, code: string }[] = data.locations || [];
@@ -81,7 +81,7 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
         const searchValue = (filters as any).searchQuery ?? (filters as any).search;
         if (searchValue && String(searchValue).trim()) params.append('search', String(searchValue).trim());
 
-        const response = await axios.get(`${getBaseUrl()}/api/publicProduct?${params.toString()}`);
+        const response = await axios.get(`${getBaseUrl()}/api/publicproduct?${params.toString()}`);
         return response.data || [];
     } catch (error) {
         console.error("Erreur getProducts:", error);
@@ -95,7 +95,7 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
 export const getProductById = async (id: string): Promise<Product | null> => {
     try {
         // Important: Utilisation de l'URL absolue via getBaseUrl() pour le serveur
-        const response = await axios.get(`${getBaseUrl()}/api/publicProduct/${id}`);
+        const response = await axios.get(`${getBaseUrl()}/api/publicproduct/${id}`);
         return response.data || null;
     } catch (error) {
         console.error(`Erreur getProductById (${id}):`, error);

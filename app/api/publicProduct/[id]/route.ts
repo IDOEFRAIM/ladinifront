@@ -34,29 +34,32 @@ export async function GET(
             return NextResponse.json({ error: "Produit non trouvé" }, { status: 404 });
         }
 
-        // Mapping Data pour correspondre au Frontend
+        // Mapping Data pour correspondre au Frontend (avec garde contre les valeurs manquantes)
+        const producer = product.producer ?? null;
+        const producerUser = producer?.user ?? null;
+
         const formattedProduct = {
             id: product.id,
-            name: product.name,
-            category: product.categoryLabel, 
-            categoryLabel: product.categoryLabel,
-            price: product.price,
-            unit: product.unit,
-            quantity: product.quantityForSale,
-            stock: product.quantityForSale, // Double mapping
-            description: product.description,
-            images: product.images,
-            audioUrl: product.audioUrl,
-            status: product.quantityForSale > 0 ? 'active' : 'sold_out',
+            name: product.name || 'Produit',
+            category: product.categoryLabel || null,
+            categoryLabel: product.categoryLabel || null,
+            price: product.price ?? 0,
+            unit: product.unit ?? '',
+            quantity: product.quantityForSale ?? 0,
+            stock: product.quantityForSale ?? 0,
+            description: product.description || '',
+            images: Array.isArray(product.images) ? product.images : [],
+            audioUrl: product.audioUrl || null,
+            status: (product.quantityForSale ?? 0) > 0 ? 'active' : 'sold_out',
             location: {
-                address: [product.producer.commune, product.producer.region].filter(Boolean).join(', ') || 'Localisation inconnue',
+                address: producer ? [producer.commune, producer.region].filter(Boolean).join(', ') : 'Localisation inconnue',
                 latitude: 0,
                 longitude: 0
             },
             producer: {
-                name: product.producer.businessName || product.producer.user.name || "Producteur",
-                location: [product.producer.commune, product.producer.region].filter(Boolean).join(', '),
-                phone: product.producer.user.phone
+                name: producer?.businessName || producerUser?.name || 'Producteur',
+                location: producer ? [producer.commune, producer.region].filter(Boolean).join(', ') : '',
+                phone: producerUser?.phone || null
             },
             createdAt: product.createdAt,
             updatedAt: product.updatedAt
