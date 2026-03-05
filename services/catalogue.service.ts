@@ -123,9 +123,10 @@ export const getProductById = async (id: string): Promise<Product | null> => {
 
             const formattedProduct = {
                 id: product.id,
+                producerId: product.producerId || producer?.id || '',
                 name: product.name || 'Produit',
-                category: product.categoryLabel || null,
-                categoryLabel: product.categoryLabel || null,
+                category: product.categoryLabel || '',
+                categoryLabel: product.categoryLabel || '',
                 price: product.price ?? 0,
                 unit: product.unit ?? '',
                 quantity: product.quantityForSale ?? 0,
