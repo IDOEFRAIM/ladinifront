@@ -11,7 +11,7 @@ import { eq, and } from 'drizzle-orm';
  * - userHasAnyPermission(userId, permissions[], organizationId?): boolean
  */
 
-import { eq, and } from "drizzle-orm";
+// duplicate import removed (already imported above)
 
 /**
  * Récupère les permissions structurées par organisation.
@@ -48,13 +48,13 @@ export async function getUserPermissions(userId: string): Promise<Record<string,
  * Fonction utilitaire de vérification (Guard)
  * À utiliser dans tes Server Actions ou ton Middleware.
  */
-export function hasPermission(
-    permissionsMap: Record<string, string[]>, 
-    orgId: string, 
-    requiredPermission: string
-): boolean {
-    const orgPermissions = permissionsMap[orgId] || [];
-    return orgPermissions.includes(requiredPermission);
+export async function hasPermission(
+  permissionsMap: Record<string, string[]>,
+  orgId: string,
+  requiredPermission: string
+): Promise<boolean> {
+  const orgPermissions = permissionsMap[orgId] || [];
+  return orgPermissions.includes(requiredPermission);
 }
 
 export async function userHasPermission(userId: string, permission: string, organizationId?: string) {
