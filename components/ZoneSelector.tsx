@@ -4,7 +4,7 @@ import React, { useState } from "react";
 
 type Zone = { id: string; name: string };
 
-export default function ZoneSelector({ zones, currentZoneId }: { zones: Zone[]; currentZoneId?: string | null }) {
+export default function ZoneSelector({ zones, currentZoneId, serverSave }: { zones: Zone[]; currentZoneId?: string | null; serverSave?: (zoneId: string) => Promise<any> }) {
   const [selected, setSelected] = useState<string | undefined>(currentZoneId || undefined);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -14,15 +14,20 @@ export default function ZoneSelector({ zones, currentZoneId }: { zones: Zone[]; 
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/user/zone', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zoneId: selected }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || 'Erreur');
-      setMessage('Zone mise à jour');
+      if (serverSave) {
+        await serverSave(selected);
+        setMessage('Zone mise à jour');
+      } else {
+        const res = await fetch('/api/user/zone', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ zoneId: selected }),
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j?.error || 'Erreur');
+        setMessage('Zone mise à jour');
+      }
     } catch (err: any) {
       setMessage(err?.message || 'Erreur serveur');
     } finally {

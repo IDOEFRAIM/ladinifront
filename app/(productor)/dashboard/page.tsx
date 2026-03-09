@@ -1,16 +1,10 @@
-﻿'use client';
-
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { useRouter } from 'next/navigation';
+﻿import React from 'react';
+import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
 import DashboardHeader from '@/components/productorDashboard/dashboardHeader';
 import AssetInventory from '@/components/productorDashboard/AssetInventory';
 import OperationalTriggers from '@/components/productorDashboard/operationTrigger';
 import MarketArbitrage from '@/components/productorDashboard/marketArbitrage';
-import { useInventory } from '@/hooks/useInventory';
-import { AgrobusinessAsset } from '@/types/dashboard.index';
 import { Leaf, Plus, HeartPulse, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -30,7 +24,7 @@ function LoadingView() {
 }
 
 function EmptyView({ user, router, activeOrg }: { user: any; router: any; activeOrg?: any }) {
-  if (isDev) console.log('EmptyView props', { user, activeOrg });
+  if (isDev) console.log('EmptyView props', { user, activeOrg },'activeOrg-id',activeOrg?.id);
   return (
     <div style={{ minHeight: '100vh', background: C.sand, padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ background: C.glass, backdropFilter: 'blur(20px)', padding: '48px 40px', borderRadius: 32, border: `1px solid ${C.border}`, maxWidth: 720, textAlign: 'center' as const, boxShadow: '0 20px 60px rgba(6,78,59,0.06)' }}>
@@ -39,6 +33,11 @@ function EmptyView({ user, router, activeOrg }: { user: any; router: any; active
         </div>
         <h1 style={{ fontFamily: F.heading, fontSize: '1.8rem', fontWeight: 800, color: C.forest, marginBottom: 12 }}>Bienvenue, {user?.name || 'Producteur'} !</h1>
         <p style={{ fontFamily: F.body, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>Votre tableau de bord est prêt.</p>
+       {user && (
+          <p style={{ fontFamily: F.body, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+            Connecté en tant que {user.name} ({user.email}) ID -{user.id} 
+          </p>
+        )}
         {activeOrg ? (
           <div style={{ marginBottom: 20 }}>
             <p style={{ fontFamily: F.body, color: C.muted, marginBottom: 6 }}>Organisation active :</p>
@@ -99,66 +98,40 @@ function DashboardView({ activeUnit, setActiveUnit, healthScore, totalValue }: {
   );
 }
 
-  export default function DashboardPage() {
-  const { user, isLoading: authLoading, organizations, activeOrg } = useAuth();
-  const router = useRouter();
-  const [assets, setAssets] = useState<AgrobusinessAsset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeUnit, setActiveUnit] = useState('global');
-
-  const fetchAssets = useCallback(async () => {
-    setIsLoading(true);
-    try { const res = await axios.get(`/api/dashboard/inventory`, { withCredentials: true }); if (Array.isArray(res.data)) setAssets(res.data); }
-    catch (err) { console.error("Erreur chargement dashboard:", err); }
-    finally { setIsLoading(false); }
-  }, []);
-
-  async function selectOrganization(orgId: string) {
+  export default async function DashboardPage() {
+    // Server-side: obtain session/user via session helper if available; fallback to null
+    let userId: string | undefined = undefined;
     try {
-      const res = await fetch('/api/select-org', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationId: orgId }),
-        credentials: 'same-origin',
-      });
-      if (res.ok) {
-        // reload to pick up new cookies/session context
-        window.location.reload();
-      } else {
-        const txt = await res.text().catch(() => 'Erreur');
+      const sessionMod = await import('@/lib/session');
+      const session = await sessionMod.getSessionFromRequest({} as any).catch(() => null);
+      userId = session?.userId;
+    } catch {}
 
-      }
-    } catch (e) {
-      console.error('selectOrg error', e);
+    const assets = await fetchDashboardInventoryServer(userId);
+    if (!userId) return <LoadingView />;
 
-    }
+    // session info for org selector
+    let organizations: any[] = [];
+    let activeOrg: any = null;
+    try {
+      const sessionMod = await import('@/lib/session');
+      const session = await sessionMod.getSessionFromRequest({} as any).catch(() => null);
+      organizations = (session as any)?.organizations || [];
+      activeOrg = (session as any)?.activeOrg || null;
+    } catch {}
+  // If user has multiple organizations, show selector at top
+  if (assets.length === 0) return <EmptyView user={null} router={null} activeOrg={activeOrg} />;
+  const DashboardShell = (await import('@/components/productorDashboard/DashboardShellClient')).default;
+
+  // Provide a server-side action to the client component so it can switch orgs without calling the API route.
+  let serverSelectOrg = undefined;
+  try {
+    const mod = await import('@/app/actions/org.server');
+    const selectOrganizationAction = mod.selectOrganizationAction;
+    serverSelectOrg = async (orgId: string) => selectOrganizationAction(String(userId), orgId);
+  } catch (e) {
+    // ignore - fallback to client API route will be used
   }
 
-  useEffect(() => { if (!authLoading) { if (user?.id) fetchAssets(); else setIsLoading(false); } }, [user, authLoading, fetchAssets]);
-
-  const { totalValue, healthScore } = useInventory(assets, activeUnit, 39);
-
-  if (authLoading || isLoading) return <LoadingView />;
-  // If user has multiple organizations, show selector at top
-  const OrgSelector = () => {
-    if (!organizations || organizations.length <= 1) return null;
-    return (
-      <div style={{ padding: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
-        <select defaultValue={activeOrg?.id} onChange={e => selectOrganization(e.target.value)} className="px-3 py-2 rounded-lg border">
-          <option value="">Choisir une organisation...</option>
-          {organizations.map((o: any) => (
-            <option key={o.organizationId || o.id} value={o.organizationId || o.id}>{o.name || o.organizationId || o.id} {o.role ? `(${o.role})` : ''}</option>
-          ))}
-        </select>
-      </div>
-    );
-  };
-  if (assets.length === 0) return <EmptyView user={user} router={router} activeOrg={activeOrg} />;
-    if (isDev) console.log('Rendering DashboardView with', { activeUnit, healthScore, totalValue });
-  return (
-    <>
-      <OrgSelector />
-      <DashboardView activeUnit={activeUnit} setActiveUnit={setActiveUnit} healthScore={healthScore} totalValue={totalValue} />
-    </>
-  );
+  return <DashboardShell assets={assets} organizations={organizations} activeOrg={activeOrg} serverSelectOrg={serverSelectOrg} />;
 }

@@ -11,16 +11,50 @@ import { eq, and } from 'drizzle-orm';
  * - userHasAnyPermission(userId, permissions[], organizationId?): boolean
  */
 
-export async function getUserPermissions(userId: string) {
+import { eq, and } from "drizzle-orm";
+
+/**
+ * Récupère les permissions structurées par organisation.
+ * Empêche la confusion de privilèges entre différents contextes (Multi-tenant).
+ */
+export async function getUserPermissions(userId: string): Promise<Record<string, string[]>> {
   const memberships = await db.query.userOrganizations.findMany({
     where: eq(schema.userOrganizations.userId, userId),
-    with: { dynRole: { columns: { permissions: true } } },
+    with: { 
+        dynRole: { 
+            columns: { permissions: true } 
+        } 
+    },
   });
-  const set = new Set<string>();
-  memberships.forEach((m: any) => {
-    (m.dynRole?.permissions || []).forEach((p: string) => set.add(p));
+
+  // Structure de sortie : { "org_abc": ["read", "write"], "org_xyz": ["read"] }
+  const permissionsByOrg: Record<string, string[]> = {};
+
+  memberships.forEach((m) => {
+    if (m.organizationId) {
+      // On s'assure que permissions est bien un tableau de strings
+      const perms = Array.isArray(m.dynRole?.permissions) 
+        ? (m.dynRole.permissions as string[]) 
+        : [];
+        
+      permissionsByOrg[m.organizationId] = perms;
+    }
   });
-  return Array.from(set);
+
+  return permissionsByOrg;
+}
+
+/**
+ * Fonction utilitaire de vérification (Guard)
+ * À utiliser dans tes Server Actions ou ton Middleware.
+ */
+export function hasPermission(
+    permissionsMap: Record<string, string[]>, 
+    orgId: string, 
+    requiredPermission: string
+): boolean {
+    const orgPermissions = permissionsMap[orgId] || [];
+    return orgPermissions.includes(requiredPermission);
 }
 
 export async function userHasPermission(userId: string, permission: string, organizationId?: string) {

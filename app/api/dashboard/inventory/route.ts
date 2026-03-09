@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
 import { AgrobusinessAsset } from '@/types/dashboard.index';
+import { fetchProducerInventory } from '@/app/actions/inventory.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,21 +10,10 @@ export async function GET(req: NextRequest) {
     const { user, error } = await requireProducer(req);
     if (error || !user) return error!;
 
-    if (!user.producerId) {
-      return NextResponse.json([]);
-    }
+    if (!user.producerId) return NextResponse.json([]);
 
-    const producer = await db.query.producers.findFirst({
-      where: eq(schema.producers.id, user.producerId),
-      with: {
-        farms: { with: { inventory: true } },
-        products: true,
-      },
-    });
-
-    if (!producer) {
-      return NextResponse.json([]);
-    }
+    const producer = await fetchProducerInventory(user.producerId);
+    if (!producer) return NextResponse.json([]);
 
     const assets: AgrobusinessAsset[] = [];
 

@@ -8,105 +8,96 @@ import { cookies } from "next/headers";
 import { RegisterSchema, LoginSchema } from "@/lib/validators";
 import { audit } from "@/lib/audit";
 import { requestOrganizationMembership } from "./membership.service";
+import { signSession } from '@/lib/session';
+import { COOKIE_NAMES, publicOpts, httpOnlyOpts, DEFAULT_COOKIE_OPTS } from '@/lib/cookie-helpers';
 
 // ─── Helper : Charge les memberships org et compile les permissions ───
 async function loadUserContext(userId: string) {
     const memberships = await db.query.userOrganizations.findMany({
         where: eq(schema.userOrganizations.userId, userId),
-        columns: {
-            organizationId: true,
-            role: true,
-            managedZoneId: true,
-        },
         with: {
             dynRole: { columns: { permissions: true } },
         },
     });
 
-    const orgs = memberships.map((m: any) => ({
+    // On garde les permissions attachées à chaque organisation
+    const orgs = memberships.map((m) => ({
         organizationId: m.organizationId,
         role: m.role,
         managedZoneId: m.managedZoneId,
+        permissions: m.dynRole?.permissions || [] // On ne "flat" pas ici
     }));
-    const permissionsSet = new Set<string>();
-    memberships.forEach((m: any) => {
-        (m.dynRole?.permissions || []).forEach((p: string) => permissionsSet.add(p));
-    });
-    return { orgs, permissions: Array.from(permissionsSet) };
+
+    // On ne renvoie pas un tableau de permissions global
+    return { orgs };
 }
 
 // ─── Helper : Écriture des cookies sécurisés ───
-import { signSession } from '@/lib/session';
-import { COOKIE_NAMES, publicOpts, httpOnlyOpts, DEFAULT_COOKIE_OPTS } from '@/lib/cookie-helpers';
 
-async function setSessionCookies(user: {
-    id: string; role: string; name: string | null; updatedAt?: Date;
-}, location: { id: string; name: string } | null, permissions: string[], orgs: { organizationId: string; role: string }[]) {
+async function setSessionCookies(
+    user: { id: string; role: string; name: string | null; updatedAt?: Date; }, 
+    location: { id: string; name: string } | null, 
+    permissions: string[], 
+    orgs: { organizationId: string; role: string }[]
+) {
     const cookieStore = await cookies();
-    const cookieOpts = DEFAULT_COOKIE_OPTS;
-    // Do NOT write raw `user-id` cookie anymore. Use signed `session-token` instead.
     const roleValue = (user.role || '').toString().toUpperCase();
-    cookieStore.set(COOKIE_NAMES.USER_ROLE, roleValue, publicOpts());
-    cookieStore.set(COOKIE_NAMES.USER_NAME, user.name || '', publicOpts());
+    const pv = (user.updatedAt ?? new Date()).getTime().toString();
+    const primaryOrg = (orgs && orgs.length > 0) ? orgs[0] : null;
+
+    // 1. STOCKAGE JWT (Source de vérité Serveur - httpOnly)
+    // On centralise tout dans le token pour éviter la désynchronisation
+    try {
+        const token = await signSession({ 
+            userId: user.id, 
+            role: roleValue, 
+            permissionVersion: pv, 
+            activeOrgId: primaryOrg?.organizationId 
+        });
+        cookieStore.set(COOKIE_NAMES.SESSION_TOKEN, token, httpOnlyOpts());
+    } catch (err) {
+        console.error('CRITICAL: Could not sign session token', err);
+        return; // On arrête tout si le token échoue
+    }
+
+    // 2. STOCKAGE CLIENT (Données d'affichage - Non-httpOnly)
+    // On limite au strict minimum pour éviter le "Cookie Bloat"
+    const publicData = {
+        [COOKIE_NAMES.USER_ROLE]: roleValue,
+        [COOKIE_NAMES.USER_NAME]: user.name || '',
+        [COOKIE_NAMES.PERMISSION_VERSION]: pv,
+        [COOKIE_NAMES.ACTIVE_ORG_ID]: primaryOrg?.organizationId || '',
+        [COOKIE_NAMES.SESSION_READY]: '1'
+    };
+
+    // On itère pour définir les cookies publics
+    Object.entries(publicData).forEach(([name, value]) => {
+        try {
+            cookieStore.set(name, value, publicOpts());
+        } catch (e) {
+            console.warn(`Could not set cookie ${name}`, e);
+        }
+    });
+
+    // 3. CAS PARTICULIERS (JSON complexes)
+    // Attention : JSON.stringify peut vite dépasser 4Ko si permissions est large
     if (location) {
         cookieStore.set(COOKIE_NAMES.USER_ZONE, JSON.stringify(location), publicOpts());
     }
-    // Ensure permissions and role cache are always present for client-side hooks
-    cookieStore.set(COOKIE_NAMES.USER_PERMISSIONS, JSON.stringify(permissions || []), publicOpts());
 
-    // Always set a `user-org` cookie so client-side code has a predictable shape.
-    // If user has no orgs, store `null` (string) — clients should handle nulls gracefully.
-    const primaryOrg = (orgs && orgs.length > 0) ? orgs[0] : null;
-    try {
-        cookieStore.set(COOKIE_NAMES.USER_ORG, JSON.stringify(primaryOrg), publicOpts());
-    } catch (e) {
-        console.warn('Could not set user-org cookie', e);
-    }
-
-    // Only set `active-org-id` when there's an actual organization to activate
-    if (primaryOrg) {
-        try {
-            cookieStore.set(COOKIE_NAMES.ACTIVE_ORG_ID, primaryOrg.organizationId, publicOpts());
-            if (process.env.NODE_ENV !== 'production') console.log(`setSessionCookies: active-org-id cookie written=${primaryOrg.organizationId}`);
-        } catch (e) {
-            console.warn('Could not set active-org-id cookie', e);
-        }
+    // OPTIMISATION : Ne stocker les permissions que si elles sont peu nombreuses
+    // Sinon, le client doit les récupérer via un appel API /api/me
+    if (permissions.length < 20) {
+        cookieStore.set(COOKIE_NAMES.USER_PERMISSIONS, JSON.stringify(permissions), publicOpts());
     } else {
-        // Helpful debug for missing orgs
-        console.warn(`setSessionCookies: no orgs found for user ${user.id}; active-org-id won't be set`);
-    }
-    // permissionVersion : timestamp du user.updatedAt utilisé pour détecter
-    // les sessions dont les permissions ont changé (changement de rôle, etc.)
-    const pv = (user.updatedAt ?? new Date()).getTime().toString();
-    cookieStore.set(COOKIE_NAMES.PERMISSION_VERSION, pv, publicOpts());
-    // Create a signed session token (JWT) containing minimal identity info and set it httpOnly
-    // Sign session token and set httpOnly cookie. Ensure USER_ROLE stays written even if signing fails.
-    const activeOrgIdForToken = orgs.length > 0 ? orgs[0].organizationId : undefined;
-    try {
-        const token = await signSession({ userId: user.id, role: roleValue, permissionVersion: pv, activeOrgId: activeOrgIdForToken });
-        cookieStore.set(COOKIE_NAMES.SESSION_TOKEN, token, httpOnlyOpts());
-    } catch (err) {
-        console.warn('Could not sign session token', err);
+        console.warn(`Too many permissions (${permissions.length}) for cookies. Use API fetch.`);
+        cookieStore.set(COOKIE_NAMES.USER_PERMISSIONS, '[]', publicOpts());
     }
 
-    // Session readiness flag: non-httpOnly cookie clients poll for
-    try {
-        cookieStore.set(COOKIE_NAMES.SESSION_READY, '1', publicOpts());
-    } catch (e) {
-        // non-fatal — cookie API may throw in some environments
-        console.warn('Could not set session-ready cookie', e);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Session set: User=${user.id}, Org=${primaryOrg?.organizationId}, PV=${pv}`);
     }
-
-    // Re-write USER_ROLE after signing/ready to maximize client visibility across environments
-    try {
-        cookieStore.set(COOKIE_NAMES.USER_ROLE, roleValue, publicOpts());
-    } catch (e) {
-        console.warn('Could not set user-role cookie after signing session', e);
-    }
-
-    if (process.env.NODE_ENV !== 'production') console.log(`setSessionCookies: session setup complete for user=${user.id} activeOrg=${activeOrgIdForToken}`);
 }
-
 // ╔══════════════════════════════════════════════╗
 // ║  INSCRIPTION                                 ║
 // ╚══════════════════════════════════════════════╝
@@ -149,7 +140,7 @@ export async function registerUser(data: {
         if (role === 'ADMIN') {
             const masterSecret = process.env.ADMIN_REGISTRATION_SECRET;
             if (!masterSecret || data.adminSecret !== masterSecret) {
-                return { success: false, error: "Code d'autorisation Admin incorrect." };
+                return { success: false, error: "Code d'autorisation Admin incorrect.Veuillez contacter un administrateur." };
             }
         }
 
@@ -160,7 +151,7 @@ export async function registerUser(data: {
                 : eq(schema.users.email, email),
         });
         if (existingUser) {
-            return { success: false, error: "Cet email ou numéro de téléphone est déjà utilisé." };
+            return { success: false, error: "Cet email ou numéro de téléphone est déjà utilisé.Vous pouvez vous connecter." };
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);

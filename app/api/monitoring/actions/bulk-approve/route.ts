@@ -4,10 +4,8 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/api-guard';
+import { bulkApproveAgentActions } from '@/app/actions/monitoring.server';
 
 export async function PATCH(req: NextRequest): Promise<Response | void> {
   const { user, error } = await requireAdmin(req);
@@ -41,20 +39,23 @@ export async function PATCH(req: NextRequest): Promise<Response | void> {
       );
     }
 
-    const result = await db.update(schema.agentActions)
-      .set({
-        status: decision,
-        adminNotes: adminNotes || null,
-        validatedById: user.id,
-      })
-      .where(
-        and(
-          inArray(schema.agentActions.id, actionIds),
-          eq(schema.agentActions.status, 'PENDING'),
-        )
-      );
-
-    return NextResponse.json({ updated: result.length });
+    try {
+      const result = await bulkApproveAgentActions(user.id, actionIds, decision as 'APPROVED' | 'REJECTED', adminNotes);
+      // normalize driver result
+      const updated = Array.isArray(result) ? result.length : Number(result) || 0;
+      return NextResponse.json({ updated });
+    } catch (e: any) {
+      if (e?.message === 'INSUFFICIENT_PERMISSIONS') {
+        return NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 });
+      }
+      if (e?.message === 'INVALID_INPUT') {
+        return NextResponse.json({ error: 'Entrée invalide.' }, { status: 400 });
+      }
+      if (e?.message === 'TOO_MANY') {
+        return NextResponse.json({ error: 'Trop d\'éléments.' }, { status: 400 });
+      }
+      throw e;
+    }
   } catch (err) {
     console.error('[API] /monitoring/actions/bulk-approve error:', err);
     return NextResponse.json(

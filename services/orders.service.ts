@@ -89,7 +89,7 @@ async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethod
     customerPhone: data.customerPhone,
     totalAmount: data.totalAmount,
     paymentMethod: paymentMethodCode as any,
-    city: data.city || "Ouagadougou",
+    city: data.city,
     gpsLat: data.gpsLat,
     gpsLng: data.gpsLng,
     deliveryDesc: data.deliveryDesc || "",

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { getAdminDashboardStats } from '@/services/admin.service';
 
 export async function GET(req: NextRequest) {
   const isDev = process.env.NODE_ENV !== 'production';
@@ -20,7 +19,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const stats = await getAdminDashboardStats();
+    const { fetchAdminMetrics } = await import('@/app/actions/admin.server');
+    const stats = await fetchAdminMetrics();
     if (isDev) console.log('[API] /admin/metrics stats computed, keys:', Object.keys(stats || {}));
     return NextResponse.json(stats);
   } catch (err) {

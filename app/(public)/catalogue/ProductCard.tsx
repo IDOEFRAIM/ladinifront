@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import React from 'react';
+import { normalizeAssetUrl } from '@/lib/assetUrl';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MapPin, ArrowRight } from 'lucide-react';
@@ -15,7 +16,7 @@ function ProductImageSection({ product, isOutOfStock }: { product: Product; isOu
     return (
         <div style={{ height:220, position:'relative', overflow:'hidden', background:`${C.forest}08` }}>
             <img
-                src={product.images && product.images.length > 0 ? `/uploads/products/${product.images[0]}` : '/placeholder.jpg'}
+                src={product.images && product.images.length > 0 ? normalizeAssetUrl(product.images[0], 'products') : '/placeholder.jpg'}
                 alt={product?.name || 'Product picture'}
                 style={{ width:'100%', height:'100%', objectFit:'cover', filter: isOutOfStock ? 'grayscale(1)' : 'none' }}
             />

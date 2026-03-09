@@ -37,7 +37,7 @@ export const warehouses = marketplaceSchema.table('warehouses', {
 }, (t) => [
   index('warehouses_zone_idx').on(t.zoneId),
 ]);
-
+//
 export const producers = marketplaceSchema.table('producers', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').unique().notNull(),

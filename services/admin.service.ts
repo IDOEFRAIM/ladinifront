@@ -16,6 +16,7 @@ export async function getAdminDashboardStats() {
     const totalUsersRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM auth.users`);
     const totalProductsRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM marketplace.products`);
     const totalOrdersRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM marketplace.orders`);
+     // Get the total number of users, products, and orders from the raw SQL results
 
     const totalUsers = Number((totalUsersRes as any[])?.[0]?.cnt || 0);
     const totalProducts = Number((totalProductsRes as any[])?.[0]?.cnt || 0);
@@ -59,6 +60,11 @@ export async function getAdminDashboardStats() {
 // ╔══════════════════════════════════════════════╗
 // ║  PRODUCTEURS                                 ║
 // ╚══════════════════════════════════════════════╝
+
+/** * Récupère la liste des producteurs avec leurs informations de base, nombre de produits, fermes, commandes, etc.
+ * @returns { success: boolean; data?: AdminProducer[]; error?: string }  
+ *  */
+
 
 export async function getAdminProducers() {
   try {
@@ -165,6 +171,13 @@ export async function getAdminProducers() {
   }
 }
 
+/**
+ * 
+ * Met à jour le statut d'un producteur (ex: PENDING, ACTIVE, REJECTED)
+ * @param producerId ID du producteur à mettre à jour
+ * @param statusId Nouveau statut à appliquer
+ * @returns { success: boolean; data?: any; error?: string }
+ */
 export async function updateProducerStatus(producerId: string, statusId: string) {
   if (!producerId) return { success: false, error: "ID requis" };
 
@@ -196,36 +209,33 @@ export async function updateProducerStatus(producerId: string, statusId: string)
 }
 
 export async function assignProducerLocation(producerId: string, locationId: string) {
-  if (!producerId || !locationId) return { success: false, error: "ID producteur et localisation requis" };
+  if (!producerId || !locationId) return { success: false, error: "ID requis" };
 
   try {
-    const zoneId = locationId;
-    const oldProducer = await db.query.producers.findFirst({
-      where: eq(schema.producers.id, producerId),
-      columns: { zoneId: true },
-    });
+
     const [updated] = await db.update(schema.producers)
-      .set({ zoneId })
+      .set({ zoneId: locationId })
       .where(eq(schema.producers.id, producerId))
       .returning();
 
+    if (!updated) return { success: false, error: "Producteur introuvable" };
+
     const userId = await getUserIdFromSession();
+    
     await audit({
       action: 'ASSIGN_PRODUCER_LOCATION',
       actorId: userId ?? 'system',
       entityType: 'Producer',
       entityId: producerId,
-      oldValue: { zoneId: oldProducer?.zoneId },
-      newValue: { zoneId },
+      // newValue est déjà dans 'updated'
+      newValue: { zoneId: updated.zoneId }, 
     });
 
     return { success: true, data: updated };
   } catch (error) {
-    console.error("Erreur assignation localisation:", error);
-    return { success: false, error: "Impossible d'assigner la localisation." };
+    return { success: false, error: "Erreur technique" };
   }
 }
-
 // ╔══════════════════════════════════════════════╗
 // ║  STOCKS / PRODUITS ADMIN                     ║
 // ╚══════════════════════════════════════════════╝

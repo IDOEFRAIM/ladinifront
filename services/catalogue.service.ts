@@ -24,6 +24,24 @@ const getBaseUrl = () => {
 
 export const getCategories = async (): Promise<Category[]> => {
     try {
+        if (typeof window === 'undefined') {
+            const mod = await import('@/app/actions/publicProduct.server');
+            const data = await mod.fetchFiltersServer();
+            const dbCategories: string[] = data.categories || [];
+            const mappedCategories = dbCategories.map(catLabel => {
+                const existing = CATEGORIES_CONFIG.find(c => 
+                    c.name.toLowerCase() === catLabel.toLowerCase() || 
+                    catLabel.toLowerCase().includes(c.key)
+                );
+                return {
+                    key: catLabel,
+                    name: catLabel,
+                    icon: existing?.icon || '📦'
+                };
+            });
+            return [{ key: 'all', name: 'Toutes les Catégories', icon: '🌍' }, ...mappedCategories];
+        }
+
         const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
         const data = res.data;
             const dbCategories: string[] = data.categories || [];
@@ -52,9 +70,16 @@ export const getCategories = async (): Promise<Category[]> => {
 
 export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
     try {
+        if (typeof window === 'undefined') {
+            const mod = await import('@/app/actions/publicProduct.server');
+            const data = await mod.fetchFiltersServer();
+            const locations: { id: string, name: string }[] = data.locations || [];
+            const mappedLocations = locations.map(l => ({ id: String(l.name || l.id).trim(), name: l.name }));
+            return [{ id: 'all', name: 'Réseau National' }, ...mappedLocations];
+        }
+
         const res = await axios.get(`${getBaseUrl()}/api/publicProduct/filters`);
         const data = res.data;
-            // Utilise les locations dynamiques (id/name) depuis la DB
             const locations: { id: string, name: string, code: string }[] = data.locations || [];
             
             const mappedLocations = locations.map(l => ({
@@ -80,6 +105,16 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
         // Support both `searchQuery` (older code) and `search` (client uses `search` key)
         const searchValue = (filters as any).searchQuery ?? (filters as any).search;
         if (searchValue && String(searchValue).trim()) params.append('search', String(searchValue).trim());
+
+        if (typeof window === 'undefined') {
+            const mod = await import('@/app/actions/publicProduct.server');
+            const data = await mod.fetchProductsServer({
+                category: (filters as any).category,
+                region: (filters as any).region,
+                search: searchValue
+            });
+            return data || [];
+        }
 
         const response = await axios.get(`${getBaseUrl()}/api/publicProduct?${params.toString()}`);
         return response.data || [];

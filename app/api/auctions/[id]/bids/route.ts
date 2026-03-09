@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { submitBid } from '@/services/auction.service';
+import { submitAuctionBid } from '@/app/actions/auctions.server';
 import { getAccessContext } from '@/lib/api-guard';
 
 export async function POST(
@@ -16,7 +16,7 @@ export async function POST(
     if (typeof offeredPrice !== 'number' || offeredPrice <= 0) {
       return NextResponse.json({ error: 'Prix invalide' }, { status: 400 });
     }
-    const res = await submitBid({ auctionId: id, offeredPrice });
+    const res = await submitAuctionBid({ auctionId: id, offeredPrice });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ data: res.data });
   } catch (e: any) {

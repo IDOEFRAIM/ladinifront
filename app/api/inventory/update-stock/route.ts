@@ -1,9 +1,6 @@
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { requireOrgAction, requireMembershipAndPermission } from '@/lib/api-guard';
-import { audit } from '@/lib/audit';
+import { updateStockAction } from '@/app/actions/inventory.server';
 
 export async function POST(req: Request) {
   const session = await getSessionFromRequest(req as any);
@@ -20,29 +17,8 @@ export async function POST(req: Request) {
   const { error: zoneError } = await requireOrgAction(req as any, organizationId, zoneId);
   if (zoneError) return zoneError;
 
-  // 2. Audit before change
-  await audit({
-    actorId: session.userId,
-    action: 'UPDATE_STOCK_REQUEST',
-    entityId: stockId,
-    entityType: 'STOCK',
-    newValue: { newQuantity }
-  });
-
-  // 3. Perform the business change in a transaction for safety
-  const result = await db.transaction(async (tx) => {
-    const [stock] = await tx.update(schema.stocks).set({ quantity: newQuantity }).where(eq(schema.stocks.id, stockId)).returning();
-
-    await tx.insert(schema.auditLogs).values({
-      actorId: session.userId,
-      action: 'UPDATE_STOCK',
-      entityId: stockId,
-      entityType: 'STOCK',
-      newValue: { quantity: newQuantity }
-    });
-
-    return stock;
-  });
+  // 2. Perform the update via server action which handles transaction and audit
+  const result = await updateStockAction(session.userId, stockId, newQuantity);
 
   return new Response(JSON.stringify({ success: true, stock: result }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }

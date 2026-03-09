@@ -4,11 +4,8 @@
 // =========================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
 import { getAccessContext } from '@/lib/api-guard';
-import { userHasPermission } from '@/services/role.service';
+import { approveAgentAction } from '@/app/actions/monitoring.server';
 
 export async function PATCH(
   req: NextRequest,
@@ -18,13 +15,6 @@ export async function PATCH(
   if (error || !ctx) {
     if (error) return error;
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
-  }
-  const user: any = { id: ctx.userId, role: ctx.role };
-
-  // Permission check: allow users with explicit approver permission
-  const canApprove = await userHasPermission(user.id, 'AGENT_ACTION_APPROVE');
-  if (!canApprove) {
-    return NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 });
   }
 
   const { id } = await params;
@@ -40,41 +30,21 @@ export async function PATCH(
       );
     }
 
-    const action = await db.query.agentActions.findFirst({ where: eq(schema.agentActions.id, id) });
-    if (!action) {
-      return NextResponse.json({ error: 'Action introuvable.' }, { status: 404 });
+    try {
+      const updated = await approveAgentAction(id, ctx.userId, decision as 'APPROVED' | 'REJECTED', adminNotes);
+      return NextResponse.json(updated);
+    } catch (e: any) {
+      if (e?.message === 'INSUFFICIENT_PERMISSIONS') {
+        return NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 });
+      }
+      if (e?.message === 'NOT_FOUND') {
+        return NextResponse.json({ error: 'Action introuvable.' }, { status: 404 });
+      }
+      if (e?.message === 'ALREADY_PROCESSED') {
+        return NextResponse.json({ error: 'Action déjà traitée.' }, { status: 409 });
+      }
+      throw e;
     }
-
-    if (action.status !== 'PENDING') {
-      return NextResponse.json(
-        { error: `Action déjà traitée (statut: ${action.status}).` },
-        { status: 409 }
-      );
-    }
-
-    const [updated] = await db.update(schema.agentActions)
-      .set({
-        status: decision,
-        adminNotes: adminNotes || null,
-        validatedById: user.id,
-      })
-      .where(eq(schema.agentActions.id, id))
-      .returning();
-
-    // Fetch with relations for the response
-    const updatedWithRelations = await db.query.agentActions.findFirst({
-      where: eq(schema.agentActions.id, id),
-      with: {
-        order: {
-          columns: { id: true, totalAmount: true, status: true, customerName: true },
-        },
-        user: {
-          columns: { id: true, name: true, role: true },
-        },
-      },
-    });
-
-    return NextResponse.json(updatedWithRelations);
   } catch (err) {
     console.error('[API] /monitoring/actions/[id]/approve error:', err);
     return NextResponse.json(

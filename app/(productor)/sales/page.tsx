@@ -49,17 +49,51 @@ export default async function OrdersPage() {
   if (error || !user) return <UnauthorizedScreen />;
   const producerId = user.producerId as string;
 
-  const orderItems = await db.query.orderItems.findMany({
-    where: eq(schema.products.producerId, producerId),
-    with: {
-      order: {
-        columns: { id: true, status: true, createdAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true },
-        with: { buyer: { columns: { name: true, phone: true } } },
-      },
-      product: { columns: { name: true, unit: true } },
+  // Join products -> filter by product.producerId, include order + buyer + product fields
+  const rows = await db.select({
+    id: schema.orderItems.id,
+    orderId: schema.orderItems.orderId,
+    productId: schema.orderItems.productId,
+    quantity: schema.orderItems.quantity,
+    priceAtSale: schema.orderItems.priceAtSale,
+
+    order_id: schema.orders.id,
+    order_status: schema.orders.status,
+    order_createdAt: schema.orders.createdAt,
+    order_customerName: schema.orders.customerName,
+    order_customerPhone: schema.orders.customerPhone,
+    order_city: schema.orders.city,
+    order_deliveryDesc: schema.orders.deliveryDesc,
+
+    buyer_name: schema.users.name,
+    buyer_phone: schema.users.phone,
+
+    product_name: schema.products.name,
+    product_unit: schema.products.unit,
+  })
+    .from(schema.orderItems)
+    .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
+    .leftJoin(schema.orders, eq(schema.orders.id, schema.orderItems.orderId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.orders.buyerId))
+    .where(eq(schema.products.producerId, producerId))
+    .orderBy(desc(schema.orderItems.orderId));
+
+  const orderItems = rows.map((r: any) => ({
+    orderId: r.orderId,
+    order: {
+      id: r.order_id,
+      status: r.order_status,
+      createdAt: r.order_createdAt,
+      customerName: r.order_customerName,
+      customerPhone: r.order_customerPhone,
+      city: r.order_city,
+      deliveryDesc: r.order_deliveryDesc,
+      buyer: { name: r.buyer_name, phone: r.buyer_phone },
     },
-    orderBy: (t, ops) => [ops.desc(t.orderId)],
-  });
+    product: { name: r.product_name, unit: r.product_unit },
+    quantity: r.quantity,
+    priceAtSale: r.priceAtSale,
+  }));
 
   const allOrders = transformOrderItems(orderItems);
   return <OrdersTabs initialOrders={allOrders} />;

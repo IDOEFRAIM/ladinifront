@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
+import { updateUserZoneAction } from '@/app/actions/org.server';
 
 export async function POST(req: Request) {
   try {
@@ -13,11 +11,8 @@ export async function POST(req: Request) {
     const zoneId = body?.zoneId;
     if (!zoneId) return NextResponse.json({ error: 'zoneId requis' }, { status: 400 });
 
-    // verify zone exists
-    const z = await db.query.zones.findFirst({ where: eq(schema.zones.id, zoneId), columns: { id: true, name: true } });
-    if (!z) return NextResponse.json({ error: 'Zone introuvable' }, { status: 404 });
-
-    await db.update(schema.users).set({ zoneId }).where(eq(schema.users.id, session.userId));
+    const res = await updateUserZoneAction(session.userId, zoneId);
+    if (!res.success) return NextResponse.json({ error: 'Zone introuvable' }, { status: 404 });
 
     return NextResponse.json({ ok: true, zoneId });
   } catch (err: any) {

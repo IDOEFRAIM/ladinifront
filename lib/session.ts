@@ -89,7 +89,7 @@ export async function getSessionFromRequest(request: Request | { cookies?: any }
           if (isDev) console.debug(`[session] no ${COOKIE_NAMES.SESSION_TOKEN} cookie found but Cookie header present (could not parse names)`);
         }
       } else {
-        if (isDev) console.debug('[session] no session-token and no Cookie header present on request');
+       if (isDev) console.debug('[session] no session-token and no Cookie header present on request');
       }
     } catch (e) {
       // ignore logging errors

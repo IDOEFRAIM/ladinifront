@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getEligibleProducers } from '@/services/auction.service';
+import { fetchEligibleProducers } from '@/app/actions/auctions.server';
 import { getAccessContext } from '@/lib/api-guard';
 
 export async function GET(
@@ -11,7 +11,7 @@ export async function GET(
 
   const { id } = await context.params;
   try {
-    const res = await getEligibleProducers({ auctionId: id });
+    const res = await fetchEligibleProducers({ auctionId: id });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ data: res.data });
   } catch (e: any) {

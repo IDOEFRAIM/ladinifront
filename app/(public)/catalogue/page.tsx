@@ -1,11 +1,7 @@
-﻿'use client';
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, SlidersHorizontal, Grid3X3, List, Leaf, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { getProducts, getCategories, getRegions, Category } from '@/services/catalogue.service';
-import ProductCard from './ProductCard';
-import UnifiedFilter from './filter';
+﻿import React from 'react';
+import { fetchProductsServer, fetchFiltersServer } from '@/app/actions/publicProduct.server';
+import CatalogueClient from './CatalogueClient';
+import { Category } from '@/services/catalogue.service';
 
 /*  Tokens  */
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
@@ -80,81 +76,23 @@ const LoadingState = () => (
 );
 
 /*  Main  */
-export default function CataloguePage() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [regions, setRegions] = useState<{id:string;name:string}[]>([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [activeRegion, setActiveRegion] = useState('all');
-  const [viewMode, setViewMode] = useState<'grid'|'list'>('grid');
-  const [loading, setLoading] = useState(true);
-  const [showMobileFilter, setShowMobileFilter] = useState(false);
+export default async function CataloguePage() {
+  // Server-side initial fetch using actions
+  const filters = await fetchFiltersServer();
+  const initialProducts = await fetchProductsServer();
+  const initialCategories = (filters?.categories || []).map((c: string) => ({ key: c, name: c }));
+  const initialRegions = filters?.locations || [];
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
-  }, [search]);
+  async function serverLoad(params: { category?: string; region?: string; search?: string }) {
+    'use server'
+    const data = await fetchProductsServer(params || {});
+    return data || [];
+  }
 
-  const loadProducts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: any = {};
-      if (activeCategory !== 'all') params.category = activeCategory;
-      if (activeRegion !== 'all') params.region = activeRegion;
-      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
-      const data = await getProducts(params);
-      setProducts(data);
-    } catch { setProducts([]); }
-    setLoading(false);
-  }, [activeCategory, activeRegion, debouncedSearch]);
+  async function serverFetchFilters() {
+    'use server'
+    return await fetchFiltersServer();
+  }
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
-
-  useEffect(() => {
-    (async () => {
-      try { const [cats, regs] = await Promise.all([getCategories(), getRegions()]); setCategories(cats); setRegions(regs); } catch {}
-    })();
-  }, []);
-
-  const handleFilterChange = (type: 'category'|'region', value: string) => {
-    if (type === 'category') setActiveCategory(prev => (prev === value ? 'all' : value));
-    else setActiveRegion(prev => (prev === value ? 'all' : value));
-  };
-  const handleReset = () => { setActiveCategory('all'); setActiveRegion('all'); setSearch(''); };
-
-  return (
-    <div style={{ minHeight:'100vh', background:C.sand, fontFamily:F.body }}>
-      <CatalogueHeader />
-      <div style={{ maxWidth:1360, margin:'0 auto', padding:'0 24px 80px', display:'flex', gap:32 }}>
-        <CatalogueSidebar categories={categories} regions={regions} activeCategory={activeCategory} activeRegion={activeRegion} onFilterChange={handleFilterChange} onReset={handleReset} />
-        <main style={{ flex:1, minWidth:0 }}>
-          <CatalogToolbar search={search} setSearch={setSearch} viewMode={viewMode} setViewMode={setViewMode} totalProducts={products.length} showMobileFilter={showMobileFilter} setShowMobileFilter={setShowMobileFilter} />
-          {loading ? <LoadingState /> : products.length === 0 ? <EmptyState /> : (
-            <div style={{ display:'grid', gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill,minmax(300px,1fr))' : '1fr', gap:24 }}>
-              <AnimatePresence>
-                {products.map((p:any) => (
-                  <motion.div key={p.id} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.3}}>
-                    <ProductCard product={p} viewMode={viewMode} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* Mobile filter overlay */}
-      <AnimatePresence>
-        {showMobileFilter && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)' }} onClick={() => setShowMobileFilter(false)}>
-            <motion.div initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{type:'spring',damping:30}} style={{ position:'absolute', right:0, top:0, bottom:0, width:'85%', maxWidth:360, background:C.sand, padding:24, overflowY:'auto' }} onClick={e => e.stopPropagation()}>
-              <UnifiedFilter categories={categories} regions={regions} activeCategory={activeCategory} activeRegion={activeRegion} onFilterChange={handleFilterChange} onReset={handleReset} />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  return <CatalogueClient initialProducts={initialProducts} initialCategories={initialCategories} initialRegions={initialRegions} serverLoad={serverLoad} serverFetchFilters={serverFetchFilters} />;
 }

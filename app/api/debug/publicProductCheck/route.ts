@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
+import { checkPublicProductById } from '@/app/actions/debugPublicProduct.server';
 
 export async function GET(req: Request) {
   try {
@@ -17,20 +15,8 @@ export async function GET(req: Request) {
       if (provided !== debugKey) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    const product = await db.query.products.findFirst({
-      where: eq(schema.products.id, id),
-      columns: { id: true, name: true, quantityForSale: true, updatedAt: true },
-    });
-
-    if (!product) return NextResponse.json({ found: false, id });
-
-    return NextResponse.json({
-      found: true,
-      id: product.id,
-      name: product.name ?? null,
-      quantityForSale: product.quantityForSale ?? null,
-      updatedAt: product.updatedAt ?? null,
-    });
+    const data = await checkPublicProductById(id);
+    return NextResponse.json(data);
   } catch (err) {
     console.error('debug/publicProductCheck error:', err);
     return NextResponse.json({ error: 'internal' }, { status: 500 });

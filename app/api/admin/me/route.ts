@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/api-guard';
-import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
 import { VALID_SYSTEM_ROLES } from '@/lib/validators';
 import { cookies } from 'next/headers';
 import { COOKIE_NAMES, publicOpts } from '@/lib/cookie-helpers';
@@ -13,10 +10,8 @@ export async function GET(req: NextRequest) {
   const { user, error } = await requireAdmin(req);
   if (error || !user) return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
 
-  const dbUser = await db.query.users.findFirst({
-    where: eq(schema.users.id, user.id),
-    columns: { id: true, name: true, role: true },
-  });
+  const { getAdminUser } = await import('@/app/actions/admin.server');
+  const dbUser = await getAdminUser(user.id);
   return NextResponse.json({ success: true, data: dbUser });
 }
 
@@ -33,10 +28,8 @@ export async function PATCH(req: NextRequest) {
     }
     if (!targetUserId) return NextResponse.json({ success: false, error: 'targetUserId required' }, { status: 400 });
 
-    const [updated] = await db.update(schema.users)
-      .set({ role: role as any })
-      .where(eq(schema.users.id, targetUserId))
-      .returning();
+    const { updateUserRole } = await import('@/app/actions/admin.server');
+    const updated = await updateUserRole(targetUserId, role);
 
     // If admin changed their own role, update cookie
     if (targetUserId === user.id) {

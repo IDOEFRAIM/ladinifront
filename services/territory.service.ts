@@ -379,9 +379,9 @@ export async function getTerritoryStats() {
       code: l.code,
       isActive: l.isActive,
       climaticRegion: regionMap.get(l.climaticRegionId) || null,
-      producers: spMap.get(l.id) || 0,
-      orders: soMap.get(l.id) || 0,
-      farms: sfMap.get(l.id) || 0,
+      producers: spMap.get(l.id),
+      orders: soMap.get(l.id),
+      farms: sfMap.get(l.id),
     }));
 
     return {

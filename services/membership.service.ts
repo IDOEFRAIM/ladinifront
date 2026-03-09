@@ -16,7 +16,7 @@ export async function requestOrganizationMembership(userId: string, organization
   return await db.transaction(async (tx) => {
     const user = await tx.query.users.findFirst({ where: eq(schema.users.id, userId) });
     if (!user) throw new Error("Utilisateur introuvable.");
-    if (user.role !== "PRODUCER") throw new Error("Seul un profil PRODUCER peut faire cette demande via ce flux.");
+    if (user.role !== "PRODUCER") throw new Error("Seul un profil PRODUCER peut rejoindre une organisation.");
 
     const org = await tx.query.organizations.findFirst({ where: eq(schema.organizations.id, organizationId) });
     if (!org) throw new Error("Organisation introuvable.");
@@ -75,8 +75,8 @@ export async function validateProducerMembership(adminUserId: string, organizati
         eq(schema.userOrganizations.organizationId, organizationId)
       ),
     });
-
-    if (!adminMembership || (adminMembership.role !== 'ADMIN' && adminMembership.role !== 'ZONE_MANAGER')) {
+const checker = !adminMembership || (adminMembership.role !== 'ADMIN' && adminMembership.role !== 'ZONE_MANAGER')
+    if (checker) {
       throw new Error("Accès refusé. Droits d'administration requis pour cette organisation.");
     }
 

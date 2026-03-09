@@ -12,16 +12,21 @@ type FormData = {
   location: string;
 };
 
-export default function ProducerSettingsForm({ initialData, producerId }: { initialData: FormData; producerId: string }) {
+export default function ProducerSettingsForm({ initialData, producerId, serverAction }: { initialData: FormData; producerId: string; serverAction?: (data: FormData) => Promise<any> }) {
   const { register, handleSubmit } = useForm<FormData>({ defaultValues: initialData });
   const [isLoading, setIsLoading] = useState(false);
 
   async function onSubmit(data: FormData) {
     setIsLoading(true);
     try {
-      const res = await axios.post('/api/productor/settings', { ...data, producerId });
-      if (!res || res.status < 200 || res.status >= 300) throw new Error('Erreur lors de la sauvegarde');
-      alert('Profil mis à jour avec succès');
+      if (serverAction) {
+        await serverAction({ ...data });
+        alert('Profil mis à jour avec succès');
+      } else {
+        const res = await axios.post('/api/productor/settings', { ...data, producerId });
+        if (!res || res.status < 200 || res.status >= 300) throw new Error('Erreur lors de la sauvegarde');
+        alert('Profil mis à jour avec succès');
+      }
     } catch (err) {
       console.error(err);
       alert('Impossible de sauvegarder les paramètres.');

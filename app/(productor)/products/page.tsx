@@ -16,11 +16,12 @@ function GlassCard({ children, style, ...props }: React.HTMLAttributes<HTMLDivEl
 }
 
 function ProductCard({ product, onDelete, onShare }: { product: any; onDelete: (id: string) => void; onShare: (p: any) => void }) {
+  console.log(product)
   return (
     <GlassCard style={{ padding: 24, position: 'relative', overflow: 'hidden', transition: 'all 0.3s' }}>
       <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
-        <span style={{ padding: '4px 12px', borderRadius: 10, fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 1, background: product.stock > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: product.stock > 0 ? C.emerald : '#EF4444' }}>
-          {product.stock > 0 ? 'En Vente' : 'Epuise'}
+        <span style={{ padding: '4px 12px', borderRadius: 10, fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 1, background: product.quantityForSale > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: product.quantityForSale > 0 ? C.emerald : '#EF4444' }}>
+          {product.quantityForSale > 0 ? 'En Vente' : 'Epuise'}
         </span>
       </div>
 
@@ -37,7 +38,7 @@ function ProductCard({ product, onDelete, onShare }: { product: any; onDelete: (
 
       <div style={{ marginBottom: 20 }}>
         <h3 style={{ fontFamily: F.heading, fontSize: '1.1rem', fontWeight: 800, color: C.text, marginBottom: 4 }}>{product.categoryLabel}</h3>
-        <p style={{ fontFamily: F.body, fontSize: '0.75rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase' as const }}>Stock: {product.stock} {product.unit}</p>
+        <p style={{ fontFamily: F.body, fontSize: '0.75rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase' as const }}>Stock: {product.quantityForSale} {product.unit}</p>
         {product.localNames && (
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' as const }}>
             {Object.entries(product.localNames).map(([lang, name]: any) => (

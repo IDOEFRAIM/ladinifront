@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOrganization } from '@/services/org-manager.service';
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, type, taxId, description } = body || {};
+    const { createOrganization } = await import('@/app/actions/admin.server');
     const res = await createOrganization({ name, type, taxId: taxId ?? null, description: description ?? null });
     if (!res.success) {
       return NextResponse.json({ success: false, error: res.error }, { status: 400 });

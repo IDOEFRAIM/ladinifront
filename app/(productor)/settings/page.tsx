@@ -57,6 +57,23 @@ export default async function SettingsPage() {
   // load active zones for selection
   const zones = await db.query.zones.findMany({ columns: { id: true, name: true } });
 
+  // bind server action to update user zone (optional)
+  let serverUpdateZone = undefined;
+  try {
+    const orgMod = await import('@/app/actions/org.server');
+    const updateUserZoneAction = orgMod.updateUserZoneAction;
+    serverUpdateZone = async (zoneId: string) => {
+      try {
+        const r = await updateUserZoneAction(user.id, zoneId);
+        return r;
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    };
+  } catch (e) {
+    // ignore - fallback to client API
+  }
+
   if (!producer) return renderProducerNotFound();
   const initialData = getInitialData(producer);
 
@@ -78,8 +95,8 @@ export default async function SettingsPage() {
               <ProducerSettingsForm initialData={initialData} producerId={producer.id} />
             </div>
             <div>
-              <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
-                <ZoneSelector zones={zones} currentZoneId={me?.zoneId || null} />
+                <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
+                <ZoneSelector zones={zones} currentZoneId={me?.zoneId || null} serverSave={serverUpdateZone} />
               </div>
             </div>
           </div>

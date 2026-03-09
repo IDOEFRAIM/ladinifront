@@ -1,6 +1,7 @@
-'use client';
+"use client";
 
 import React, { useState, useEffect } from 'react';
+import { normalizeAssetUrl } from '@/lib/assetUrl';
 import { useRouter } from 'next/navigation';
 import { Product } from '@/types/market';
 import { useCart } from '@/context/CartContext';
@@ -52,7 +53,7 @@ function VisualBlock({ product, mainImage, setMainImage }: { product: Product, m
                 style={{ position: 'relative', borderRadius: '30px', overflow: 'hidden', border: `1px solid ${THEME.border}`, boxShadow: '0 15px 35px rgba(0,0,0,0.05)' }}
             >
                 <img 
-                    src={`/uploads/products/${mainImage}`} 
+                    src={normalizeAssetUrl(mainImage, 'products')} 
                     alt={product.name}
                     style={{ width: '100%', height: '550px', objectFit: 'cover' }}
                 />
@@ -70,7 +71,7 @@ function VisualBlock({ product, mainImage, setMainImage }: { product: Product, m
                 {product.images?.map((img, i) => (
                     <img 
                         key={i}
-                        src={`/uploads/products/${img}`}
+                        src={normalizeAssetUrl(img, 'products')}
                         onClick={() => setMainImage(img)}
                         style={{ 
                             width: '80px', height: '80px', borderRadius: '15px', objectFit: 'cover', cursor: 'pointer',

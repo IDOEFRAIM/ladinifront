@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { awardAuction } from '@/services/auction.service';
+import { awardAuctionAction } from '@/app/actions/auctions.server';
 import { getAccessContext } from '@/lib/api-guard';
 
 export async function POST(
@@ -15,7 +15,7 @@ export async function POST(
     const body = await req.json();
     const { winnerBidId } = body;
     if (!winnerBidId) return NextResponse.json({ error: 'winnerBidId requis' }, { status: 400 });
-    const res = await awardAuction({ auctionId: id, winnerBidId });
+    const res = await awardAuctionAction({ auctionId: id, winnerBidId });
     if (!res.success) return NextResponse.json({ error: (res as any).error }, { status: 400 });
     return NextResponse.json({ data: (res as any).data });
   } catch (e: any) {

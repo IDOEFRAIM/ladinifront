@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import React from 'react';
+import { normalizeAssetUrl } from '@/lib/assetUrl';
 import { useCart } from '@/context/CartContext';
 import { Trash2, ShoppingBag, ArrowRight, Leaf, X } from 'lucide-react';
 import Link from 'next/link';
@@ -70,9 +71,9 @@ export default function CartPage() {
                     transition={{ delay: idx * 0.05 }}
                   >
                     <GlassCard hover style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <div style={{ width: 72, height: 72, borderRadius: 16, overflow: 'hidden', border: `1px solid ${C.border}`, flexShrink: 0 }}>
+                        <div style={{ width: 72, height: 72, borderRadius: 16, overflow: 'hidden', border: `1px solid ${C.border}`, flexShrink: 0 }}>
                         <img
-                          src={item.images?.[0] ? `/uploads/products/${item.images[0]}` : '/placeholder.jpg'}
+                          src={item.images?.[0] ? normalizeAssetUrl(item.images[0], 'products') : '/placeholder.jpg'}
                           alt={item.name}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />

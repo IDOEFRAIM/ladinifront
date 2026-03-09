@@ -111,10 +111,10 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
 }
 
 // ─── Main Component ──────────────────────────────────────────────────
-export default function AuctionClient({ auctionId }: { auctionId: string }) {
-  const [auction, setAuction] = useState<Auction | null>(null);
-  const [producers, setProducers] = useState<ProducerItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function AuctionClient({ auctionId, initialAuction, initialProducers, serverLoad, serverSubmit }: { auctionId: string; initialAuction?: Auction | null; initialProducers?: ProducerItem[]; serverLoad?: (auctionId: string) => Promise<{ auction: Auction | null; producers: ProducerItem[] }>; serverSubmit?: (auctionId: string, payload: { offeredPrice: number }) => Promise<any> }) {
+  const [auction, setAuction] = useState<Auction | null>(initialAuction ?? null);
+  const [producers, setProducers] = useState<ProducerItem[]>(initialProducers ?? []);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Bid form
@@ -125,28 +125,32 @@ export default function AuctionClient({ auctionId }: { auctionId: string }) {
   const { remaining, expired } = useCountdown(auction?.deadline ?? null);
   const isOpen = auction?.status === 'OPEN' && !expired;
 
-  // ─── Data fetching ──────────────────────────────────────────────
+  // Client-side refresh loads (keeps ability to refresh and submit bids via existing API)
   async function loadData() {
     setLoading(true);
     setError(null);
     try {
-      const [aRes, pRes] = await Promise.all([
-        fetch(`/api/auctions/${auctionId}`),
-        fetch(`/api/auctions/${auctionId}/eligible-producers`),
-      ]);
-      if (!aRes.ok) throw new Error('Impossible de charger l\'enchère');
-      const aJson = await aRes.json();
-      const pJson = await pRes.json();
-      setAuction(aJson.data ?? null);
-      setProducers(pJson.data ?? []);
+      if (serverLoad) {
+        const res = await serverLoad(auctionId);
+        setAuction(res?.auction ?? null);
+        setProducers(res?.producers ?? []);
+      } else {
+        const [aRes, pRes] = await Promise.all([
+          fetch(`/api/auctions/${auctionId}`),
+          fetch(`/api/auctions/${auctionId}/eligible-producers`),
+        ]);
+        if (!aRes.ok) throw new Error('Impossible de charger l\'enchère');
+        const aJson = await aRes.json();
+        const pJson = await pRes.json();
+        setAuction(aJson.data ?? null);
+        setProducers(pJson.data ?? []);
+      }
     } catch (e: any) {
       setError(e.message || 'Erreur de chargement');
     } finally {
       setLoading(false);
     }
   }
-
-  useEffect(() => { loadData(); }, [auctionId]);
 
   // ─── Submit bid ─────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -165,19 +169,29 @@ export default function AuctionClient({ auctionId }: { auctionId: string }) {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/auctions/${auctionId}/bids`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offeredPrice: numPrice }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur');
+      if (serverSubmit) {
+        await serverSubmit(auctionId, { offeredPrice: numPrice });
+      } else {
+        const res = await fetch(`/api/auctions/${auctionId}/bids`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offeredPrice: numPrice }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erreur');
+      }
       setBidMessage({ type: 'success', text: 'Offre soumise avec succès !' });
       setPrice('');
       // Refresh producers list
-      const pRes = await fetch(`/api/auctions/${auctionId}/eligible-producers`);
-      const pJson = await pRes.json();
-      setProducers(pJson.data ?? []);
+      if (serverLoad) {
+        const res = await serverLoad(auctionId);
+        setProducers(res?.producers ?? []);
+        setAuction(res?.auction ?? null);
+      } else {
+        const pRes = await fetch(`/api/auctions/${auctionId}/eligible-producers`);
+        const pJson = await pRes.json();
+        setProducers(pJson.data ?? []);
+      }
     } catch (e: any) {
       setBidMessage({ type: 'error', text: e.message || 'Erreur lors de la soumission' });
     } finally {

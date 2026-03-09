@@ -1,165 +1,47 @@
-﻿'use client';
+﻿import React from 'react';
+import AdminSettingsClient from '@/app/admin/AdminSettingsClient';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Settings, ShieldCheck, Palette, Lock, LogOut, ChevronRight, Database, RefreshCw, XCircle, Sun, Moon } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { VALID_SYSTEM_ROLES } from '@/lib/validators';
-import { useRouter } from 'next/navigation';
+export default async function AdminSettingsPage() {
+  // Server-side: get current admin user and pass as initialProfile
+  let userId: string | undefined = undefined;
+  try {
+    const sessionMod = await import('@/lib/session');
+    const session = await sessionMod.getSessionFromRequest({} as any).catch(() => null);
+    userId = session?.userId;
+  } catch (e) {
+    // ignore
+  }
 
-const C = { forest: '#064E3B', emerald: '#10B981', lime: '#84CC16', amber: '#D97706', sand: '#F9FBF8', glass: 'rgba(255,255,255,0.72)', border: 'rgba(6,78,59,0.07)', muted: '#64748B', text: '#1F2937' };
-const F = { heading: "'Space Grotesk', sans-serif", body: "'Inter', sans-serif" };
+  let initialProfile = { id: undefined, name: '', role: '', theme: 'light' };
+  try {
+    if (userId) {
+      const mod = await import('@/app/actions/admin.server');
+      const user = await mod.getAdminUser(String(userId));
+      if (user) initialProfile = { id: user.id, name: user.name || '', role: user.role || '', theme: 'light' };
+    }
+  } catch (e) {
+    // ignore - client will fallback
+  }
 
-type AdminProfile = { id?: string; name: string; role: string; theme: 'light' | 'dark'; };
-
-function GlassCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, ...style }}>
-      {children}
-    </div>
-  );
-}
-
-export default function AdminSettingsPage() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<AdminProfile>({ name: '', role: '', theme: 'light' });
-  const [isLoading, setIsLoading] = useState(false);
-  const [editingRole, setEditingRole] = useState(false);
-  const [roleDraft, setRoleDraft] = useState<string>('');
-
-  useEffect(() => {
-    (async () => {
+  // bind server action for role update
+  let serverUpdateRole = undefined;
+  try {
+    const mod = await import('@/app/actions/admin.server');
+    const updateUserRole = mod.updateUserRole;
+    serverUpdateRole = async (role: string, targetUserId?: string) => {
       try {
-        const res = await fetch('/api/admin/me');
-        const j = await res.json();
-        if (j.success && j.data) {
-          setProfile({ id: j.data.id, name: j.data.name || '', role: j.data.role || '', theme: 'light' });
-          setRoleDraft(j.data.role || '');
-        }
-      } catch (e) {
-        console.error('Failed to load admin profile', e);
+        const id = targetUserId || String(userId);
+        const res = await updateUserRole(id, role);
+        return res || { success: true };
+      } catch (err) {
+        return { success: false, error: String(err) };
       }
-    })();
-  }, []);
+    };
+  } catch (e) {
+    // ignore
+  }
 
-  const toggleTheme = () => {
-    const newTheme = profile.theme === 'light' ? 'dark' : 'light';
-    setProfile(prev => ({ ...prev, theme: newTheme }));
-    alert(`Thème passé à : ${newTheme} (Simulé)`);
-  };
-
-  const handleDatabaseMaintenance = () => {
-    setIsLoading(true);
-    alert("Lancement de l'optimisation des index de la base de données... (Simulé)");
-    setTimeout(() => { alert("Maintenance terminée. 120MB de logs purgés."); setIsLoading(false); }, 2000);
-  };
-
-  const handleClearLocalCache = () => {
-    if (window.confirm("Voulez-vous effacer le cache local (IndexéDB/Service Worker) ?")) {
-      alert("Cache local effacé. La page va se recharger. (Simulé)");
-      window.location.reload();
-    }
-  };
-
-  const handleLogout = () => {
-    if (window.confirm("Êtes-vous sûr de vouloir vous déconnecter de la console Admin ?")) {
-      alert("Déconnexion Admin réussie !");
-      router.push('/login');
-    }
-  };
-
-  const handleSaveRole = async () => {
-    setIsLoading(true);
-    try {
-      const targetUserId = profile.id;
-      const res = await fetch('/api/admin/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: roleDraft, targetUserId }) });
-      const j = await res.json();
-      if (j.success) {
-        setProfile(p => ({ ...p, role: roleDraft }));
-        setEditingRole(false);
-        toast.success('Rôle mis à jour');
-      } else {
-        toast.error(j.error || 'Erreur');
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error('Erreur');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ minHeight: '100vh', background: C.sand, paddingBottom: 80 }}>
-      {/* Header */}
-      <div style={{ background: C.glass, backdropFilter: 'blur(20px)', padding: '20px 24px', position: 'sticky', top: 64, zIndex: 10, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Settings size={20} color="white" />
-          </div>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: C.forest, fontFamily: F.heading }}>Paramètres Admin</h1>
-            <p style={{ fontSize: 13, color: C.muted, fontFamily: F.body }}>Gestion du compte superviseur et maintenance système</p>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {/* Profile Section */}
-        <Section title="Profil Administrateur" icon={ShieldCheck}>
-          <InfoRow icon={ShieldCheck} label="Nom / Rôle" value={`${profile.name} (${profile.role})`} />
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', paddingTop: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Rôle</label>
-              {editingRole ? (
-                <select value={roleDraft} onChange={e => setRoleDraft(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
-                  <option value="">Choisir un rôle</option>
-                  {VALID_SYSTEM_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              ) : (
-                <div style={{ fontWeight: 700 }}>{profile.role}</div>
-              )}
-            </div>
-            <div>
-              {editingRole ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={handleSaveRole} disabled={isLoading} style={{ padding: '8px 14px', borderRadius: 8, background: '#10b981', color: 'white' }}>{isLoading ? '...' : 'Enregistrer'}</button>
-                  <button onClick={() => setEditingRole(false)} style={{ padding: '8px 14px', borderRadius: 8 }}>Annuler</button>
-                </div>
-              ) : (
-                <button onClick={() => setEditingRole(true)} style={{ padding: '8px 14px', borderRadius: 8 }}>Modifier</button>
-              )}
-            </div>
-          </div>
-          <InfoRow icon={Lock} label="Sécurité" value="Changer le mot de passe" isLink="/admin/password-reset" />
-        </Section>
-
-        {/* Display Section */}
-        <Section title="Affichage" icon={Palette}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {profile.theme === 'dark' ? <Moon size={18} color={C.forest} /> : <Sun size={18} color={C.amber} />}
-              <span style={{ fontWeight: 600, color: C.text, fontFamily: F.body }}>Mode Sombre (Dark Mode)</span>
-            </div>
-            <ToggleSwitch checked={profile.theme === 'dark'} onChange={toggleTheme} />
-          </div>
-        </Section>
-
-        {/* Resilience Section */}
-        <Section title="Outils de Résilience et Maintenance" icon={Database}>
-          <SettingItem label="Lancer la Maintenance Serveur" onClick={handleDatabaseMaintenance} icon={RefreshCw} disabled={isLoading}
-            description={isLoading ? 'Optimisation en cours...' : 'Optimisation des tables et purge des logs non critiques.'} />
-          <SettingItem label="Vider le Cache Local" onClick={handleClearLocalCache} icon={XCircle} isDanger
-            description="Force le re-téléchargement de tous les catalogues et images." />
-        </Section>
-
-        {/* Session Section */}
-        <Section title="Session" icon={LogOut}>
-          <SettingItem label="Déconnexion de la Console" onClick={handleLogout} icon={LogOut} isDanger />
-        </Section>
-      </div>
-    </div>
-  );
+  return <AdminSettingsClient initialProfile={initialProfile} serverUpdateRole={serverUpdateRole} />;
 }
 
 /*  Sub-components  */

@@ -52,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateSession = useCallback((userData: any) => {
     if (isDev) console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
+    // Quick debug: always log the user id to the browser console
+    try { console.log('[Auth] user id:', userData?.id); } catch (e) { /* ignore */ }
     const normalizedRole = (userData.role || '').toString().toUpperCase();
     Cookies.set(COOKIE_NAMES.USER_ROLE, normalizedRole, { expires: 7, sameSite: 'lax' });
     Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    let mounted = true;
 
     const checkSession = async () => {
       const startMs = Date.now();
@@ -116,13 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               // ignore
             }
 
-            hydrateSession(data.user);
+            if (mounted) hydrateSession(data.user);
             return;
           }
         }
 
         const savedRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
-        if (savedRole) {
+        if (savedRole && mounted) {
           const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
           const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
 
@@ -136,12 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e: any) {
         if (e.name !== 'AbortError') console.error('Initial check session failed:', e);
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     checkSession();
-    return () => controller.abort();
+    return () => { mounted = false; controller.abort(); };
   }, [hydrateSession]);
 
   const handleRedirect = (userData: any) => {

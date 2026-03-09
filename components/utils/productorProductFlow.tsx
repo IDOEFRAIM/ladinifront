@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef } from 'react';
+import { normalizeAssetUrl } from '@/lib/assetUrl';
+import { createProductAction, updateProductAction } from '@/app/actions/createProductAction';
 import { useRouter } from 'next/navigation';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { 
@@ -47,6 +48,9 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const imagesInputRef = useRef<HTMLInputElement | null>(null);
 
   // React Hook Form - On initialise vide, le useEffect fera le travail
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<ProductFormData>({
@@ -110,55 +114,38 @@ const foundCat = CATEGORIES.find(c =>
   }, [newPreviews]);
 
   // --- SAUVEGARDE ---
-  const onSubmit: SubmitHandler<ProductFormData> = async (formData) => {
+  // Prepare file inputs (images/audio) and submit the native form to the server action.
+  const prepareAndSubmit = async () => {
     if (authLoading) return;
-    
     setIsSubmitting(true);
     setErrorMsg(null);
-
     try {
-      const data = new FormData();
-      data.append('mode', mode);
-
-      if (mode === 'edit') {
-        if (!initialData?.id) throw new Error("ID du produit manquant pour la modification");
-        data.append('id', initialData.id);
-      }
-      
-      data.append('category', formData.category);
-      data.append('categoryLabel', formData.categoryLabel);
-      data.append('name', formData.name);
-      data.append('description', formData.description);
-      data.append('price', formData.price);
-      data.append('unit', formData.unit);
-      data.append('quantity', formData.quantity);
-      data.append('existingImages', JSON.stringify(existingImages));
-
-      newImages.forEach((file) => data.append('images', file));
-      if (audioBlob) {
-        data.append('audio', audioBlob, 'desc_vocale.webm');
+      // Populate images input from `newImages`
+      if (imagesInputRef.current) {
+        const dt = new DataTransfer();
+        newImages.forEach((f) => dt.items.add(f));
+        imagesInputRef.current.files = dt.files;
       }
 
-      const res = await axios({
-        url: '/api/products',
-        method: mode === 'create' ? 'post' : 'put',
-        data: data,
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      if (!res || !res.data) {
-        throw new Error('Une erreur est survenue.');
+      // Populate audio input from `audioBlob`
+      if (audioBlob && audioInputRef.current) {
+        const audioFile = new File([audioBlob], 'desc_vocale.webm', { type: 'audio/webm' });
+        const dt2 = new DataTransfer();
+        dt2.items.add(audioFile);
+        audioInputRef.current.files = dt2.files;
       }
 
-      setIsSuccess(true);
-      setTimeout(() => {
-        router.push('/products'); 
-        router.refresh();
-      }, 2000);
+      // Ensure hidden id field exists (for edit mode)
+      if (mode === 'edit' && initialData?.id) {
+        const idInput = formRef.current?.querySelector('input[name="id"]') as HTMLInputElement | null;
+        if (idInput) idInput.value = String(initialData.id);
+      }
 
+      // Submit the native form so the `action` server function receives the multipart FormData
+      formRef.current?.requestSubmit?.();
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMsg(err.message || "Impossible d'enregistrer le produit.");
+      setErrorMsg(err?.message || 'Erreur préparation du formulaire');
     }
   };
 
@@ -173,7 +160,16 @@ const foundCat = CATEGORIES.find(c =>
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-sans relative">
+    <form ref={formRef} action={mode === 'create' ? createProductAction : updateProductAction} className="min-h-screen bg-slate-50 pb-20 font-sans relative">
+      {/* Hidden canonical inputs to guarantee server action receives values */}
+      <input type="hidden" name="id" value={initialData?.id || ''} />
+      <input type="hidden" name="name" value={watchedName || ''} />
+      <input type="hidden" name="category" value={watchedCategory || ''} />
+      <input type="hidden" name="categoryLabel" value={watchedCategoryLabel || ''} />
+      <input type="hidden" name="description" value={watchedDescription || ''} />
+      <input type="hidden" name="price" value={watchedPrice || ''} />
+      <input type="hidden" name="quantity" value={watchedQuantity || ''} />
+      <input type="hidden" name="unit" value={watchedUnit || 'KG'} />
       
       {/* OVERLAY SUCCÈS / ENVOI */}
       {(isSubmitting || isSuccess) && (
@@ -223,6 +219,10 @@ const foundCat = CATEGORIES.find(c =>
       )}
 
       <div className="p-6 max-w-md mx-auto">
+        {/* Hidden audio input to receive programmatic blob attachment */}
+        <input ref={audioInputRef} type="file" name="audio" accept="audio/*" className="hidden" />
+        {/* Hidden images input to attach selected images to the native form before submit */}
+        <input ref={imagesInputRef} type="file" name="images" accept="image/*" multiple className="hidden" />
         
         {/* STEP 1: CATEGORIES */}
         {step === 1 && (
@@ -262,7 +262,7 @@ const foundCat = CATEGORIES.find(c =>
               {/* Existing */}
               {existingImages.map((url, i) => (
                 <div key={`ex-${i}`} className="relative aspect-square rounded-3xl overflow-hidden border-2 border-slate-200">
-                  <img src={url.startsWith('http') ? url : `/uploads/products/${url}`} className="w-full h-full object-cover" alt="prev" />
+                  <img src={normalizeAssetUrl(url, 'products')} className="w-full h-full object-cover" alt="prev" />
                   <button onClick={() => setExistingImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-500 text-white p-1.5 rounded-full"><FaTrash size={10}/></button>
                 </div>
               ))}
@@ -362,7 +362,7 @@ const foundCat = CATEGORIES.find(c =>
             <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-white">
                 <div className="h-52 bg-slate-100 relative">
                     <img 
-                      src={newPreviews[0] || (existingImages[0]?.startsWith('http') ? existingImages[0] : `/uploads/products/${existingImages[0]}`)} 
+                      src={newPreviews[0] || normalizeAssetUrl(existingImages[0], 'products')} 
                       className="w-full h-full object-cover" 
                       alt="final" 
                     />
@@ -400,18 +400,19 @@ const foundCat = CATEGORIES.find(c =>
                     )}
 
                     <button 
-                        onClick={handleSubmit(onSubmit)} 
-                        disabled={isSubmitting}
-                        className="w-full bg-green-600 text-white py-6 rounded-[2.2rem] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-200 flex items-center justify-center gap-4 hover:bg-green-700 transition-all"
+                      type="button"
+                      onClick={prepareAndSubmit}
+                      disabled={isSubmitting || !watchedName || !watchedQuantity || Number(watchedPrice) <= 0}
+                      className="w-full bg-green-600 text-white py-6 rounded-[2.2rem] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-200 flex items-center justify-center gap-4 hover:bg-green-700 transition-all disabled:opacity-50"
                     >
-                        {isSubmitting ? <FaSpinner className="animate-spin" /> : <FaSave />}
-                        {mode === 'create' ? 'Publier' : 'Enregistrer'}
+                      {isSubmitting ? <FaSpinner className="animate-spin" /> : <FaSave />}
+                      {mode === 'create' ? 'Publier' : 'Enregistrer'}
                     </button>
                 </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </form>
   );
 }
