@@ -29,7 +29,9 @@ async function loadUserContext(userId: string) {
     }));
 
     // On ne renvoie pas un tableau de permissions global
-    return { orgs };
+    // Optionally expose an aggregated permissions list for convenience
+    const allPermissions = Array.from(new Set(orgs.flatMap(o => o.permissions || [])));
+    return { orgs, permissions: allPermissions };
 }
 
 // ─── Helper : Écriture des cookies sécurisés ───

@@ -79,7 +79,6 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
 
   const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 
-  // Helper components (KpiCard, FeedItem, AdminActionLink) could be extracted but kept inline for brevity
   const KpiCard = ({ label, value, sub, accent, icon, isAlert = false }: any) => (
     <div style={{ background: 'white', borderRadius: 16, padding: 18, border: '1px solid rgba(6,78,59,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -260,3 +259,18 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
             {data.pendingProducers > 0 && (
               <div style={{
                 background: `linear-gradient(135deg, ${C.amber}, #F59E0B)`, padding: 24, borderRadius: 28,
+              }}>
+                <p style={{ fontWeight: 800, fontSize: 14, marginBottom: 12 }}>Action requise</p>
+                <p style={{ fontSize: 12, color: 'rgba(0,0,0,0.7)' }}>Vous avez {data.pendingProducers} producteur(s) en attente de validation.</p>
+                <div style={{ marginTop: 12 }}>
+                  <Link href="/admin/validations" style={{ textDecoration: 'none', fontWeight: 800, color: C.forest }}>Gérer les validations →</Link>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -133,5 +133,5 @@ function DashboardView({ activeUnit, setActiveUnit, healthScore, totalValue }: {
     // ignore - fallback to client API route will be used
   }
 
-  return <DashboardShell assets={assets} organizations={organizations} activeOrg={activeOrg} serverSelectOrg={serverSelectOrg} />;
+  return <DashboardShell assets={assets} organizations={organizations} activeOrg={activeOrg} />;
 }

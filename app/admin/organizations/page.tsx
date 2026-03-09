@@ -43,5 +43,5 @@ export default async function AdminOrganizationsListPage() {
     // ignore - fall back to client API calls
   }
 
-  return <OrgListClient initialOrgs={orgs || []} serverApproveOrg={serverApproveOrg} serverSelectOrg={serverSelectOrg} />;
+  return <OrgListClient initialOrgs={orgs || []} />;
 }

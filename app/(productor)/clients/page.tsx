@@ -5,7 +5,7 @@ import { fetchClients as fetchClientsAction } from '@/app/actions/clients.server
 import { createClient as createClientAction } from '@/app/actions/clients.server';
 
 export default async function ClientsPage() {
-  let clients = [];
+  let clients: any[] = [];
   try {
     clients = await fetchClientsAction();
   } catch (e) {
@@ -13,7 +13,8 @@ export default async function ClientsPage() {
     clients = [];
   }
 
-  const serverCreateClient = async (data: any) => {
+  async function serverCreateClient(data: any) {
+    'use server'
     try {
       const created = await createClientAction(data);
       return created || null;
@@ -21,7 +22,7 @@ export default async function ClientsPage() {
       console.error('serverCreateClient error', e);
       return null;
     }
-  };
+  }
 
   return <ClientsClient initialClients={clients} serverCreateClient={serverCreateClient} />;
 }

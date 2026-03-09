@@ -1,5 +1,5 @@
 import React from 'react';
-import CreateOrganizationClient from './CreateOrganizationClient';
+import CreateOrganizationClient from '../CreateOrganizationClient';
 import { createOrganization } from '@/app/actions/admin.server';
 
 export default async function CreateOrganizationPage() {

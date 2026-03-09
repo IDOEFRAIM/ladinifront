@@ -142,8 +142,8 @@ export async function fetchFiltersServer() {
   const categoriesRes = await db.select({ categoryLabel: schema.products.categoryLabel }).from(schema.products).groupBy(schema.products.categoryLabel);
   const categories = categoriesRes.map((r: any) => r.categoryLabel).filter(Boolean);
 
-  const locationsRes = await db.select({ id: schema.producers.id, name: schema.producers.region }).from(schema.producers).groupBy(schema.producers.region);
-  const locations = locationsRes.map((r: any) => ({ id: String(r.name || r.id).trim(), name: r.name }));
+  const locationsRes = await db.select({ name: schema.producers.region }).from(schema.producers).groupBy(schema.producers.region);
+  const locations = locationsRes.map((r: any) => ({ id: String(r.name || '').trim(), name: r.name }));
 
   return { categories, locations };
 }

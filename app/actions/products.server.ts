@@ -96,7 +96,7 @@ async function validateProductFormData(formData: FormData) {
     // Attach Zod validation details and the parsed raw input for debugging
     (err as any).validation = validation.error;
     (err as any).raw = raw;
-    console.warn('Product form validation failed', { raw, errors: validation.error.format?.() ?? validation.error.errors });
+    console.warn('Product form validation failed', { raw, errors: validation.error.format?.() ?? validation.error.issues });
     throw err;
   }
   return validation;

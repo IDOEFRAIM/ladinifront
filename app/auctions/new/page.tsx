@@ -18,5 +18,5 @@ export default async function NewAuctionPage() {
     // ignore - fallback to API
   }
 
-  return <NewAuctionClient serverCreateAuction={serverCreateAuction} />;
+  return <NewAuctionClient />;
 }

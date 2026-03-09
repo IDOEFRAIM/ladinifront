@@ -15,11 +15,11 @@ export default async function AuctionPage({ params }: { params: { id: string } }
       }
     : null;
 
-  async function serverLoad(auctionId: string) {
+  async function serverLoad(auctionId: string): Promise<{ auction: any | null; producers: any[] }> {
     'use server'
     const aRaw = await fetchAuctionById(auctionId);
     const pRes = await fetchEligibleProducers({ auctionId });
-    const pList = pRes && pRes.success ? pRes.data : [];
+    const pList = pRes && pRes.success && pRes.data ? pRes.data : [];
     const a = aRaw
       ? {
           ...aRaw,

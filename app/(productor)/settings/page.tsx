@@ -95,10 +95,10 @@ export default async function SettingsPage() {
               <ProducerSettingsForm initialData={initialData} producerId={producer.id} />
             </div>
             <div>
-                <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
-                <ZoneSelector zones={zones} currentZoneId={me?.zoneId || null} serverSave={serverUpdateZone} />
+                  <div style={{ background: 'white', padding: 16, borderRadius: 12 }}>
+                  <ZoneSelector zones={zones} currentZoneId={me?.zoneId || null} />
+                </div>
               </div>
-            </div>
           </div>
         </div>
       </div>

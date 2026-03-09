@@ -2,8 +2,8 @@ import React from 'react';
 import ProductFlow from '@/components/utils/productorProductFlow';
 import { fetchProductByIdServer } from '@/app/actions/publicProduct.server';
 
-export default async function EditPage({ params }: { params: { productId: string } | Promise<{ productId: string }> }) {
-  const resolvedParams = await params;
+export default async function EditPage(props: any) {
+  const resolvedParams = await props.params;
   const productId = String(resolvedParams?.productId ?? '').trim();
   if (!productId) {
     return (
