@@ -1,0 +1,57 @@
+Agent, mission de synchronisation schéma ↔ UI (FR)
+
+Contexte : J'ai analysé les schémas Drizzle (Governance, Intelligence, Marketplace). Le backend contient déjà des tables riches (zones, orders, agent_actions, agent_telemetry, standard_prices, anomalies, etc.) mais l'UI manque de modules pour exploiter ces données.
+Objectif général : Scanner l'UI actuelle et implémenter les modules manquants listés ci-dessous en respectant le schéma et les champs existants (JSONB, champs géo, relations zones, etc.). Priorise d'abord les items 1→3.
+
+Tâches prioritaires
+1) Kanban de Gestion des Commandes
+- Source : table `orders` (utilise `orderStatusEnum`).
+- Fonctionnalités : colonnes status drag-n-drop, filtres par `zoneId` et `organizationId`, recherche, pagination/infinite scroll, détail d'une commande (modal/sidepanel) incluant tous les champs de `orders`.
+- Critères d'acceptation : créer route/page `admin/orders/kanban` ou `orders/kanban` + tests manuels (drag, filtre par zone).
+
+2) Dashboard de Supervision IA (Agent Actions)
+- Source : `agent_actions`, `agent_telemetry`, `conversations`, `ai_rating_reasonings`.
+- Fonctionnalités : tri/filtre par priorité/status, vue détaillée de `ai_reasoning` (texte), possibilité d'approuver/rejeter actions depuis l'UI, timeline des `conversations`.
+- Critères d'acceptation : page `admin/ai-monitor` avec liste, modal détail et action de validation.
+
+3) Module de Tarification Géographique
+- Source : `standard_prices` (lier `sub_category` ↔ `zone` ↔ prix).
+- Fonctionnalités : matrice/éditeur par zone, CRUD, validation (prix > 0), import/export CSV, affichage fallback price si pas de prix zonal.
+- Critères d'acceptation : page `admin/pricing` + formulaire reliant `sub_category` et `zone`.
+
+Fonctionnalités complémentaires (ordre de priorité secondaire)
+4) Tracking de Proximité (Agent Telemetry)
+- Source : `agent_telemetry`, `warehouses`, `zones`.
+- Fonctionnalités : carte interactive (Leaflet/Mapbox) affichant agents + warehouses, clustering, filtre par temps (ex: dernières 24h).
+- Critères d'acceptation : page `admin/telemetry-map` avec markers et sélection d'un marker affiche télémétrie.
+
+5) Workflow de Gestion des Anomalies
+- Source : `anomalies`.
+- Fonctionnalités : kanban/issue-tracker pour anomalies, assignation, historique des statuts, commentaires, lien vers zone/produit concerné.
+- Critères d'acceptation : page `admin/anomalies` + actions assign/resolve/reopen.
+
+Consignes techniques et règles
+- Respecte tous les champs du schéma (ex : `products.local_names` JSONB, `farms.soil_type`, `producers.region`/`zoneId`, etc.). Les formulaires de création/édition doivent exposer ces champs.
+- Zone-centric UI : implémente un `Global Zone Selector` réutilisable (context/provider) qui filtre toutes les vues du dashboard par `zoneId`.
+- Server actions : pour les pages qui rendent des composants client, n'envoie PAS de closures serveur non marquées. Utilise soit une action serveur marquée `'use server'`, soit des API routes. (Voir erreurs précédentes de build).
+- Tests basiques : pour chaque module fournir un plan de test manuel (smoke tests) et au moins un test automatisé léger si le repo utilise des tests.
+- Access control : respecter `organizationId` et rôles (ex : seuls `ADMIN`/`SUPERADMIN` peuvent modifier `standard_prices`).
+- Performance : paginer et indexer les listes lourdes et éviter SELECT * sans limite sur les pages publiques.
+
+Livrables et priorités
+- Livrable 1 (priorité haute) : `orders` Kanban (page, composants réutilisables, Global Zone Selector).
+- Livrable 2 (priorité haute) : `agent_actions` Dashboard (détail IA + validation).
+- Livrable 3 (priorité haute) : `standard_prices` UI (matrix CRUD).
+- Livrables 4–5 (priorité moyenne) : Telemetry map, Anomalies workflow.
+- Pour chaque livrable : fournir PRs séparés, tests, et un bref README d'intégration.
+
+---
+
+Actions demandées :
+- Génère des issues GitHub (une par livrable) avec description, critères d'acceptation et estimation (points/hours).
+- Crée des branches préparatoires pour les trois livrables prioritaires :
+  * `feature/kanban-orders`
+  * `feature/ai-supervision`
+  * `feature/geographic-pricing`
+
+Merci de me tenir informé des PRs/branches générées. Si tu as besoin d'autorisations Git/GitHub, signale-le.
