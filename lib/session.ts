@@ -27,6 +27,17 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     const { payload } = await jwtVerify(token, secretKey as Uint8Array);
     return payload as unknown as SessionPayload;
   } catch (err) {
+    // In development log the verification error to help diagnose expired tokens,
+    // signature mismatches, malformed tokens, etc. Do not log token contents.
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        // err may be a JOSE error with message
+        // eslint-disable-next-line no-console
+        console.debug('[session] verifySession error:', (err as any)?.message ?? err);
+      } catch (e) {
+        // swallow logging issues
+      }
+    }
     return null;
   }
 }

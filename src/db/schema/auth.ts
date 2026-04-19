@@ -1,4 +1,4 @@
-import { uuid, text, timestamp, index, uniqueIndex, integer } from 'drizzle-orm/pg-core';
+import { uuid, text, timestamp, index, uniqueIndex, integer, boolean } from 'drizzle-orm/pg-core';
 import { type InferModel } from 'drizzle-orm';
 import { authSchema, roleEnum } from './_config';
 
@@ -10,7 +10,9 @@ export const users = authSchema.table('users', {
   image: text('image'),
   password: text('password'),
   phone: text('phone').unique(),
+  cnibNumber: text('cnib_number').unique(),
   role: roleEnum('role').default('USER').notNull(),
+  identityVerified: boolean('identity_verified').default(false),
   zoneId: uuid('zone_id'),
   deletedAt: timestamp('deleted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

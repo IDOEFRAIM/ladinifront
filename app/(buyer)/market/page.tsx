@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import ProductCard from '@/components/Market/ProductCard';
 import FilterSidebar from '@/components/Market/FilterSidebar';
 import { ProductRepository } from '@/services/repository';
-import { Product } from '@/types/market';
+import { Product } from '@/types/product';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Loader2, AlertTriangle, RotateCcw, Search } from 'lucide-react';
 

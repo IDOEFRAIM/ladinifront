@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { fetchProductsServer, fetchFiltersServer } from '@/app/actions/publicProduct.server';
+import { fetchProductsServer, fetchFiltersServer } from '@/app/actions/publicProduct.safe.server';
 import { Leaf, Search, Grid3X3, List, SlidersHorizontal, Loader2 } from 'lucide-react';
 import UnifiedFilter from './filter';
 import CatalogueClient from './CatalogueClient';

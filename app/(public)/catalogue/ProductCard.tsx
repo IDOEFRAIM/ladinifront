@@ -4,8 +4,24 @@ import React from 'react';
 import { normalizeAssetUrl } from '@/lib/assetUrl';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { MapPin, ArrowRight } from 'lucide-react';
-import { Product } from '@/types/market';
+// Small inline icons to avoid lucide-react file access under OneDrive
+function IconMapPin({ size = 14 }: { size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M12 21s8-5.5 8-11a8 8 0 10-16 0c0 5.5 8 11 8 11z" stroke="currentColor" strokeWidth="1" fill="none" />
+            <circle cx="12" cy="10" r="2" fill="currentColor" />
+        </svg>
+    );
+}
+
+function IconArrowRight({ size = 20 }: { size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M5 12h14M13 5l6 7-6 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+import { Product } from '@/types/product';
 
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
 const F = { heading:"'Space Grotesk',sans-serif", body:"'Inter',sans-serif" };
@@ -52,7 +68,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
     return (
         <motion.div whileHover={{ y: -6 }} transition={{ type:'spring', stiffness:300 }} style={{ height:'100%' }}>
             <Link
-                href={!isOutOfStock ? `/publicproducts/${product.id}` : '#'}
+                href={!isOutOfStock ? `/publicProducts/${product.id}` : '#'}
                 style={{ textDecoration:'none', color:'inherit', display:'block', height:'100%' }}
                 onClick={e => isOutOfStock && e.preventDefault()}
             >
@@ -70,7 +86,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                     <ProductImageSection product={product} isOutOfStock={isOutOfStock} />
                     <div style={{ padding:24, display:'flex', flexDirection:'column', flex:1 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:4, color:C.forest, marginBottom:12 }}>
-                            <MapPin size={14} />
+                            <IconMapPin size={14} />
                             <span style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', fontFamily:F.body }}>
                                 {product.producer?.location?.split(',')[0] || 'Région'}
                             </span>
@@ -84,7 +100,7 @@ export default function ProductCard({ product, viewMode = 'grid' }: ProductCardP
                         <div style={{ marginTop:'auto', paddingTop:16, borderTop:`1px solid ${C.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                             <ProductPriceSection product={product} />
                             <div style={{ width:40, height:40, borderRadius:'50%', background:C.forest, color:'white', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                <ArrowRight size={20} />
+                                <IconArrowRight size={20} />
                             </div>
                         </div>
                     </div>

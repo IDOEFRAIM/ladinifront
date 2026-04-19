@@ -107,6 +107,30 @@ const checker = !adminMembership || (adminMembership.role !== 'ADMIN' && adminMe
 
 // ─── 3. Assignation d'un Agent à une Zone de Travail ────
 export async function assignAgentToWorkZone(adminUserId: string, organizationId: string, agentUserId: string, zoneId: string, specificRole?: string) {
+  // Defensive: ensure organizationId is a plain string (at runtime callers may send wrong types)
+  const rawOrg: any = organizationId;
+  if (!rawOrg) {
+    throw new Error('Missing organizationId parameter passed to assignAgentToWorkZone');
+  }
+
+  let orgId: string = typeof rawOrg === 'string' ? rawOrg : String(rawOrg);
+  // Normalize: if somehow an object was passed at runtime, extract the id
+  if (typeof rawOrg === 'object' && rawOrg !== null) {
+    orgId = String(rawOrg.organizationId || rawOrg.id || rawOrg);
+  }
+  // If it looks like a JSON string, try to parse
+  if (orgId.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(orgId);
+      orgId = String(parsed.organizationId || parsed.id || orgId);
+    } catch { /* keep as-is */ }
+  }
+  organizationId = orgId;
+
+  // Also check user-level role: SUPERADMIN bypasses org membership check
+  const callerUser = await db.query.users.findFirst({ where: eq(schema.users.id, adminUserId), columns: { id: true, role: true } });
+  const isSuperadmin = callerUser?.role === 'SUPERADMIN';
+
   return await db.transaction(async (tx) => {
     // Vérification droits administrateur (Isolation M-T)
     const adminMembership = await tx.query.userOrganizations.findFirst({
@@ -116,8 +140,9 @@ export async function assignAgentToWorkZone(adminUserId: string, organizationId:
       ),
     });
 
-    if (!adminMembership || adminMembership.role !== 'ADMIN') {
-      throw new Error("Accès refusé. Seul un Admin peut assigner des zones de travail.");
+    const allowedRoles = ['ADMIN', 'ZONE_MANAGER', 'SALES_MANAGER'];
+    if (!isSuperadmin && (!adminMembership || !allowedRoles.includes(adminMembership.role))) {
+      throw new Error("Accès refusé. Seul un Admin ou Chef de zone peut assigner des zones de travail.");
     }
 
     // Vérification que l'agent fait bien partie de l'organisation

@@ -1,5 +1,5 @@
 // @/components/orders/StatusBadge.tsx
-import { OrderStatus } from '@/types';
+import { OrderStatus } from '@/types/inferred';
 
 export const StatusBadge = ({ status }: { status: OrderStatus }) => {
   const configs: Record<OrderStatus, string> = {

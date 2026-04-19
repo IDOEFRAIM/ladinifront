@@ -158,7 +158,7 @@ export async function getAdminProducers() {
       productsCount: prodCountMap.get(p.id) || 0,
       farmsCount: farmCountMap.get(p.id) || 0,
       totalOrders: orderCountByProducer.get(p.id) || 0,
-      registrationDate: p.user.createdAt.toISOString(),
+      registrationDate: p.user && p.user.createdAt ? p.user.createdAt.toISOString() : '',
     }));
 
     return {
@@ -256,7 +256,7 @@ export async function getAdminProducts() {
       producer: {
         businessName: string | null;
         zone: { name: string } | null;
-      };
+      } | null;
     }
 
     const productsRaw = await db.query.products.findMany({
@@ -309,8 +309,8 @@ export async function getAdminProducts() {
       price: p.price,
       unit: p.unit,
       quantityForSale: p.quantityForSale,
-      producerName: p.producer.businessName || 'Inconnu',
-      location: p.producer.zone?.name || 'Non assigné',
+      producerName: p.producer?.businessName || 'Inconnu',
+      location: p.producer?.zone?.name || 'Non assigné',
       totalOrders: orderItemCountMap.get(p.id) || 0,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),

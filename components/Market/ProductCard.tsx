@@ -2,7 +2,7 @@
 
 'use client';
 import React from 'react';
-import { Product } from '@/types/market';
+import { Product } from '@/types/product';
 import { useRouter } from 'next/navigation';
 import { FaLeaf, FaMapMarkerAlt, FaPlay } from 'react-icons/fa';
 
@@ -14,7 +14,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     const router = useRouter();
 
     const handleViewProduct = () => {
-        router.push(`/publicproducts/${product.id}`);
+        router.push(`/publicProducts/${product.id}`);
     };
 
     const available = product.quantityForSale ?? product.stock ?? (product as any).quantity ?? 0;

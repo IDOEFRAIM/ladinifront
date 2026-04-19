@@ -11,6 +11,11 @@ export default function KpiCard({ icon, label, value, color, trend }: { icon: Re
   };
   const cm = colorMap[color] || colorMap.green;
   const trendColor = trend && trend > 0 ? C.emerald : trend && trend < 0 ? '#EF4444' : C.muted;
+  // Ensure we never render NaN into children — convert numbers safely
+  const displayValue = typeof value === 'number'
+    ? (Number.isFinite(value) ? value.toLocaleString() : '0')
+    : String(value ?? '');
+
   return (
     <div style={{ background: C.glass, backdropFilter: 'blur(16px)', borderRadius: 24, border: `1px solid ${C.border}`, padding: 20, display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.3s', cursor: 'default' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 8px 32px rgba(6,78,59,0.08)')}

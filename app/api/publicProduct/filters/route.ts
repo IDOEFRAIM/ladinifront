@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const { fetchFiltersServer } = await import('@/app/actions/publicProduct.server');
+    const { fetchFiltersServer } = await import('@/app/actions/publicProduct.safe.server');
     const data = await fetchFiltersServer();
     return NextResponse.json(data);
   } catch (error) {

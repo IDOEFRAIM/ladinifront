@@ -57,6 +57,23 @@ export async function middleware(request: NextRequest) {
   const normalizedUserRole = userRole ? userRole.toUpperCase() : undefined;
   // Prefer signed session token if present
   const session = await getSessionFromRequest(request as any);
+  // If a token is present but verification failed, clear stale cookies and force login
+  const rawToken = request.cookies.get(COOKIE_NAMES.SESSION_TOKEN)?.value;
+  if (rawToken && !session) {
+    const loginUrl = new URL('/login', request.url);
+    const res = NextResponse.redirect(loginUrl);
+    try {
+      // Clear primary httpOnly session cookie and client-side cache cookies
+      res.cookies.set(COOKIE_NAMES.SESSION_TOKEN, '', { path: '/', maxAge: 0 });
+      res.cookies.set(COOKIE_NAMES.SESSION_READY, '', { path: '/', maxAge: 0 });
+      res.cookies.set(COOKIE_NAMES.USER_PERMISSIONS, '', { path: '/', maxAge: 0 });
+      res.cookies.set(COOKIE_NAMES.USER_ROLE, '', { path: '/', maxAge: 0 });
+      res.cookies.set(COOKIE_NAMES.ACTIVE_ORG_ID, '', { path: '/', maxAge: 0 });
+    } catch (e) {
+      // If runtime does not support res.cookies in this environment, ignore
+    }
+    return res;
+  }
   const userIdFromToken = session?.userId;
   const roleFromToken = session?.role;
   const userId    = userIdFromToken;

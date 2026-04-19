@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
-import { Product } from '@/types/market';
+import { Product } from '@/types/product';
 
 const LOCAL_STORAGE_KEY = 'agriConnectCart'; 
 

@@ -48,6 +48,13 @@ import {
   bids,
 } from './marketplace';
 
+// Inventory / distribution tables
+import {
+  seedAllocations,
+  seedDistributions,
+  seedDistributionAttempts,
+} from './inventory';
+
 // ── Intelligence tables ──
 import {
   auditLogs,
@@ -313,6 +320,57 @@ export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
     references: [zones.id],
   }),
   stocks: many(stocks),
+}));
+
+export const seedAllocationsRelations = relations(seedAllocations, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [seedAllocations.organizationId],
+    references: [organizations.id],
+  }),
+  zone: one(zones, {
+    fields: [seedAllocations.zoneId],
+    references: [zones.id],
+  }),
+  allocatedBy: one(users, {
+    fields: [seedAllocations.allocatedById],
+    references: [users.id],
+  }),
+  distributions: many(seedDistributions),
+}));
+
+export const seedDistributionsRelations = relations(seedDistributions, ({ one, many }) => ({
+  allocation: one(seedAllocations, {
+    fields: [seedDistributions.allocationId],
+    references: [seedAllocations.id],
+  }),
+  producer: one(producers, {
+    fields: [seedDistributions.producerId],
+    references: [producers.id],
+  }),
+  agent: one(users, {
+    fields: [seedDistributions.agentId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [seedDistributions.organizationId],
+    references: [organizations.id],
+  }),
+  zone: one(zones, {
+    fields: [seedDistributions.zoneId],
+    references: [zones.id],
+  }),
+  attempts: many(seedDistributionAttempts),
+}));
+
+export const seedDistributionAttemptsRelations = relations(seedDistributionAttempts, ({ one }) => ({
+  distribution: one(seedDistributions, {
+    fields: [seedDistributionAttempts.distributionId],
+    references: [seedDistributions.id],
+  }),
+  actor: one(users, {
+    fields: [seedDistributionAttempts.actorId],
+    references: [users.id],
+  }),
 }));
 
 // ╔══════════════════════════════════════════════╗

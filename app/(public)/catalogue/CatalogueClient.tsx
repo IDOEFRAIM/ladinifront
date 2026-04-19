@@ -52,18 +52,38 @@ export default function CatalogueClient({ initialProducts = [], initialCategorie
 
   useEffect(() => {
     (async () => {
+      // If server has already provided categories/regions, skip client fetch to avoid overwriting with empty results
+      if (Array.isArray(initialCategories) && initialCategories.length > 0 && Array.isArray(initialRegions) && initialRegions.length > 0) {
+        console.debug('[CatalogueClient] using initial categories/regions from server; skipping client fetch');
+        return;
+      }
       try {
+        console.debug('[CatalogueClient] initialCategories:', initialCategories, 'initialRegions:', initialRegions);
         if (serverFetchFilters) {
           const f = await serverFetchFilters();
-          setCategories(f.categories || []);
-          setRegions(f.locations || []);
+          console.debug('[CatalogueClient] serverFetchFilters result:', f);
+          if (Array.isArray(f.categories) && f.categories.length > 0) {
+            console.debug('[CatalogueClient] setting categories from serverFetchFilters', f.categories);
+            setCategories(f.categories);
+          }
+          if (Array.isArray(f.locations) && f.locations.length > 0) {
+            console.debug('[CatalogueClient] setting regions from serverFetchFilters', f.locations);
+            setRegions(f.locations);
+          }
         } else {
           const mod = await import('@/services/catalogue.service');
           const [cats, regs] = await Promise.all([mod.getCategories(), mod.getRegions()]);
-          setCategories(cats);
-          setRegions(regs);
+          console.debug('[CatalogueClient] getCategories result:', cats, 'getRegions result:', regs);
+          if (Array.isArray(cats) && cats.length > 0) {
+            console.debug('[CatalogueClient] setting categories from getCategories', cats);
+            setCategories(cats);
+          }
+          if (Array.isArray(regs) && regs.length > 0) {
+            console.debug('[CatalogueClient] setting regions from getRegions', regs);
+            setRegions(regs);
+          }
         }
-      } catch {}
+      } catch (e) { console.debug('fetch filters failed', e); }
     })();
   }, [serverFetchFilters]);
 

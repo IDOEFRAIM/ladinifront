@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const region = searchParams.get('region') || undefined;
     const search = searchParams.get('search') || undefined;
 
-    const { fetchProductsServer } = await import('@/app/actions/publicProduct.server');
+    const { fetchProductsServer } = await import('@/app/actions/publicProduct.safe.server');
     const data = await fetchProductsServer({ category, region, search });
     return NextResponse.json(data);
   } catch (error) {

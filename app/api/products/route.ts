@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { requireProducer } from '@/lib/api-guard';
 import { createProductFromForm, updateProductFromForm } from '@/app/actions/products.server';
 // DB access and ownership checks moved to actions
-import { fetchProductsServer } from '@/app/actions/publicProduct.server';
+import { fetchProductsServer } from '@/app/actions/publicProduct.safe.server';
 import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.webm'];

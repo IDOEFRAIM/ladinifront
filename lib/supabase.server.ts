@@ -45,26 +45,60 @@ function getSupabaseAdmin() {
 
 export async function uploadBufferToSupabase(path: string, buffer: Buffer, contentType?: string) {
   const supabaseAdmin = getSupabaseAdmin();
-  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, buffer, {
-    contentType: contentType || undefined,
-    upsert: false,
-  });
-  if (error) throw error;
+  const maxAttempts = 3;
+  let lastErr: any = null;
 
-  const { data: publicData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
-  return publicData?.publicUrl || null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, buffer, {
+        contentType: contentType || undefined,
+        upsert: false,
+      });
+      if (error) throw error;
+
+      const { data: publicData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
+      return publicData?.publicUrl || null;
+    } catch (err: any) {
+      lastErr = err;
+      const code = err?.code || err?.status || err?.statusCode || 'unknown';
+      console.warn(`[supabase] upload attempt ${attempt}/${maxAttempts} failed for ${path} — code=${code}`, err?.message || err);
+      // Short exponential backoff
+      if (attempt < maxAttempts) {
+        const delayMs = 200 * Math.pow(2, attempt - 1);
+        await new Promise(res => setTimeout(res, delayMs));
+        continue;
+      }
+    }
+  }
+
+  // All attempts failed — throw with enriched information
+  const enriched = new Error(`Supabase upload failed for ${path} after ${maxAttempts} attempts: ${lastErr?.message || lastErr}`);
+  // attach original error for callers
+  (enriched as any).original = lastErr;
+  throw enriched;
 }
 
 export async function removeFileFromSupabase(path: string) {
   const supabaseAdmin = getSupabaseAdmin();
-  try {
-    const { error } = await supabaseAdmin.storage.from(BUCKET).remove([path]);
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.warn('Supabase remove failed for', path, err);
-    return false;
+  const maxAttempts = 3;
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { error } = await supabaseAdmin.storage.from(BUCKET).remove([path]);
+      if (error) throw error;
+      return true;
+    } catch (err: any) {
+      lastErr = err;
+      console.warn(`[supabase] remove attempt ${attempt}/${maxAttempts} failed for ${path}`, err?.message || err);
+      if (attempt < maxAttempts) {
+        const delayMs = 200 * Math.pow(2, attempt - 1);
+        await new Promise(res => setTimeout(res, delayMs));
+        continue;
+      }
+    }
   }
+  console.warn('Supabase remove failed after retries for', path, lastErr);
+  return false;
 }
 
 export default getSupabaseAdmin;

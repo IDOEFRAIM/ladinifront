@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
 
 const runtimeCaching = [
   {
@@ -31,6 +32,8 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   turbopack: {},
+  // Ensure Next.js traces output from the correct project root
+  outputFileTracingRoot: path.join(__dirname),
   images: {
     remotePatterns: [
       {
@@ -39,6 +42,12 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  // Increase Server Actions body size limit to allow image uploads in forms
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   // Sécurité : Headers HTTP
   async headers() {
@@ -52,6 +61,20 @@ const nextConfig = {
         ],
       },
     ];
+  },
+  // Workaround pour environnements OneDrive sur Windows :
+  // désactive les source maps en dev si le repo est dans OneDrive
+  webpack(config, { dev }) {
+    try {
+      const cwd = process.cwd() || '';
+      if (dev && typeof cwd === 'string' && cwd.toLowerCase().includes('onedrive')) {
+        // Empêche Next/Webpack d'écrire/charger des source maps corrompus par le provider cloud
+        config.devtool = false;
+      }
+    } catch (e) {
+      // noop
+    }
+    return config;
   },
 };
 

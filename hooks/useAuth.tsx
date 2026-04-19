@@ -94,8 +94,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           await delay(100);
         }
-        if (!sawReady && isDev) console.debug('[Auth] SESSION_READY not detected during poll, calling /api/me directly');
+        if (!sawReady && isDev) console.debug('[Auth] SESSION_READY not detected during poll');
 
+        // If there is no client-side session hint (no SESSION_READY and no saved USER_ROLE cookie),
+        // skip calling /api/me to avoid unnecessary 401s for anonymous visitors.
+        const savedRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
+        if (!sawReady && !savedRole) {
+          if (isDev) console.debug('[Auth] no session hints present; skipping /api/me for anonymous user');
+          if (mounted) setIsLoading(false);
+          return;
+        }
         if (isDev) console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
         let res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
 
@@ -124,15 +132,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const savedRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
-        if (savedRole && mounted) {
+        const fallbackRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
+        if (fallbackRole && mounted) {
           const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
           const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
 
-          if (isDev) console.debug('[Auth] Falling back to UI cookies', { savedRole, savedName });
+          if (isDev) console.debug('[Auth] Falling back to UI cookies', { fallbackRole, savedName });
           setAuthState(prev => ({
             ...prev,
-            user: { id: undefined, name: savedName || null, role: savedRole },
+            user: { id: undefined, name: savedName || null, role: fallbackRole },
             userLocation: savedLocation ? JSON.parse(savedLocation) : null,
           }));
         }

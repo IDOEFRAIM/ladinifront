@@ -3,12 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { normalizeAssetUrl } from '@/lib/assetUrl';
 import { useRouter } from 'next/navigation';
-import { Product } from '@/types/market';
+import { Product } from '@/types/product';
 import { useCart } from '@/context/CartContext';
-import { 
-    ArrowLeft, ShieldCheck, MapPin, Volume2, 
-    VolumeX, ShoppingCart, Info, ChevronRight, Package 
-} from 'lucide-react';
+// Inline SVG icons to avoid reading files from node_modules under OneDrive
 import { motion } from 'framer-motion';
 
 const THEME = {
@@ -21,23 +18,66 @@ const THEME = {
     active: '#FFF3E0'
 };
 
+function IconArrowLeft({ size = 16, color = THEME.accent }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M15 18L9 12l6-6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function IconShieldCheck({ size = 16, color = THEME.accent }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke={color} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <path d="M9 12l2 2 4-4" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function IconChevronRight({ size = 14, color = THEME.muted }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function IconVolume2({ size = 20, color = 'white' }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M11 5L6 9H2v6h4l5 4V5z" fill={color} />
+            <path d="M19 9a4 4 0 010 6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function IconVolumeX({ size = 20, color = 'white' }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M11 5L6 9H2v6h4l5 4V5z" fill={color} />
+            <path d="M19 9l-4 4m0-4l4 4" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
 // --- SOUS-COMPOSANTS ---
 
 function NavigationBar({ product, router }: { product: Product, router: any }) {
     return (
         <nav style={{ borderBottom: `1px solid ${THEME.border}`, padding: '20px 5%', backgroundColor: THEME.surface }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600 }}>
-                <button 
+                    <button 
                     onClick={() => router.back()}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: THEME.accent }}
                 >
-                    <ArrowLeft size={16} /> RETOUR
+                    <IconArrowLeft size={16} /> RETOUR
                 </button>
                 <span style={{ color: THEME.border }}>|</span>
                 <span style={{ color: THEME.muted }}>MARCHÉ</span>
-                <ChevronRight size={14} color={THEME.muted} />
+                <IconChevronRight size={14} color={THEME.muted} />
                 <span style={{ color: THEME.muted }}>{product.categoryLabel?.toUpperCase()}</span>
-                <ChevronRight size={14} color={THEME.muted} />
+                <IconChevronRight size={14} color={THEME.muted} />
                 <span style={{ color: THEME.secondary }}>{product.name}</span>
             </div>
         </nav>
@@ -63,7 +103,7 @@ function VisualBlock({ product, mainImage, setMainImage }: { product: Product, m
                     borderRadius: '15px', border: `1px solid ${THEME.border}`,
                     display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', fontWeight: 700
                 }}>
-                    <ShieldCheck size={16} color={THEME.accent} />
+                    <IconShieldCheck size={16} color={THEME.accent} />
                     ORIGINE CERTIFIÉE : {product.producer?.location?.split(',')[0].toUpperCase() || 'BURKINA FASO'}
                 </div>
             </motion.div>
@@ -86,7 +126,21 @@ function VisualBlock({ product, mainImage, setMainImage }: { product: Product, m
 }
 
 function AudioMessage({ product, isPlaying, setIsPlaying, audio, setAudio }: any) {
-    if (!product.audioUrl) return null;
+    if (!product.audioUrl) {
+        return (
+            <div style={{
+                padding: '20px',
+                backgroundColor: '#F8FAFC',
+                borderRadius: '16px',
+                border: `1px dashed ${THEME.border}`,
+                color: THEME.muted,
+                fontSize: '0.9rem',
+                fontWeight: 600
+            }}>
+                Audio non disponible pour ce produit.
+            </div>
+        );
+    }
 
     const toggleAudio = () => {
         if (!audio) {
@@ -114,7 +168,7 @@ function AudioMessage({ product, isPlaying, setIsPlaying, audio, setAudio }: any
                 width: '50px', height: '50px', borderRadius: '50%', backgroundColor: THEME.accent,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
             }}>
-                {isPlaying ? <Volume2 /> : <VolumeX />}
+                {isPlaying ? <IconVolume2 /> : <IconVolumeX />}
             </div>
             <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 800, color: THEME.accent }}>MESSAGE DU PRODUCTEUR</div>

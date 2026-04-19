@@ -1,7 +1,7 @@
-@import "tailwindcss";
-
 /* Space Grotesk and Inter */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
 
 /* ╔══════════════════════════════════════════════╗ */
 /* ║  FrontAg — Minimalisme Organique             ║ */
@@ -21,6 +21,27 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* AgriConnect semantic palette */
+  --color-forest: #064E3B;
+  --color-forest-light: #E6F5EE;
+  --color-forest-dark: #053826;
+  --color-amber-accent: #D97706;
+  --color-amber-light: #FDE8B5;
+  --color-amber-muted: #A75B08;
+  --color-sand: #F9FBF8;
+  --color-clay: rgba(6, 78, 59, 0.08);
+  --color-savanna: #FFF8E1;
+  --color-soft-border: rgba(6, 78, 59, 0.1);
+  --color-muted: #4B5563;
+  --color-success: #10B981;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-info: #0EA5E9;
+
+  --radius-card: 32px;
+  --radius-button: 100px;
+  --radius-input: 12px;
 }
 
 body {

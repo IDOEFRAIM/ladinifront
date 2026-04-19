@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { Coffee, ArrowLeft, MessageSquareHeart } from 'lucide-react';
 
 export default function Error({ error, reset }: { error: Error; reset: () => void }) {
     
@@ -81,8 +80,8 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
                     </button>
 
                     {/* Bouton secondaire : La sortie sereine */}
-                    <Link 
-                        href="/catalogue" 
+                    <Link
+                        href="/catalogue"
                         style={{
                             padding: '16px',
                             color: '#636E72',
@@ -95,14 +94,17 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
                             gap: '8px'
                         }}
                     >
-                        <ArrowLeft size={18} /> Revenir tranquillement au marché
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                            <path d="M15 18L9 12l6-6" stroke="#2D3436" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Revenir tranquillement au marché
                     </Link>
                 </div>
 
                 {/* La main tendue finale */}
-                <div style={{ 
-                    marginTop: '48px', 
-                    paddingTop: '24px', 
+                <div style={{
+                    marginTop: '48px',
+                    paddingTop: '24px',
                     borderTop: '1px solid #F1EDE9',
                     color: '#B2BEC3',
                     fontSize: '0.9rem',
@@ -111,7 +113,9 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
                     justifyContent: 'center',
                     gap: '10px'
                 }}>
-                    <MessageSquareHeart size={20} color="#A63C06" />
+                    <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <path d="M21 11.5a8.5 8.5 0 10-16.98 1.9L3 21l7.6-1.9A8.5 8.5 0 0021 11.5z" fill="#A63C06" />
+                    </svg>
                     <span>Un souci persistant ? <strong>On est là pour vous.</strong></span>
                 </div>
             </div>

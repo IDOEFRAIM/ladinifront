@@ -1,5 +1,5 @@
 /**
- * ACCESS MANAGER — AgriConnect v2
+ * ACCESS MANAGER — AgriConnect v3 (Drizzle)
  * ──────────────────────────────────────────────────────────────────────────
  * Point d'entrée UNIQUE pour toute vérification de permission dans l'app.
  *
@@ -20,13 +20,10 @@
  *     .permission(PERMISSIONS.PRODUCER_CREATE)
  *     .check()    // retourne boolean
  *
- * Filtres Prisma sûrs (Zero-Trust multi-tenant) :
+ * Filtres Drizzle sûrs (Zero-Trust multi-tenant) :
  *
- *   const where = {
- *     ...AccessManager.orgFilter(ctx),
- *     ...AccessManager.zoneFilter(ctx),
- *   };
- *   await prisma.stock.findMany({ where });
+ *   AccessManager.orgFilter(ctx)  // { organizationId: inArray(ctx.organizationIds) }
+ *   AccessManager.zoneFilter(ctx) // { zoneId: inArray([...ctx.managedZoneIds]) }
  */
 
 import type { AccessContext } from '@/lib/access-context';

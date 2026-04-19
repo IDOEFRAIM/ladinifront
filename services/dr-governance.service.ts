@@ -15,7 +15,7 @@ import getUserIdFromSession from '@/lib/get-userId';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/** Vérifier que l'appelant est bien Chef de DR (PRODUCER certifié) ou SUPERADMIN */
+/** Vérifier que l'appelant est bien Chef de DR (PRODUCER certifié), Admin org, ou SUPERADMIN */
 async function assertDRChief(userId: string, zoneId: string): Promise<any> {
   // Load user and producer explicitly to avoid relation metadata reliance
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
@@ -23,6 +23,27 @@ async function assertDRChief(userId: string, zoneId: string): Promise<any> {
 
   // SUPERADMIN bypass
   if (user.role === 'SUPERADMIN') return user;
+
+  // ADMIN system role bypass (with org membership check)
+  if (user.role === 'ADMIN') {
+    // Allow ADMIN if they belong to the same organization that owns the zone.
+    // If the zone has no organizationId, fall back to allowing any org membership with allowed roles.
+    const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, zoneId) });
+    const allowedOrgRoles = ['ADMIN', 'ZONE_MANAGER', 'SALES_MANAGER'];
+    if (zone && zone.organizationId) {
+      const membership = await db.query.userOrganizations.findFirst({
+        where: (t, { and: andOp }) => andOp(
+          eq(schema.userOrganizations.userId, userId),
+          eq(schema.userOrganizations.organizationId, zone.organizationId),
+        ),
+      });
+      if (membership && allowedOrgRoles.includes(membership.role)) return user;
+    } else {
+      // Zone has no organization linked — be permissive if user has any allowed org membership
+      const membershipAny = await db.query.userOrganizations.findFirst({ where: eq(schema.userOrganizations.userId, userId) });
+      if (membershipAny && allowedOrgRoles.includes(membershipAny.role)) return user;
+    }
+  }
 
   // If user is producer, fetch producer record
   let producer: any = null;
@@ -32,7 +53,8 @@ async function assertDRChief(userId: string, zoneId: string): Promise<any> {
 
   // Chef de DR = PRODUCER certifié rattaché à cette zone
   if (user.role !== 'PRODUCER' || !producer?.isCertified) {
-    throw new Error('Seul un Chef de DR certifié ou un SUPERADMIN peut effectuer cette action.');
+    console.warn(`assertDRChief denied: user.role=${user.role}, producerCert=${producer?.isCertified}, userId=${userId}, zoneId=${zoneId}`);
+    throw new Error('Seul un Chef de DR certifié, un Admin, ou un SUPERADMIN peut effectuer cette action.');
   }
 
   if (producer.zoneId !== zoneId) {

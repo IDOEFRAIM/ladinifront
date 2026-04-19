@@ -52,7 +52,7 @@ export default function OrgMembersPage() {
   // Invite modal
   const [showInvite, setShowInvite] = useState(false);
   const [inviteId, setInviteId] = useState('');
-  const [producerOptions, setProducerOptions] = useState<Array<{ id: string; businessName: string; email: string }>>([]);
+  const [producerOptions, setProducerOptions] = useState<Array<{ id: string; businessName: string; email: string; phone?: string }>>([]);
   const [inviteOrgRole, setInviteOrgRole] = useState('FIELD_AGENT');
   const [inviteRoleDefId, setInviteRoleDefId] = useState('');
   const [inviteSaving, setInviteSaving] = useState(false);
@@ -74,10 +74,34 @@ export default function OrgMembersPage() {
     try {
       const p = await getAdminProducers();
       if (p && p.success && 'data' in p && p.data) {
-        setProducerOptions((p.data as any[]).map(x => ({ id: x.id, businessName: x.businessName, email: x.email })));
+        setProducerOptions((p.data as any[]).map(x => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
+      } else {
+        // Fallback to public test endpoint when server action unavailable
+        try {
+          const r = await fetch('/api/test/producers');
+          if (r.ok) {
+            const json = await r.json();
+            if (json && Array.isArray(json.data)) {
+              setProducerOptions(json.data.map((x: any) => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
+            }
+          }
+        } catch (err) {
+          // ignore fallback error
+        }
       }
     } catch (e) {
-      // ignore
+      // If server action throws, attempt the public fallback
+      try {
+        const r = await fetch('/api/test/producers');
+        if (r.ok) {
+          const json = await r.json();
+          if (json && Array.isArray(json.data)) {
+            setProducerOptions(json.data.map((x: any) => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
     }
 
     // Determine whether current user may invite members (is org ADMIN or system ADMIN)
@@ -381,7 +405,7 @@ export default function OrgMembersPage() {
                 >
                   <option value="">Choisir un producteur...</option>
                   {producerOptions.map(p => (
-                    <option key={p.id} value={p.email}>{p.businessName} — {p.email}</option>
+                    <option key={p.id} value={p.email || p.phone}>{p.businessName} — {p.email || p.phone}</option>
                   ))}
                 </select>
               </div>

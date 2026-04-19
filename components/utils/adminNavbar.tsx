@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Bot, Map, Users, Warehouse, CheckCircle, Settings, LogOut, Eye } from 'lucide-react';
+import { LayoutDashboard, Bot, Map, Users, Warehouse, CheckCircle, Settings, LogOut, Eye, ClipboardList, Tags } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const C = {
@@ -14,6 +14,8 @@ const C = {
 const adminNavItems = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
   { name: 'Œil de Dieu', href: '/admin/eye-of-god', icon: Eye },
+  { name: 'Commandes', href: '/admin/orders/kanban', icon: ClipboardList },
+  { name: 'Gouvernance', href: '/admin/governance', icon: Tags },
   { name: 'Agents IA', href: '/admin/monitoring', icon: Bot },
   { name: 'Territoires', href: '/admin/territories', icon: Map },
   { name: 'Producteurs', href: '/admin/producers', icon: Users },

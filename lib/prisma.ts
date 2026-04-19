@@ -6,4 +6,4 @@
  */
 
 export { db, schema } from '@/src/db';
-export type { DB } from '@/src/db';
+export type { DB } from '@/src/db' 

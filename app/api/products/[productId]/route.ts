@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchProductByIdServer } from '@/app/actions/publicProduct.server';
+import { fetchProductByIdServer } from '@/app/actions/publicProduct.safe.server';
 
 export async function GET(
   req: Request,

@@ -79,6 +79,10 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
 
   const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 
+  // Safeguard arrays in case server returns partial payload
+  const recentActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
+  const topZones = Array.isArray(data?.topZones) ? data.topZones : [];
+
   const KpiCard = ({ label, value, sub, accent, icon, isAlert = false }: any) => (
     <div style={{ background: 'white', borderRadius: 16, padding: 18, border: '1px solid rgba(6,78,59,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -199,9 +203,9 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
                 <Link href="/admin/orders" style={{ fontSize: 11, fontWeight: 700, color: C.amber, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voir historique</Link>
               </div>
               <div style={{ padding: 8, maxHeight: 450, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {data.recentActivity.length === 0 ? (
+                {recentActivity.length === 0 ? (
                   <div style={{ padding: '60px 0', textAlign: 'center', color: C.muted, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Calme plat sur le reseau</div>
-                ) : data.recentActivity.map((activity: any) => (
+                ) : recentActivity.map((activity: any) => (
                   <FeedItem key={activity.id} type={activity.status} title={activity.customerName} desc={activity.producerName} time={new Date(activity.date)} amount={activity.amount} zone={activity.zone} />
                 ))}
               </div>
@@ -215,7 +219,7 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
               <div style={{ position: 'relative', zIndex: 10 }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: 28 }}>Analyse Geographique - Burkina</p>
                 <div style={{ display: 'grid', gap: 16 }} className="grid-cols-1 md:grid-cols-3">
-                  {data.topZones ? data.topZones.map((zone: any) => (
+                  {topZones.length ? topZones.map((zone: any) => (
                     <div key={zone.id} style={{
                       background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(8px)',
                       padding: 24, borderRadius: 24, border: '1px solid rgba(255,255,255,0.08)',

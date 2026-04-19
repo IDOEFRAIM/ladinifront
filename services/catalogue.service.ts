@@ -1,4 +1,4 @@
-import { Product, ProductFilters } from '@/types/catalogue';
+import { Product, ProductFilters } from '@/types/product';
 import axios from 'axios';
 
 export type Category = {
@@ -25,7 +25,7 @@ const getBaseUrl = () => {
 export const getCategories = async (): Promise<Category[]> => {
     try {
         if (typeof window === 'undefined') {
-            const mod = await import('@/app/actions/publicProduct.server');
+            const mod = await import('@/app/actions/publicProduct.safe.server');
             const data = await mod.fetchFiltersServer();
             const dbCategories: string[] = data.categories || [];
             const mappedCategories = dbCategories.map(catLabel => {
@@ -71,7 +71,7 @@ export const getCategories = async (): Promise<Category[]> => {
 export const getRegions = async (): Promise<{ id: string, name: string }[]> => {
     try {
         if (typeof window === 'undefined') {
-            const mod = await import('@/app/actions/publicProduct.server');
+            const mod = await import('@/app/actions/publicProduct.safe.server');
             const data = await mod.fetchFiltersServer();
             const locations: { id: string, name: string }[] = data.locations || [];
             const mappedLocations = locations.map(l => ({ id: String(l.name || l.id).trim(), name: l.name }));
@@ -107,7 +107,7 @@ export const getProducts = async (filters: ProductFilters = {}): Promise<Product
         if (searchValue && String(searchValue).trim()) params.append('search', String(searchValue).trim());
 
         if (typeof window === 'undefined') {
-            const mod = await import('@/app/actions/publicProduct.server');
+            const mod = await import('@/app/actions/publicProduct.safe.server');
             const data = await mod.fetchProductsServer({
                 category: (filters as any).category,
                 region: (filters as any).region,

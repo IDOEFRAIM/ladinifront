@@ -108,6 +108,8 @@ async function validateProductUpdateFormData(formData: FormData) {
   if (name) values.name = name;
   const categoryLabel = parseOptionalStringField(formData, 'categoryLabel');
   if (categoryLabel) values.categoryLabel = categoryLabel;
+  const catId = parseOptionalStringField(formData, 'categoryId');
+  if (catId) values.subCategoryId = catId;
   const description = parseOptionalStringField(formData, 'description');
   if (description) values.description = description;
   const price = parseOptionalNumberField(formData, 'price');
@@ -200,13 +202,19 @@ export async function createProductFromForm(formData: FormData, producerId: stri
   const imageNames = await processProductImages(formData);
   const audioName = await processProductAudio(formData);
 
-  const [product] = await db.insert(schema.products).values({
+  // Determine subCategoryId from submitted form. The client uses `categoryId` for the selected subcategory id.
+  const subCategoryId = String(formData.get('categoryId') || formData.get('subCategoryId') || validation.data.categoryId || '');
+
+  const insertValues: any = {
     ...validation.data,
     images: imageNames,
     audioUrl: audioName,
     producerId,
     unit: validation.data.unit as any,
-  }).returning();
+  };
+  if (subCategoryId) insertValues.subCategoryId = subCategoryId;
+
+  const [product] = await db.insert(schema.products).values(insertValues).returning();
 
   return product;
 }

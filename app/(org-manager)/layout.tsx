@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, Shield, Users, MapPin, ChevronLeft, Menu, Loader2, Building2 } from 'lucide-react';
+import { Settings, Shield, Users, MapPin, ChevronLeft, Menu, Loader2, Building2, Package, List, PlusCircle } from 'lucide-react';
 
 // ─── Design tokens (aligned with style-guide.ts) ────────────────────────────
 const C = {
@@ -22,6 +22,9 @@ const NAV_ITEMS = [
   { href: '/org/roles', label: 'Rôles', icon: Shield },
   { href: '/org/members', label: 'Membres', icon: Users },
   { href: '/org/work-zones', label: 'Zones de travail', icon: MapPin },
+  { href: '/org/allocations', label: 'Allocations', icon: Package },
+  { href: '/org/distributions', label: 'Distributions', icon: List },
+  { href: '/org/distributions/create', label: 'Nouvelle distribution', icon: PlusCircle },
 ];
 
 function OrgSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {

@@ -14,7 +14,7 @@ const C = {
 const BUYER_LINKS = [
   { name: 'Le Marche', href: '/catalogue' },
   { name: 'Commandes', href: '/orders' },
-  { name: 'Agent IA', href: '/conversations', icon: Bot },
+  { name: 'Suivi Agent', href: '/conversations', icon: Bot },
 ];
 
 export default function BuyerNavbar() {

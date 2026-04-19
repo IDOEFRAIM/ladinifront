@@ -1,10 +1,10 @@
 // types/monitoring.d.ts
 // =========================================================
 // TYPES POUR LE MONITORING DES AGENTS MCP/A2A
-// Alignés sur le schema Prisma (AgentAction, Conversation, ExternalContext)
+// Alignés sur le schema Drizzle (intelligence.ts)
 // =========================================================
 
-// --- ENUMS (miroirs Prisma) ---
+// --- ENUMS ---
 
 export type AgentActionStatus =
   | 'PENDING'

@@ -8,7 +8,7 @@ export async function GET(
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'ID manquant' }, { status: 400 });
 
-    const { fetchProductByIdServer } = await import('@/app/actions/publicProduct.server');
+    const { fetchProductByIdServer } = await import('@/app/actions/publicProduct.safe.server');
     const product = await fetchProductByIdServer(id);
     if (!product) return NextResponse.json({ error: 'Produit non trouvé' }, { status: 404 });
 
