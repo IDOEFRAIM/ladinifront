@@ -9,7 +9,7 @@ export default async function Page() {
   let rows: any[] = [];
   try {
     rows = await db.query.agentActions.findMany({
-      where: (t) => t.actionType.eq('SEND_VERIFICATION'),
+      where: (t, { eq }) => eq(t.actionType, 'SEND_VERIFICATION'),
       limit: 200,
       orderBy: (t, ops) => [ops.desc(t.createdAt)],
     });

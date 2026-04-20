@@ -30,11 +30,11 @@ async function assertDRChief(userId: string, zoneId: string): Promise<any> {
     // If the zone has no organizationId, fall back to allowing any org membership with allowed roles.
     const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, zoneId) });
     const allowedOrgRoles = ['ADMIN', 'ZONE_MANAGER', 'SALES_MANAGER'];
-    if (zone && zone.organizationId) {
+      if (zone && zone.organizationId) {
       const membership = await db.query.userOrganizations.findFirst({
         where: (t, { and: andOp }) => andOp(
           eq(schema.userOrganizations.userId, userId),
-          eq(schema.userOrganizations.organizationId, zone.organizationId),
+          eq(schema.userOrganizations.organizationId, zone.organizationId as string),
         ),
       });
       if (membership && allowedOrgRoles.includes(membership.role)) return user;

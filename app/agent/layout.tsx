@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const currentPath = pathname ?? '';
 
   return (
     <div style={{ minHeight: '100vh', background: C.sand, fontFamily: F.body }}>
@@ -43,7 +44,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           padding: '8px 0',
         }}>
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/');
+            const active = currentPath === href || currentPath.startsWith(href + '/');
             return (
               <Link
                 key={href}
@@ -74,7 +75,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
       >
         <div style={{ display: 'flex', gap: 4 }}>
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/');
+            const active = currentPath === href || currentPath.startsWith(href + '/');
             return (
               <Link
                 key={href}

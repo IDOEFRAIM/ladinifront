@@ -27,8 +27,9 @@ const NAV_ITEMS = [
   { href: '/org/distributions/create', label: 'Nouvelle distribution', icon: PlusCircle },
 ];
 
-function OrgSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  function OrgSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
   const { activeOrg } = useAuth();
 
   return (
@@ -69,7 +70,7 @@ function OrgSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href;
+            const isActive = currentPath === href;
             return (
               <a
                 key={href}

@@ -22,6 +22,7 @@ export default function BuyerNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const { isAuthenticated, userRole, user, logout } = useAuth();
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
 
   useEffect(() => { setIsMobileMenuOpen(false); }, [pathname]);
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function BuyerNavbar() {
           {/* DESKTOP NAV */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} className="hidden md:flex">
             {BUYER_LINKS.map((link) => {
-              const isActive = pathname.startsWith(link.href) && (link.href !== '/market' || pathname === '/market');
+              const isActive = currentPath.startsWith(link.href) && (link.href !== '/market' || currentPath === '/market');
               return (
                 <Link key={link.name} href={link.href} style={{
                   fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600,

@@ -27,6 +27,7 @@ const PRODUCER_LINKS = [
 
 export default function ProductorSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
   const { logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -102,7 +103,7 @@ export default function ProductorSidebar({ isOpen, onClose }: { isOpen: boolean;
           {/* NAVIGATION */}
           <nav style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingRight: 8 }}>
             {PRODUCER_LINKS.map((link) => {
-              const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname.startsWith(link.href));
+              const isActive = currentPath === link.href || (link.href !== '/dashboard' && currentPath.startsWith(link.href));
               return (
                 <Link
                   key={link.name}

@@ -64,7 +64,7 @@ const nextConfig = {
   },
   // Workaround pour environnements OneDrive sur Windows :
   // désactive les source maps en dev si le repo est dans OneDrive
-  webpack(config, { dev }) {
+  webpack(config: any, { dev }: { dev?: boolean }) {
     try {
       const cwd = process.cwd() || '';
       if (dev && typeof cwd === 'string' && cwd.toLowerCase().includes('onedrive')) {

@@ -27,6 +27,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const { isAuthenticated, userRole, logout } = useAuth();
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
 
   useEffect(() => { setIsMobileMenuOpen(false); }, [pathname]);
 
@@ -74,7 +75,7 @@ export default function Navbar() {
           {/* DESKTOP LINKS */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 32 }} className="hidden md:flex">
             {NAV_LINKS.map((link) => {
-              const isActive = pathname === link.href;
+              const isActive = currentPath === link.href;
               return (
                 <Link key={link.name} href={link.href} style={{
                   fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600,
@@ -119,7 +120,7 @@ export default function Navbar() {
         {isMobileMenuOpen && (
           <div style={{ paddingBottom: 20, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 12 }} className="md:hidden">
             {NAV_LINKS.map((link) => {
-              const isActive = pathname === link.href;
+              const isActive = currentPath === link.href;
               return (
                 <Link key={link.name} href={link.href} style={{
                   fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: isActive ? 700 : 500,

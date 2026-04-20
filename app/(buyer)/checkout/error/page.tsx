@@ -25,7 +25,7 @@ const StepItem = ({ icon, title, desc, isLast }: { icon: any; title: string; des
 function SuccessContent() {
   const { clearCart } = useCart();
   const searchParams = useSearchParams();
-  const mode = searchParams.get('mode');
+  const mode = searchParams?.get('mode') ?? undefined;
   const [orderId, setOrderId] = useState<string | null>(null);
   const hasCleared = useRef(false);
 

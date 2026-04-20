@@ -13,10 +13,11 @@ export default function ClientLayoutWrapper({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
 
   // Liste des chemins où on NE VEUT PAS la Navbar du haut ni le panier
   // Si l'URL commence par /productor, on considère qu'on est dans le dashboard
-  const isDashboard = pathname.startsWith('/productor') || pathname.startsWith('/dashboard');
+  const isDashboard = currentPath.startsWith('/productor') || currentPath.startsWith('/dashboard');
 
   return (
     <>

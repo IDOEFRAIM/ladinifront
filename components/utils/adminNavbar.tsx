@@ -26,6 +26,7 @@ const adminNavItems = [
 
 export default function AdminNavbar() {
   const pathname = usePathname();
+  const currentPath = pathname ?? '';
   const { logout } = useAuth();
   const { userRole } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -56,8 +57,8 @@ export default function AdminNavbar() {
           className="md:!justify-start md:!gap-2 md:!h-auto md:!py-2 md:!px-0">
           {items.map((item) => {
           const isActive = item.exact
-            ? pathname === item.href
-            : pathname.startsWith(item.href) && pathname !== '/admin';
+            ? currentPath === item.href
+            : currentPath.startsWith(item.href) && currentPath !== '/admin';
 
           return (
             <Link key={item.name} href={item.href} style={{ textDecoration: 'none', flex: '1', maxWidth: 100 }} className="md:!flex-none md:!max-w-none">
@@ -115,8 +116,8 @@ export default function AdminNavbar() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {items.map((item) => {
                   const isActive = item.exact
-                    ? pathname === item.href
-                    : pathname.startsWith(item.href) && pathname !== '/admin';
+                    ? currentPath === item.href
+                    : currentPath.startsWith(item.href) && currentPath !== '/admin';
                   return (
                     <Link key={item.name} href={item.href} onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, background: isActive ? 'rgba(16,185,129,0.06)' : 'transparent' }}>
