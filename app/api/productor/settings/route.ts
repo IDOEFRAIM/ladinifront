@@ -8,13 +8,13 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { producerId, name, email, phone, location } = body;
+    const { producerId, name, email, phone, location, whatsappEnabled, dailyAdviceTime, latitude, longitude, cnibNumber } = body;
 
     if (!producerId || producerId !== (user.producerId || user.id)) {
       return NextResponse.json({ error: 'Invalid producer' }, { status: 403 });
     }
 
-    const updated = await updateProducerSettings(user.id, producerId, { name, email, phone, location });
+    const updated = await updateProducerSettings(user.id, producerId, { name, email, phone, location, whatsappEnabled, dailyAdviceTime, latitude, longitude, cnibNumber });
     return NextResponse.json({ ok: true, producer: updated });
   } catch (err) {
     console.error(err);

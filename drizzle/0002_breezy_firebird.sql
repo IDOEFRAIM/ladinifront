@@ -1,4 +1,4 @@
-CREATE TABLE "marketplace"."seed_allocations" (
+CREATE TABLE IF NOT EXISTS "marketplace"."seed_allocations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid NOT NULL,
 	"zone_id" uuid NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE "marketplace"."seed_allocations" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "marketplace"."seed_distribution_attempts" (
+CREATE TABLE IF NOT EXISTS "marketplace"."seed_distribution_attempts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"distribution_id" uuid NOT NULL,
 	"actor_id" uuid,
@@ -22,7 +22,7 @@ CREATE TABLE "marketplace"."seed_distribution_attempts" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "marketplace"."seed_distributions" (
+CREATE TABLE IF NOT EXISTS "marketplace"."seed_distributions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"allocation_id" uuid NOT NULL,
 	"producer_id" uuid NOT NULL,
@@ -42,12 +42,12 @@ CREATE TABLE "marketplace"."seed_distributions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "seed_allocations_org_idx" ON "marketplace"."seed_allocations" USING btree ("organization_id");--> statement-breakpoint
-CREATE INDEX "seed_allocations_zone_idx" ON "marketplace"."seed_allocations" USING btree ("zone_id");--> statement-breakpoint
-CREATE INDEX "seed_allocations_seedtype_idx" ON "marketplace"."seed_allocations" USING btree ("seed_type");--> statement-breakpoint
-CREATE INDEX "sda_distribution_idx" ON "marketplace"."seed_distribution_attempts" USING btree ("distribution_id");--> statement-breakpoint
-CREATE INDEX "sda_actor_idx" ON "marketplace"."seed_distribution_attempts" USING btree ("actor_id");--> statement-breakpoint
-CREATE INDEX "seed_distributions_alloc_idx" ON "marketplace"."seed_distributions" USING btree ("allocation_id");--> statement-breakpoint
-CREATE INDEX "seed_distributions_producer_idx" ON "marketplace"."seed_distributions" USING btree ("producer_id");--> statement-breakpoint
-CREATE INDEX "seed_distributions_agent_idx" ON "marketplace"."seed_distributions" USING btree ("agent_id");--> statement-breakpoint
-CREATE INDEX "seed_distributions_status_idx" ON "marketplace"."seed_distributions" USING btree ("status");
+CREATE INDEX IF NOT EXISTS "seed_allocations_org_idx" ON "marketplace"."seed_allocations" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_allocations_zone_idx" ON "marketplace"."seed_allocations" USING btree ("zone_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_allocations_seedtype_idx" ON "marketplace"."seed_allocations" USING btree ("seed_type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "sda_distribution_idx" ON "marketplace"."seed_distribution_attempts" USING btree ("distribution_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "sda_actor_idx" ON "marketplace"."seed_distribution_attempts" USING btree ("actor_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_distributions_alloc_idx" ON "marketplace"."seed_distributions" USING btree ("allocation_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_distributions_producer_idx" ON "marketplace"."seed_distributions" USING btree ("producer_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_distributions_agent_idx" ON "marketplace"."seed_distributions" USING btree ("agent_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "seed_distributions_status_idx" ON "marketplace"."seed_distributions" USING btree ("status");

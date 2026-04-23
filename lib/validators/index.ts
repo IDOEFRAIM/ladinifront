@@ -41,6 +41,12 @@ export const RegisterSchema = z.object({
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères").max(128),
   role: z.enum(VALID_SYSTEM_ROLES).default('USER'),
   phone: PhoneSchema,
+  whatsappEnabled: z.boolean().optional().default(true),
+  dailyAdviceTime: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  cnibNumber: z.string().optional().nullable(),
+  zoneId: z.string().optional(),
   adminSecret: z.string().optional(),
   locationId: z.string().optional(),
 }).refine((data) => {

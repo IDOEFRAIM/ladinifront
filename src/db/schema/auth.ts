@@ -1,4 +1,4 @@
-import { uuid, text, timestamp, index, uniqueIndex, integer, boolean } from 'drizzle-orm/pg-core';
+import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, time, doublePrecision } from 'drizzle-orm/pg-core';
 import { type InferModel } from 'drizzle-orm';
 import { authSchema, roleEnum } from './_config';
 
@@ -10,6 +10,10 @@ export const users = authSchema.table('users', {
   image: text('image'),
   password: text('password'),
   phone: text('phone').unique(),
+  whatsappEnabled: boolean('whatsapp_enabled').default(true), // Canaux de communication
+  dailyAdviceTime: time('daily_advice_time').default('07:00'), // Heure idéale d'envoi
+  latitude: doublePrecision('latitude'), // Pour la météo locale
+  longitude: doublePrecision('longitude'), // Pour la météo locale
   cnibNumber: text('cnib_number').unique(),
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),
@@ -55,6 +59,28 @@ export default {
   accounts,
   sessions,
 };
+
+//news part
+
+export const userCultures = authSchema.table('user_cultures', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  cultureName: text('culture_name').notNull(), // ex: "Sorgho"
+  plantingDate: timestamp('planting_date').notNull(), // Date du semis
+  isAssociation: boolean('is_association').default(false), // Pour les cultures associées
+  status: text('status').default('active'), // active, récoltée
+},(t) => [
+  index('user_cultures_user_idx').on(t.userId), // Index important pour les performances du script quotidien
+]);
+
+export const dailyAdviceLogs = authSchema.table('daily_advice_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  cultureName: text('culture_name').notNull(),
+  adviceContent: text('advice_content').notNull(), // Le conseil envoyé
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  isUseful: boolean('is_useful'), // Feedback utilisateur (optionnel)
+});
 
 // Relations are defined centrally in ./relations.ts
 

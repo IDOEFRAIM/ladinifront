@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useGeoLocation } from '@/hooks/useGeoLocalisation';
 import { Sprout, Loader2, User, Mail, Lock, ShieldAlert, ShoppingCart, Leaf } from 'lucide-react';
 
 const C = {
@@ -28,6 +29,12 @@ const signupSchema = z.object({
   orgType: z.enum(['GOVERNMENT_REGIONAL', 'COOPERATIVE', 'NGO', 'PRIVATE_TRADER', 'RESELLER']).optional(),
   orgTaxId: z.string().optional().nullable(),
   orgDescription: z.string().optional().nullable(),
+  phone: z.string().optional(),
+  cnibNumber: z.string().optional().nullable(),
+  whatsappEnabled: z.boolean().optional().default(true),
+  dailyAdviceTime: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 }).refine((data) => (data.role !== 'ADMIN' || !!data.adminSecret), {
   message: "Code secret requis pour les administrateurs",
   path: ["adminSecret"],
@@ -51,8 +58,9 @@ function SignupPageContent() {
   const router = useRouter();
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
-    resolver: zodResolver(signupSchema),
-    defaultValues: { role: 'USER', name: '', email: '', password: '', adminSecret: '' }
+    // zodResolver typing is strict; cast to any to avoid inferred optional mismatch
+    resolver: zodResolver(signupSchema) as any,
+    defaultValues: { role: 'USER', name: '', email: '', password: '', adminSecret: '', phone: '', cnibNumber: null, whatsappEnabled: true, dailyAdviceTime: '' } as any
   });
 
   // extra org fields
@@ -82,6 +90,17 @@ function SignupPageContent() {
     const result = await registerUser(payload);
     return result?.success ? toast.success("Inscription reussie !") : toast.error(result?.error || "Erreur");
   };
+
+  // Geo hook
+  const { location, error: geoError, isLoading: geoLoading, getLocation } = useGeoLocation();
+
+  // When location is obtained, write into form
+  React.useEffect(() => {
+    if (location) {
+      setValue('latitude' as any, location.lat);
+      setValue('longitude' as any, location.lng);
+    }
+  }, [location, setValue]);
 
   const inputStyle = (hasError: boolean, isCritical = false) => ({
     width: '100%', paddingLeft: 42, paddingRight: 16, paddingTop: 14, paddingBottom: 14,
@@ -150,6 +169,27 @@ function SignupPageContent() {
               <Mail size={16} style={iconStyle(!!errors.email)} />
               <input {...register("email")} disabled={isSubmitting} placeholder="Email" style={inputStyle(!!errors.email)} />
               {errors.email && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.email.message}</p>}
+            </div>
+            <div style={{ position: 'relative' }}>
+              <User size={16} style={iconStyle(!!errors.phone)} />
+              <input {...register("phone")} disabled={isSubmitting} placeholder="Téléphone" style={inputStyle(!!errors.phone)} />
+            </div>
+            <div style={{ position: 'relative' }}>
+              <User size={16} style={iconStyle(!!errors.cnibNumber)} />
+              <input {...register("cnibNumber")} disabled={isSubmitting} placeholder="Numéro CNIB (optionnel)" style={inputStyle(!!errors.cnibNumber)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" {...register('whatsappEnabled' as any)} defaultChecked /> Recevoir les notifications WhatsApp
+              </label>
+              <div style={{ marginLeft: 'auto' }}>
+                <button type="button" onClick={() => getLocation()} disabled={geoLoading} style={{ padding: '8px 12px', borderRadius: 8, background: C.forest, color: '#fff' }}>{geoLoading ? '...' : 'Obtenir ma position'}</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="time" {...register('dailyAdviceTime' as any)} placeholder="Heure conseillée" style={{ ...inputStyle(false), flex: 1 }} />
+              <input {...register('latitude' as any)} placeholder="Latitude" style={{ ...inputStyle(false), width: 140 }} readOnly />
+              <input {...register('longitude' as any)} placeholder="Longitude" style={{ ...inputStyle(false), width: 140 }} readOnly />
             </div>
             <div style={{ position: 'relative' }}>
               <Lock size={16} style={iconStyle(!!errors.password)} />

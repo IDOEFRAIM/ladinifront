@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useGeoLocation } from '@/hooks/useGeoLocalisation';
 import axios from 'axios';
 import { useForm } from 'react-hook-form';
 import { FaUser, FaPhone, FaMapMarkerAlt, FaEnvelope, FaLock, FaPalette } from 'react-icons/fa';
@@ -10,11 +11,24 @@ type FormData = {
   email: string;
   phone: string;
   location: string;
+  whatsappEnabled?: boolean;
+  dailyAdviceTime?: string;
+  latitude?: number;
+  longitude?: number;
+  cnibNumber?: string;
 };
 
 export default function ProducerSettingsForm({ initialData, producerId, serverAction }: { initialData: FormData; producerId: string; serverAction?: (data: FormData) => Promise<any> }) {
-  const { register, handleSubmit } = useForm<FormData>({ defaultValues: initialData });
+  const { register, handleSubmit, setValue } = useForm<FormData>({ defaultValues: initialData });
   const [isLoading, setIsLoading] = useState(false);
+  const { location, error: geoError, isLoading: geoLoading, getLocation } = useGeoLocation();
+
+  React.useEffect(() => {
+    if (location) {
+      setValue('latitude' as any, location.lat as any);
+      setValue('longitude' as any, location.lng as any);
+    }
+  }, [location, setValue]);
 
   async function onSubmit(data: FormData) {
     setIsLoading(true);
@@ -55,6 +69,27 @@ export default function ProducerSettingsForm({ initialData, producerId, serverAc
       <div>
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1"><FaMapMarkerAlt className="text-green-600"/> Adresse</label>
         <input {...register('location')} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1">WhatsApp</label>
+        <label className="flex items-center gap-2"><input type="checkbox" {...register('whatsappEnabled' as any)} /> Recevoir via WhatsApp</label>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1">Heure conseil</label>
+        <input type="time" {...register('dailyAdviceTime' as any)} className="px-4 py-2 border border-gray-300 rounded-lg" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <input {...register('latitude' as any)} name="latitude" placeholder="Latitude" className="px-3 py-2 border border-gray-300 rounded-lg" />
+        <input {...register('longitude' as any)} name="longitude" placeholder="Longitude" className="px-3 py-2 border border-gray-300 rounded-lg" />
+        <button type="button" onClick={() => getLocation()} className="px-3 py-2 bg-green-700 text-white rounded-lg">Obtenir position</button>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1">CNIB</label>
+        <input {...register('cnibNumber' as any)} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
       </div>
 
       <div className="flex gap-3">

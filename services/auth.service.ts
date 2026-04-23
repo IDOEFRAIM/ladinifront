@@ -110,6 +110,12 @@ export async function registerUser(data: {
     name: string;
     role?: string;
     phone?: string;
+    whatsappEnabled?: boolean;
+    dailyAdviceTime?: string;
+    latitude?: number;
+    longitude?: number;
+    cnibNumber?: string | null;
+    zoneId?: string;
     adminSecret?: string;
     locationId?: string;
     isProducer?: boolean;
@@ -135,8 +141,8 @@ export async function registerUser(data: {
             return { success: false, error: errors };
         }
 
-        const { email, password, name, role, phone } = validation.data as any;
-        const locationId = data.locationId;
+        const { email, password, name, role, phone, whatsappEnabled, dailyAdviceTime, latitude, longitude, cnibNumber, zoneId } = validation.data as any;
+        const locationId = data.locationId || zoneId;
 
         // Admin secret check
         if (role === 'ADMIN') {
@@ -170,6 +176,12 @@ export async function registerUser(data: {
             name,
             role: role as any,
             phone: phone || undefined,
+            whatsappEnabled: whatsappEnabled ?? true,
+            dailyAdviceTime: dailyAdviceTime || undefined,
+            latitude: latitude ?? undefined,
+            longitude: longitude ?? undefined,
+            cnibNumber: cnibNumber ?? undefined,
+            zoneId: zoneId ?? undefined,
         }).returning();
 
         // Create producer profile if needed
