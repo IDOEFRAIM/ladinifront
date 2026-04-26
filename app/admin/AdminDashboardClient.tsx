@@ -37,10 +37,12 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
     try {
       if (serverRefresh) {
         const res = await serverRefresh();
+        console.log('Server refresh result:', res);
         setData(res || null);
       } else {
         const res = await axios.get('/api/admin/metrics', { withCredentials: true });
         const result = res.data;
+        console.log('result',result)
         if (result && result.success && result.data) {
           setData(result.data);
         } else {
@@ -76,10 +78,10 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
       </div>
     </div>
   );
+console.log('Admin Dashboard data:', data);
+const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n || 0);
 
-  const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
-
-  // Safeguard arrays in case server returns partial payload
+  // Sécurité pour éviter les erreurs si les tableaux sont vides
   const recentActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
   const topZones = Array.isArray(data?.topZones) ? data.topZones : [];
 
@@ -147,7 +149,7 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
           </div>
           <div>
             <h1 style={{ fontFamily: F.heading, fontSize: '1.1rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em' }}>
-              AgriConnect <span style={{ color: C.emerald }}>HQ</span>
+              Ladini <span style={{ color: C.emerald }}>HQ</span>
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.emerald, display: 'inline-block', animation: 'pulse 2s infinite' }} />
@@ -200,7 +202,7 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
             <GlassCard style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '24px 28px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontFamily: F.heading, fontSize: 16, fontWeight: 800, color: C.forest }}>Flux d Activite</h3>
-                <Link href="/admin/orders" style={{ fontSize: 11, fontWeight: 700, color: C.amber, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voir historique</Link>
+                <Link href="/admin/orders/kanban" style={{ fontSize: 11, fontWeight: 700, color: C.amber, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voir historique</Link>
               </div>
               <div style={{ padding: 8, maxHeight: 450, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {recentActivity.length === 0 ? (

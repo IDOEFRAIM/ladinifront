@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Globe, Map, Users, ShoppingCart, Tractor, Loader2, Plus, Search, ChevronRight, Zap, TrendingUp, MapPin } from 'lucide-react';
+import LocationDetailModal from '@/components/LocationDetailModal';
 import { useRouter } from 'next/navigation';
 import { getClimaticRegions, getLocations, getTerritoryStats, createClimaticRegion, updateClimaticRegion, deleteClimaticRegion, createLocation, toggleLocationActive, deleteLocation } from '@/services/territory.service';
 import KpiCard from './_components/kpiCard';
@@ -234,6 +235,7 @@ export default function TerritoriesPage() {
   const [locationForm, setLocationForm] = useState({ name: '', code: '', climaticRegionId: '', latitude: '', longitude: '' });
   const [editingRegion, setEditingRegion] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -246,9 +248,10 @@ export default function TerritoriesPage() {
         locationStats: statsRes.data.locationStats.map((z: any) => ({
           locationId: z.id,
           locationName: z.name,
-          producers: z.producers,
-          orders: z.orders,
-          farms: z.farms
+          producers: z.producers ?? 0,
+          orders: z.orders ?? 0,
+          farms: z.farms ?? 0,
+          gmv: z.gmv ?? 0,
         }))
       };
       setStats(transformedStats);
@@ -264,7 +267,10 @@ export default function TerritoriesPage() {
   const handleCreateLocation = async () => { const payload = { ...locationForm, latitude: parseFloat(locationForm.latitude) || 0, longitude: parseFloat(locationForm.longitude) || 0 }; const res = await createLocation(payload); if (res.success) { toast.success('Localité créée'); setLocationForm({ name: '', code: '', climaticRegionId: '', latitude: '', longitude: '' }); setShowLocationForm(false); loadData(); } else toast.error('Erreur'); };
   const handleToggleLocation = async (id: string) => { const res = await toggleLocationActive(id); if (res.success) { toast.success('Localité mise à jour'); loadData(); } else toast.error('Erreur'); };
   const handleDeleteLocation = async (id: string) => { if (!confirm('Supprimer cette localité ?')) return; const res = await deleteLocation(id); if (res.success) { toast.success('Supprimée'); loadData(); } else toast.error('Erreur'); };
-  const handleNavigateToLocation = (id: string) => router.push(`/admin/territories/${id}`);
+  const handleNavigateToLocation = (id: string) => {
+    // open detail modal for location
+    setSelectedLocationId(id);
+  };
 
   const tabs = [
     { key: 'overview' as const, label: "Vue d'ensemble", icon: <Globe size={16} /> },
@@ -285,7 +291,7 @@ export default function TerritoriesPage() {
   const handleRegionFormChange = (field: string, value: string) => {
     setRegionForm(prev => ({ ...prev, [field]: value }));
   };
-
+console.log('TerritoriesPage render - stats:', stats, 'regions:', regions, 'locations:', locations);
   return (
     <div style={{ minHeight: '100vh', background: C.sand, paddingBottom: 80 }}>
       {/* Header (non-sticky to avoid overlapping global admin header/nav) */}
@@ -320,8 +326,12 @@ export default function TerritoriesPage() {
             <KpiCard icon={<Map size={18} />} label="Localités Actives" value={`${stats.activeLocations}/${stats.totalLocations}`} color="green" trend={2} />
             <KpiCard icon={<Users size={18} />} label="Producteurs" value={stats.totalProducers} color="amber" trend={-1} />
             <KpiCard icon={<ShoppingCart size={18} />} label="Volume Commandes" value={stats.totalOrders} color="indigo" trend={14} />
-            <KpiCard icon={<Tractor size={18} />} label="Exploitations" value={stats.locationStats.reduce((a: number, z: LocationStat) => a + z.farms, 0)} color="emerald" trend={5} />
+            <KpiCard icon={<Tractor size={18} />} label="Exploitations" value={stats.locationStats.reduce((a: number, z: LocationStat) => a + (z.farms ?? 0), 0)} color="emerald" trend={5} />
           </div>
+        )}
+
+        {selectedLocationId && (
+          <LocationDetailModal locationId={selectedLocationId} onClose={() => setSelectedLocationId(null)} />
         )}
 
         {/* Overview Tab */}

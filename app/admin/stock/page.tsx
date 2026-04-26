@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Package, AlertTriangle, ArrowRight, User, Loader2 } from 'lucide-react';
 import { getAdminProducts } from '@/services/admin.service';
-
+import Link from 'next/link';
 const C = { forest: '#064E3B', emerald: '#10B981', lime: '#84CC16', amber: '#D97706', sand: '#F9FBF8', glass: 'rgba(255,255,255,0.72)', border: 'rgba(6,78,59,0.07)', muted: '#64748B', text: '#1F2937' };
 const F = { heading: "'Space Grotesk', sans-serif", body: "'Inter', sans-serif" };
 
@@ -47,7 +47,11 @@ function ProductItem({ product, index }: { product: AdminProduct; index: number 
             </div>
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>{product.shortCode || product.id.slice(0, 8)}</p>
-              <h3 style={{ fontSize: 20, fontWeight: 800, color: C.forest, fontFamily: F.heading }}>{product.name}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 800, color: C.forest, fontFamily: F.heading }}>
+                <Link href={`/admin/stock/${product.id}`} style={{ color: 'inherit', textDecoration: 'underline' }}>
+                  {product.name}
+                </Link>
+              </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
                 <span style={{ fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}><User size={12} /> {product.producerName}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, color: C.forest, background: 'rgba(16,185,129,0.08)', padding: '2px 10px', borderRadius: 100 }}>{product.location}</span>

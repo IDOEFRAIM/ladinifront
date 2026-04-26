@@ -47,12 +47,11 @@ export default function AdminNavbar() {
     <>
       {/* Desktop / medium+ nav (unchanged) */}
       <nav style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
         background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         borderTop: `1px solid ${C.border}`,
         boxShadow: '0 -4px 24px rgba(6,78,59,0.04)',
         zIndex: 40,
-      }} className="hidden md:block md:relative md:border-t-0 md:border-b md:shadow-none md:!bottom-auto">
+      }} className="bg-red-500 z-[9999] hidden md:block md:relative md:border-t-0 md:border-b md:shadow-none md:!bottom-auto sticky top-0 z-10 px-6 py-5">
         <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 64, maxWidth: 1280, margin: '0 auto' }}
           className="md:!justify-start md:!gap-2 md:!h-auto md:!py-2 md:!px-0">
           {items.map((item) => {

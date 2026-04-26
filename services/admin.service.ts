@@ -2,60 +2,116 @@
 
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, sql, count, sum, gte, inArray } from 'drizzle-orm';
-import { audit, snapshot } from "@/lib/audit";
-import getUserIdFromSession from "@/lib/get-userId";
-
-// ╔══════════════════════════════════════════════╗
-// ║  DASHBOARD STATS                             ║
-// ╚══════════════════════════════════════════════╝
+import { eq, sql, count, sum, gte, countDistinct, desc } from 'drizzle-orm';
 
 export async function getAdminDashboardStats() {
   try {
-    // Simplified fallback: use raw SQL to get a few basic counts so endpoint stays functional
-    const totalUsersRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM auth.users`);
-    const totalProductsRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM marketplace.products`);
-    const totalOrdersRes = await db.execute(sql`SELECT COUNT(*)::int AS cnt FROM marketplace.orders`);
-     // Get the total number of users, products, and orders from the raw SQL results
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const totalUsers = Number((totalUsersRes as any[])?.[0]?.cnt || 0);
-    const totalProducts = Number((totalProductsRes as any[])?.[0]?.cnt || 0);
-    const totalOrders = Number((totalOrdersRes as any[])?.[0]?.cnt || 0);
+    // 1. On récupère tout en une fois
+    const [
+      countsRes,
+      geoStats,
+      orderStats,
+      recentActivityRaw,
+      topZonesRaw
+    ] = await Promise.all([
+      
+      // A. Utilisateurs & Produits
+      db.execute(sql`SELECT 
+          (SELECT COUNT(*)::int FROM auth.users) as users,
+          (SELECT COUNT(*)::int FROM marketplace.products) as products`),
 
-    // Minimal response
-    const formattedData = {
-      totalProducers: 0,
-      pendingProducers: 0,
-      activeProducers: 0,
-      totalOrders,
-      pendingOrders: 0,
-      recentOrders: 0,
-      totalProducts,
-      totalLocations: 0,
-      activeLocations: 0,
-      totalRegions: 0,
-      totalUsers,
-      totalRevenue: 0,
-      avgOrderValue: 0,
-      conversion7d: 0,
-      avgDeliveryHours: 0,
-      aiApprovalRate: 0,
-      topLocations: [],
-      recentActivity: [],
+      // B. Géo & Producteurs
+      db.select({
+        totalRegions: countDistinct(schema.climaticRegions.id),
+        totalZones: countDistinct(schema.zones.id),
+        totalProducers: count(schema.producers.id),
+        pendingProducers: sql`count(*) filter (where ${schema.producers.status} = 'PENDING')`,
+        activeProducers: sql`count(*) filter (where ${schema.producers.status} = 'ACTIVE')`,
+      }).from(schema.producers)
+        .leftJoin(schema.zones, eq(schema.producers.zoneId, schema.zones.id))
+        .leftJoin(schema.climaticRegions, eq(schema.zones.climaticRegionId, schema.climaticRegions.id)),
+
+      // C. Ventes
+      db.select({
+        totalOrders: count(schema.orders.id),
+        pendingOrders: sql`count(*) filter (where ${schema.orders.status} = 'PENDING')`,
+        totalRevenue: sum(schema.orders.totalAmount),
+        orders7d: sql`count(*) filter (where ${schema.orders.createdAt} >= ${sevenDaysAgo.toISOString()})`,
+      }).from(schema.orders),
+
+      // D. Flux d'activité (Jointures manuelles pour éviter l'erreur 'referencedTable')
+      db.select({
+        id: schema.orders.id,
+        customerName: schema.orders.customerName,
+        amount: schema.orders.totalAmount,
+        status: schema.orders.status,
+        date: schema.orders.createdAt,
+        producerName: schema.producers.businessName,
+      })
+      .from(schema.orders)
+      .leftJoin(schema.orderItems, eq(schema.orders.id, schema.orderItems.orderId))
+      .leftJoin(schema.products, eq(schema.orderItems.productId, schema.products.id))
+      .leftJoin(schema.producers, eq(schema.products.producerId, schema.producers.id))
+      .orderBy(desc(schema.orders.createdAt))
+      .limit(10),
+
+      // E. Top Zones
+      db.select({
+        id: schema.zones.id,
+        name: schema.zones.name,
+        region: schema.climaticRegions.name,
+        producers: countDistinct(schema.producers.id),
+        orders: countDistinct(schema.orders.id),
+      })
+      .from(schema.zones)
+      .leftJoin(schema.climaticRegions, eq(schema.zones.climaticRegionId, schema.climaticRegions.id))
+      .leftJoin(schema.producers, eq(schema.producers.zoneId, schema.zones.id))
+      .leftJoin(schema.orders, eq(schema.orders.zoneId, schema.zones.id))
+      .groupBy(schema.zones.id, schema.zones.name, schema.climaticRegions.name)
+      .orderBy(desc(sql`count(distinct ${schema.orders.id})`))
+      .limit(3)
+    ]);
+
+    const usersProducts = (countsRes as any)[0];
+    const geo = geoStats[0];
+    const sales = orderStats[0];
+
+    const totalUsers = Number(usersProducts.users || 0);
+    const totalOrders = Number(sales.totalOrders || 0);
+    const totalRevenue = Number(sales.totalRevenue || 0);
+
+    return {
+      success: true,
+      data: {
+        totalRevenue,
+        totalOrders,
+        pendingOrders: Number(sales.pendingOrders || 0),
+        totalProducers: Number(geo.totalProducers || 0),
+        activeProducers: Number(geo.activeProducers || 0),
+        pendingProducers: Number(geo.pendingProducers || 0),
+        totalProducts: Number(usersProducts.products || 0),
+        totalUsers,
+        totalLocations: Number(geo.totalZones || 0),
+        totalRegions: Number(geo.totalRegions || 0),
+        avgOrderValue: totalOrders > 0 ? (totalRevenue / totalOrders) : 0,
+        conversion7d: totalUsers > 0 ? (Number(sales.orders7d || 0) / totalUsers) : 0,
+        topZones: topZonesRaw,
+        recentActivity: recentActivityRaw.map(a => ({
+          ...a,
+          producerName: a.producerName || 'Nom non definie'
+        }))
+      }
     };
-
-    return { success: true, data: formattedData };
-
-    // (Detailed metrics generation removed temporarily - simplified response returned above)
   } catch (error) {
-      console.error("Erreur critique dashboard stats:", error);
-      if (error instanceof Error) console.error(error.stack);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Erreur lors du calcul des indicateurs." 
-    };
+    console.error("ERREUR DASHBOARD:", error);
+    return { success: false, error: "Erreur technique" };
   }
 }
+
+
 
 // ╔══════════════════════════════════════════════╗
 // ║  PRODUCTEURS                                 ║
@@ -123,7 +179,7 @@ export async function getAdminProducers() {
       if (prod) {
         orderCountByProducer.set(
           prod.producerId,
-          (orderCountByProducer.get(prod.producerId) || 0) + Number(po.count)
+          (orderCountByProducer.get(prod.producerId)) + Number(po.count)
         );
       }
     }
@@ -155,9 +211,9 @@ export async function getAdminProducers() {
       phone: p.user?.phone || '',
       zone: p.zone?.name || 'Non assigné',
       zoneId: p.zone?.id || null,
-      productsCount: prodCountMap.get(p.id) || 0,
-      farmsCount: farmCountMap.get(p.id) || 0,
-      totalOrders: orderCountByProducer.get(p.id) || 0,
+      productsCount: prodCountMap.get(p.id),
+      farmsCount: farmCountMap.get(p.id),
+      totalOrders: orderCountByProducer.get(p.id),
       registrationDate: p.user && p.user.createdAt ? p.user.createdAt.toISOString() : '',
     }));
 
@@ -311,7 +367,7 @@ export async function getAdminProducts() {
       quantityForSale: p.quantityForSale,
       producerName: p.producer?.businessName || 'Inconnu',
       location: p.producer?.zone?.name || 'Non assigné',
-      totalOrders: orderItemCountMap.get(p.id) || 0,
+      totalOrders: orderItemCountMap.get(p.id),
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
     }));
@@ -328,69 +384,72 @@ export async function getAdminProducts() {
 
 // ╔══════════════════════════════════════════════╗
 // ║  VALIDATIONS (PENDING)                       ║
-// ╚══════════════════════════════════════════════╝
-
+// ╚════
+// 
 export async function getAdminValidations() {
   try {
-    // Producteurs en attente de validation
+    // 1. Récupération des producteurs en attente avec leurs relations
     const pendingProducers = await db.query.producers.findMany({
       where: eq(schema.producers.status, 'PENDING'),
       with: {
-        user: { columns: { name: true, email: true, phone: true, createdAt: true } },
-        zone: { columns: { name: true } },
+        user: { 
+          columns: { 
+            name: true, 
+            email: true, 
+            phone: true, 
+            createdAt: true 
+          } 
+        },
+        zone: { 
+          columns: { 
+            name: true 
+          } 
+        },
       },
       orderBy: (t, { desc }) => [desc(t.createdAt)],
     });
 
-    interface ValidationMetadata {
-      phone: string;
-      riskLevel: 'safe';
-    }
+    // 2. Formatage des données avec protection contre les valeurs nulles
+    const validations = pendingProducers.map((p) => {
+      // On prépare des fallback pour éviter les erreurs de lecture
+      const userName = p.user?.name || 'Utilisateur sans nom';
+      const userEmail = p.user?.email || 'Email non renseigné';
+      const userPhone = p.user?.phone || 'Pas de numéro';
+      const zoneName = p.zone?.name || 'Zone non définie';
 
-    interface Validation {
-      id: string;
-      entityId: string;
-      type: 'producer';
-      title: string;
-      producerName: string;
-      submissionDate: string;
-      priority: 'high';
-      status: 'pending';
-      metadata: ValidationMetadata;
-    }
-
-    interface PendingProducer {
-      id: string;
-      businessName: string | null;
-      createdAt: Date;
-      user: {
-      name: string | null;
-      email: string | null;
-      phone: string | null;
+      return {
+        id: p.id,
+        entityId: p.id,
+        type: 'PRODUCER' as const, // Match avec ton type TabKey côté client
+        title: p.businessName || userName,
+        details: `${userEmail} • ${zoneName}`, // Ajout du champ details attendu par le client
+        name: p.businessName || userName,     // Ajout du champ name attendu par le client
+        producerName: `${userEmail} • ${zoneName}`,
+        submissionDate: p.createdAt ? p.createdAt.toISOString() : new Date().toISOString(),
+        date: p.createdAt ? p.createdAt.toLocaleDateString('fr-FR') : 'Date inconnue', // Pour l'affichage direct
+        priority: 'high' as const,
+        status: 'PENDING' as const,
+        metadata: {
+          phone: userPhone,
+          riskLevel: 'safe' as const,
+        }
       };
-      zone: {
-      name: string;
-      } | null;
-    }
+    });
 
-    const validations: Validation[] = (pendingProducers as PendingProducer[]).map((p: PendingProducer) => ({
-      id: p.id,
-      entityId: p.id,
-      type: 'producer' as const,
-      title: p.businessName || p.user.name || 'Producteur',
-      producerName: `${p.user.email || 'N/A'} • ${p.zone?.name || 'Localisation inconnue'}`,
-      submissionDate: p.createdAt.toISOString(),
-      priority: 'high' as const,
-      status: 'pending' as const,
-      metadata: {
-      phone: p.user.phone || '',
-      riskLevel: 'safe' as const,
-      }
-    }));
+    // Optionnel: Tu pourrais aussi fetch les produits en attente ici 
+    // et les concaténer à la liste 'validations'
 
-    return { success: true, data: validations };
+    return { 
+      success: true, 
+      data: validations 
+    };
+
   } catch (error) {
-    console.error("Erreur chargement validations:", error);
-    return { success: false, error: "Impossible de charger les validations." };
+    // On log l'erreur réelle pour le debug mais on renvoie un message propre
+    console.error("DÉTAIL ERREUR VALIDATIONS:", error);
+    return { 
+      success: false, 
+      error: "Erreur lors de la récupération des dossiers de validation." 
+    };
   }
 }

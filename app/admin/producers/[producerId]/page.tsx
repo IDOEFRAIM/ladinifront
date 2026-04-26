@@ -1,223 +1,201 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
-    ArrowUpRight, Truck, Mic, Database, Smartphone, 
-    Target, ShieldCheck, CheckCircle2, HelpCircle, 
-    ChevronDown, ChevronUp 
+  ChevronLeft, MapPin, Mail, Phone, Calendar, 
+  Package, ShoppingCart, TrendingUp, ShieldCheck, Globe, Loader2, Landmark
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { getAdminProducers } from '@/services/admin.service';
 
-// --- 1. CONFIGURATION & THÈME ---
-const THEME = {
-    colors: {
-        green: '#497a3a',
-        orange: '#e65100',
-        text: '#5b4636',
-        muted: '#7c795d',
-        border: '#e0e0d1',
-        bgGradient: 'linear-gradient(120deg, #f7f5ee 70%, #e6f4ea 100%)',
-        cardBg: '#f8faf7'
-    },
-    animations: {
-        fadeInUp: {
-            initial: { opacity: 0, y: 20 },
-            whileInView: { opacity: 1, y: 0 },
-            viewport: { once: true },
-            transition: { duration: 0.6 }
+const C = { 
+  forest: '#064E3B', 
+  emerald: '#10B981', 
+  amber: '#D97706', 
+  sand: '#F9FBF8', 
+  border: 'rgba(6,78,59,0.07)', 
+  muted: '#64748B' 
+};
+
+export default function ProducerDetailPage({ params }: { params: Promise<{ producerId: string }> }) {
+  const { producerId } = use(params);
+  const router = useRouter();
+  const [producer, setProducer] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDetail() {
+      try {
+        const res = await getAdminProducers();
+        if (res.success && 'data' in res) {
+          // On cherche le producteur spécifique dans la liste
+          const found = (res.data as any[]).find(p => p.id === producerId);
+          setProducer(found);
         }
+      } catch (err) {
+        console.error("Erreur détaillée:", err);
+      } finally {
+        setLoading(false);
+      }
     }
-};
+    fetchDetail();
+  }, [producerId]);
 
-// --- 2. COMPOSANTS ATOMIQUES (Petites briques) ---
-
-const AgriculturalIllustration = () => (
-    <div style={{ flex: '0 0 200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="160" height="160" viewBox="0 0 180 180" fill="none">
-            <ellipse cx="90" cy="140" rx="60" ry="18" fill="#d9ead3" />
-            <ellipse cx="90" cy="150" rx="40" ry="8" fill="#b6d7a8" />
-            <rect x="65" y="90" width="50" height="35" rx="17" fill="#ffe599" />
-            <path d="M65 125 Q90 110 115 125" stroke="#b6d7a8" strokeWidth="5" fill="none" />
-            <circle cx="90" cy="70" r="32" fill="#f9cb9c" />
-            <circle cx="90" cy="70" r="24" fill="#fff2cc" />
-            <rect x="85" y="38" width="8" height="22" rx="4" fill="#93c47d" />
-        </svg>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand }}>
+      <Loader2 size={32} color={C.forest} className="animate-spin" />
     </div>
-);
+  );
 
-const BentoCard = ({ icon: Icon, title, desc, colSpan, highlight = false }: any) => (
-    <motion.div 
-        {...THEME.animations.fadeInUp}
-        style={{ 
-            gridColumn: colSpan,
-            padding: '40px',
-            borderRadius: '32px',
-            backgroundColor: highlight ? THEME.colors.orange : THEME.colors.cardBg,
-            color: highlight ? 'white' : THEME.colors.text,
-            border: `1px solid ${THEME.colors.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px'
-        }}
-    >
-        <div style={{ 
-            width: '48px', height: '48px', borderRadius: '12px', 
-            backgroundColor: highlight ? 'rgba(255,255,255,0.2)' : '#e6f4ea',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: highlight ? 'white' : THEME.colors.green
-        }}>
-            <Icon size={24} />
+  if (!producer) return (
+    <div style={{ padding: 100, textAlign: 'center', color: C.muted }}>
+      Producteur introuvable.
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.sand, paddingBottom: 60 }}>
+      {/* Sticky Header */}
+      <div style={{ background: 'white', borderBottom: `1px solid ${C.border}`, padding: '16px 24px', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 20 }}>
+          <button 
+            onClick={() => router.back()} 
+            style={{ border: `1px solid ${C.border}`, background: 'white', cursor: 'pointer', color: C.forest, borderRadius: '12px', padding: '8px' }}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.forest, margin: 0 }}>Profil Partenaire</h1>
+            <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>ID: {producer.id.slice(0,8)}</p>
+          </div>
         </div>
-        <div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '10px' }}>{title}</h3>
-            <p style={{ opacity: 0.9, lineHeight: 1.5 }}>{desc}</p>
-        </div>
-    </motion.div>
-);
+      </div>
 
-const FAQItem = ({ question, answer }: { question: string, answer: string }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    return (
-        <div style={{ borderBottom: `1px solid ${THEME.colors.border}`, padding: '24px 0' }}>
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: THEME.colors.green }}>{question}</span>
-                {isOpen ? <ChevronUp color={THEME.colors.orange} /> : <ChevronDown color={THEME.colors.orange} />}
-            </button>
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        style={{ overflow: 'hidden', color: THEME.colors.muted, marginTop: '12px', lineHeight: 1.6 }}
-                    >
-                        {answer}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-};
-
-// --- 3. SECTIONS (Molecules) ---
-
-function Hero() {
-    return (
-        <header style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 6%' }}>
-            <div style={{ maxWidth: '950px', width: '100%', display: 'flex', alignItems: 'center', gap: '48px', flexWrap: 'wrap' }}>
-                <AgriculturalIllustration />
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ flex: 1, minWidth: '300px' }}>
-                    <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', lineHeight: 1.1, fontWeight: 900, color: THEME.colors.green }}>
-                        Bienvenue sur <span style={{ color: THEME.colors.orange }}>FrontAg</span>
-                    </h1>
-                    <p style={{ fontSize: '1.2rem', marginTop: '28px', color: THEME.colors.muted, lineHeight: '1.7' }}>
-                        Ici, producteurs et consommateurs du Burkina Faso se rencontrent pour bâtir l’autosuffisance alimentaire.
-                    </p>
-                    <button style={{ marginTop: '38px', backgroundColor: THEME.colors.green, color: 'white', padding: '18px 40px', borderRadius: '16px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        Découvrir le marché <ArrowUpRight size={20} />
-                    </button>
-                </motion.div>
+      <main style={{ maxWidth: 1000, margin: '40px auto', padding: '0 20px' }}>
+        
+        {/* Main Card */}
+        <div style={{ background: 'white', borderRadius: 32, padding: 40, border: `1px solid ${C.border}`, marginBottom: 32, boxShadow: '0 4px 24px rgba(6,78,59,0.02)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 40, alignItems: 'center' }}>
+            <div style={{ 
+              width: 100, height: 100, borderRadius: 32, 
+              background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              fontSize: 40, color: 'white', fontWeight: 800 
+            }}>
+              {producer.businessName?.charAt(0)}
             </div>
-        </header>
-    );
-}
-
-function BentoGrid() {
-    const features = [
-        { icon: Truck, colSpan: 'span 8', title: "Algorithme de Collecte", desc: "Optimisation dynamique des routes pour les producteurs ruraux. Réduction de 40% des pertes." },
-        { icon: Mic, colSpan: 'span 4', title: "Inclusion Vocale", desc: "Interface en Mooré, Dioula et Fulfuldé.", highlight: true },
-        { icon: Database, colSpan: 'span 5', title: "Edge Ledger", desc: "Certification des récoltes même sans connexion internet stable." },
-        { icon: Smartphone, colSpan: 'span 7', title: "Micro-Crédit", desc: "Accès au financement basé sur l'historique de production certifié." }
-    ];
-
-    return (
-        <section style={{ padding: '0 6% 80px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-                <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: THEME.colors.green }}>Moteur de Croissance Locale</h2>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '28px' }}>
-                {features.map((f, i) => <BentoCard key={i} {...f} />)}
-            </div>
-        </section>
-    );
-}
-
-function Team() {
-    const members = [
-        { name: "Dr. Issa Traoré", role: "CTO - MIT / Ouaga" },
-        { name: "Mariam Sawadogo", role: "Impact Communautaire" },
-        { name: "Ousmane Ouédraogo", role: "Architecture Cloud" },
-        { name: "Sarah Koné", role: "Expertise Logistique" }
-    ];
-
-    return (
-        <section style={{ padding: '80px 6%' }}>
-            <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-                <h2 style={{ fontSize: '2rem', fontWeight: 800, color: THEME.colors.green }}>L'Équipe engagée</h2>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
-                {members.map((m, i) => (
-                    <motion.div key={i} whileHover={{ y: -8 }} style={{ textAlign: 'center', backgroundColor: THEME.colors.cardBg, padding: '32px', borderRadius: '24px', border: `1px solid ${THEME.colors.border}` }}>
-                        <div style={{ width: 64, height: 64, backgroundColor: '#e6f4ea', borderRadius: '50%', margin: '0 auto 18px' }} />
-                        <h4 style={{ fontWeight: 700, color: THEME.colors.green }}>{m.name}</h4>
-                        <p style={{ color: THEME.colors.orange, fontSize: '0.9rem', fontWeight: 700 }}>{m.role}</p>
-                    </motion.div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-// --- 4. COMPOSANT PRINCIPAL (LE CHEF D'ORCHESTRE) ---
-
-export default function HomePage() {
-    return (
-        <div style={{ background: THEME.colors.bgGradient, color: THEME.colors.text, minHeight: '100vh', fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
-            <Hero />
-            <BentoGrid />
             
-            {/* Impact Section */}
-            <section style={{ padding: '80px 6%', backgroundColor: '#f8faf7', borderTop: `1px solid ${THEME.colors.border}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '60px', alignItems: 'center' }}>
-                    <motion.div {...THEME.animations.fadeInUp}>
-                        <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '28px', color: THEME.colors.green }}>Transformer la terre par la <span style={{ color: THEME.colors.orange }}>Data</span>.</h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                            <div style={{ display: 'flex', gap: '16px' }}>
-                                <Target color={THEME.colors.orange} />
-                                <div>
-                                    <h4 style={{ fontWeight: 700 }}>Asymétrie d'Information</h4>
-                                    <p style={{ color: THEME.colors.muted }}>Prix réel du marché en temps réel.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                    <div style={{ backgroundColor: '#e6f4ea', borderRadius: '36px', padding: '48px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '3.5rem', fontWeight: 900, color: THEME.colors.orange }}>+25%</div>
-                        <p style={{ fontWeight: 700, color: THEME.colors.green }}>Revenus Directs Mesurés</p>
-                    </div>
-                </div>
-            </section>
-
-            <Team />
-
-            {/* FAQ Section */}
-            <section style={{ padding: '80px 6%', background: '#f7f5ee', borderTop: `1px solid ${THEME.colors.border}` }}>
-                <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-                    <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '40px', textAlign: 'center', color: THEME.colors.green }}>Questions fréquentes</h2>
-                    <FAQItem question="Comment garantissez-vous la qualité ?" answer="Chaque lot est inspecté physiquement et les données sont inscrites sur le registre numérique immuable." />
-                    <FAQItem question="Fonctionnement sans internet ?" answer="Notre protocole USSD/SMS permet de certifier des lots même en zone blanche." />
-                </div>
-            </section>
-
-            {/* Footer */}
-            <footer style={{ padding: '60px 6% 28px', borderTop: `1px solid ${THEME.colors.border}`, textAlign: 'center' }}>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: THEME.colors.green }}>FRONT<span style={{ color: THEME.colors.orange }}>AG</span></h3>
-                <p style={{ color: THEME.colors.muted, marginTop: '10px' }}>Indépendance alimentaire et excellence technologique au Burkina Faso.</p>
-                <div style={{ marginTop: '30px', opacity: 0.6, fontSize: '0.8rem' }}>LA PATRIE OU LA MORT, NOUS VAINCRONS. © 2026</div>
-            </footer>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 900, color: C.forest, margin: 0 }}>{producer.businessName}</h2>
+                <StatusTag status={producer.status} />
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                <InfoItem icon={<MapPin size={16} />} text={producer.zone} />
+                <InfoItem icon={<Mail size={16} />} text={producer.email} />
+                <InfoItem icon={<Phone size={16} />} text={producer.phone || 'Non renseigné'} />
+                <InfoItem icon={<Calendar size={16} />} text={`Inscrit le ${new Date(producer.registrationDate).toLocaleDateString()}`} />
+              </div>
+            </div>
+          </div>
         </div>
-    );
+
+        {/* Dynamic Stats Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 40 }}>
+          <StatCard icon={<Package color={C.emerald} />} label="Produits Référencés" value={producer.productsCount} />
+          <StatCard icon={<Landmark color={C.forest} />} label="Exploitations (Farms)" value={producer.farmsCount} />
+          <StatCard icon={<ShoppingCart color={C.amber} />} label="Ventes Cumulées" value={producer.totalOrders} />
+          <StatCard icon={<TrendingUp color="#3B82F6" />} label="Zone d'influence" value={producer.zone} />
+        </div>
+
+        {/* Administration Section */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 32 }}>
+          <div style={{ background: 'white', borderRadius: 24, padding: 32, border: `1px solid ${C.border}` }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: C.forest, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShieldCheck size={20} /> État des Vérifications
+            </h3>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <CheckItem label="Validation du Compte" checked={producer.status === 'ACTIVE'} />
+              <CheckItem label="Email de contact vérifié" checked={!!producer.email} />
+              <CheckItem label="Zone géographique rattachée" checked={producer.zone !== 'Non assigné'} />
+              <CheckItem label="Numéro de téléphone lié" checked={!!producer.phone} />
+            </ul>
+          </div>
+
+          <div style={{ 
+            background: C.forest, borderRadius: 24, padding: 32, color: 'white', 
+            position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center' 
+          }}>
+            <Globe style={{ position: 'absolute', right: -20, bottom: -20, opacity: 0.1 }} size={150} />
+            <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>Notes Internes</h3>
+            <p style={{ fontSize: 14, lineHeight: 1.6, opacity: 0.8, marginBottom: 24 }}>
+              Ce partenaire opère dans la zone de <strong>{producer.zone}</strong>. 
+              Avec {producer.farmsCount} ferme(s) enregistrée(s), ce producteur est un acteur clé de l'approvisionnement local.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button style={{ background: 'white', color: C.forest, border: 'none', padding: '10px 20px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                Gérer le statut
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Composants utilitaires
+function InfoItem({ icon, text }: { icon: any, text: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.muted, fontSize: 14 }}>
+      <span style={{ color: C.emerald }}>{icon}</span>
+      {text}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value }: any) {
+  return (
+    <div style={{ background: 'white', padding: 24, borderRadius: 24, border: `1px solid ${C.border}`, transition: 'transform 0.2s' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(6,78,59,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+        {icon}
+      </div>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 26, fontWeight: 900, color: C.forest }}>{value || 0}</p>
+    </div>
+  );
+}
+
+function CheckItem({ label, checked }: { label: string, checked: boolean }) {
+  return (
+    <li style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, fontSize: 14 }}>
+      <div style={{ 
+        width: 20, height: 20, borderRadius: 6, 
+        border: `2px solid ${checked ? C.emerald : '#CBD5E1'}`, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        background: checked ? C.emerald : 'transparent' 
+      }}>
+        {checked && <div style={{ width: 8, height: 4, borderLeft: '2px solid white', borderBottom: '2px solid white', transform: 'rotate(-45deg) translateY(-1px)' }} />}
+      </div>
+      <span style={{ fontWeight: 600, color: checked ? C.forest : C.muted }}>{label}</span>
+    </li>
+  );
+}
+
+function StatusTag({ status }: { status: string }) {
+  const colors: any = {
+    ACTIVE: { bg: 'rgba(16,185,129,0.1)', co: C.emerald },
+    PENDING: { bg: 'rgba(217,119,6,0.1)', co: C.amber },
+    SUSPENDED: { bg: 'rgba(239,68,68,0.1)', co: '#EF4444' }
+  };
+  const style = colors[status] || colors.PENDING;
+  return (
+    <span style={{ 
+      padding: '6px 14px', borderRadius: 100, background: style.bg, 
+      color: style.co, fontSize: 11, fontWeight: 800, textTransform: 'uppercase' 
+    }}>
+      {status}
+    </span>
+  );
 }

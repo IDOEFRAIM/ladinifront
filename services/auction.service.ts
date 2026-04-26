@@ -29,51 +29,50 @@ import getUserIdFromSession from '@/lib/get-userId';
  *   - Producteur ACTIVE uniquement
  *   - Non bloqué dans la zone (SubCategory.blockedZoneIds)
  *   - Trié par TrustScore décroissant (si présent)
- */
-export async function getEligibleProducers(input: {
+ */export async function getEligibleProducers(input: {
   auctionId: string;
   subCategoryId?: string;
   targetZoneId?: string;
   limit?: number;
 }) {
+  // 1. Validation stricte de l'entrée pour éviter l'erreur SQL "params: 1,,1"
+  if (!input || !input.auctionId || typeof input.auctionId !== 'string') {
+    console.error('getEligibleProducers: auctionId est invalide ou manquant', input);
+    return { success: false, error: 'ID de l\'enchère requis' };
+  }
+
   const { auctionId, subCategoryId, targetZoneId, limit = 50 } = input;
 
   try {
-    // 1. Charger l'enchère
+    // 2. Charger l'enchère (Vérifier si elle existe)
     const auction = await db.query.auctions.findFirst({
       where: eq(schema.auctions.id, auctionId),
       with: { targetZone: true },
     });
-    if (!auction) return { success: false, error: 'Enchère introuvable' };
+    
+    if (!auction) {
+      return { success: false, error: 'Enchère introuvable dans la base de données' };
+    }
 
     const zoneId = targetZoneId ?? auction.targetZoneId;
     const subCatId = subCategoryId ?? auction.subCategoryId;
 
-    // 2. Résoudre le chemin de la zone cible pour le matching géographique
-    let targetZone: { id: string; path: string | null; parentId: string | null; climaticRegionId: string } | null = null;
+    // 3. Résoudre les priorités de zones
+    const zonePriority: { priority: number; zoneIds: string[] }[] = [];
+    let targetZone = null;
+
     if (zoneId) {
       targetZone = await db.query.zones.findFirst({
         where: eq(schema.zones.id, zoneId),
-        columns: { id: true, path: true, parentId: true, climaticRegionId: true },
-      }) as any;
+        columns: { id: true, parentId: true, climaticRegionId: true },
+      });
     }
-
-    // 3. Vérifier si la sous-catégorie est bloquée dans la zone
-    if (subCatId && zoneId) {
-      const sub = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, subCatId) });
-      if (sub?.blockedZoneIds.includes(zoneId)) {
-        return { success: false, error: 'Cette sous-catégorie est bloquée dans la zone cible par la DR.' };
-      }
-    }
-
-    // 4. Construire les ensembles de zones par priorité
-    const zonePriority: { priority: number; zoneIds: string[] }[] = [];
 
     if (targetZone) {
-      // Priorité 1 : même zone
+      // P1: Même zone
       zonePriority.push({ priority: 1, zoneIds: [targetZone.id] });
 
-      // Priorité 2 : zones sœurs (même parent)
+      // P2: Zones sœurs
       if (targetZone.parentId) {
         const siblings = await db.query.zones.findMany({
           where: and(
@@ -84,113 +83,81 @@ export async function getEligibleProducers(input: {
           columns: { id: true },
         });
         if (siblings.length > 0) {
-          zonePriority.push({ priority: 2, zoneIds: siblings.map((z) => z.id) });
+          zonePriority.push({ priority: 2, zoneIds: siblings.map(z => z.id) });
         }
       }
 
-      // Priorité 3 : même région climatique (fallback large)
-      const excludeIds = zonePriority.flatMap((zp) => zp.zoneIds);
-      const regionConditions = [
-        eq(schema.zones.climaticRegionId, targetZone.climaticRegionId),
-        eq(schema.zones.isActive, true),
-      ];
-      if (excludeIds.length > 0) {
-        regionConditions.push(notInArray(schema.zones.id, excludeIds));
-      }
+      // P3: Même région climatique (fallback)
+      const excludeIds = zonePriority.flatMap(zp => zp.zoneIds);
       const regionZones = await db.query.zones.findMany({
-        where: and(...regionConditions),
+        where: and(
+          eq(schema.zones.climaticRegionId, targetZone.climaticRegionId),
+          eq(schema.zones.isActive, true),
+          excludeIds.length > 0 ? notInArray(schema.zones.id, excludeIds) : undefined
+        ),
         columns: { id: true },
       });
       if (regionZones.length > 0) {
-        zonePriority.push({ priority: 3, zoneIds: regionZones.map((z) => z.id) });
+        zonePriority.push({ priority: 3, zoneIds: regionZones.map(z => z.id) });
       }
     }
 
-    // 5. Récupérer les producteurs par couche de priorité
-    const allZoneIds = zonePriority.flatMap((zp) => zp.zoneIds);
-
-    // Exclude producers that already submitted a bid for this auction
+    // 4. Filtrer les producteurs (Actifs + Pas encore de bid)
+    const allZoneIds = zonePriority.flatMap(zp => zp.zoneIds);
+    
     const existingBids = await db
       .select({ producerId: schema.bids.producerId })
       .from(schema.bids)
       .where(eq(schema.bids.auctionId, auctionId));
+    
     const excludeProducerIds = existingBids.map(b => b.producerId);
 
     const producerConditions = [eq(schema.producers.status, 'ACTIVE')];
-    if (allZoneIds.length > 0) {
-      producerConditions.push(inArray(schema.producers.zoneId, allZoneIds));
-    }
-    if (excludeProducerIds.length > 0) {
-      producerConditions.push(notInArray(schema.producers.id, excludeProducerIds));
-    }
+    if (allZoneIds.length > 0) producerConditions.push(inArray(schema.producers.zoneId, allZoneIds));
+    if (excludeProducerIds.length > 0) producerConditions.push(notInArray(schema.producers.id, excludeProducerIds));
 
     const producers = await db.query.producers.findMany({
       where: and(...producerConditions),
       with: {
         user: {
           columns: { id: true, name: true },
-          with: {
-            trustScore: {
-              columns: { globalScore: true, reliabilityIndex: true, complianceIndex: true, resilienceBonus: true },
-            } as any,
-          },
+          with: { trustScore: true },
         },
-        products: subCatId
-          ? {
-              where: (t: any, { and: andOp, eq: eqOp, gt: gtOp }: any) =>
-                andOp(eqOp(t.subCategoryId, subCatId), gtOp(t.quantityForSale, 0)),
-              limit: 1,
-            }
-          : undefined,
+        products: subCatId ? {
+          where: and(eq(schema.products.subCategoryId, subCatId), gt(schema.products.quantityForSale, 0)),
+          limit: 1,
+        } : undefined,
       },
-      limit: limit * 2, // prendre plus pour trier après
-    }) as any;
-
-    // 6. Annoter chaque producteur avec sa priorité géographique
-    const zoneToP = new Map<string, number>();
-    for (const zp of zonePriority) {
-      for (const zid of zp.zoneIds) {
-        if (!zoneToP.has(zid)) zoneToP.set(zid, zp.priority);
-      }
-    }
-
-    type ScoredProducer = (typeof producers)[number] & {
-      _geoPriority: number;
-      _trustGlobal: number;
-    };
-
-    interface ScoredProducerData {
-      _geoPriority: number;
-      _trustGlobal: number;
-    }
-
-    const scored: ScoredProducer[] = producers.map((p: typeof producers[number]): ScoredProducer => ({
-      ...p,
-      _geoPriority: p.zoneId ? zoneToP.get(p.zoneId) ?? 99 : 99,
-      _trustGlobal: p.user.trustScore?.globalScore ?? 0,
-    }));
-
-    // Tri : priorité géographique ASC, puis trustScore DESC
-    scored.sort((a, b) => {
-      if (a._geoPriority !== b._geoPriority) return a._geoPriority - b._geoPriority;
-      return b._trustGlobal - a._trustGlobal;
+      limit: limit * 2,
     });
 
-    return {
-      success: true,
-      data: scored.slice(0, limit).map((p) => ({
+    // 5. Scoring et Tri
+    const zoneToPriority = new Map<string, number>();
+    zonePriority.forEach(zp => zp.zoneIds.forEach(zid => {
+      if (!zoneToPriority.has(zid)) zoneToPriority.set(zid, zp.priority);
+    }));
+
+    const result = producers
+      .map(p => ({
         producerId: p.id,
         userId: p.user.id,
         name: p.user.name,
         zoneId: p.zoneId,
-        geoPriority: p._geoPriority,
+        geoPriority: p.zoneId ? (zoneToPriority.get(p.zoneId) ?? 99) : 99,
         trustScore: p.user.trustScore,
-        hasMatchingProduct: subCatId ? ((p.products as any)?.length ?? 0) > 0 : null,
-      })),
-    };
+        hasMatchingProduct: subCatId ? (p.products?.length > 0) : null,
+      }))
+      .sort((a, b) => {
+        if (a.geoPriority !== b.geoPriority) return a.geoPriority - b.geoPriority;
+        return (b.trustScore?.globalScore ?? 0) - (a.trustScore?.globalScore ?? 0);
+      })
+      .slice(0, limit);
+
+    return { success: true, data: result };
+
   } catch (e: any) {
     console.error('getEligibleProducers error:', e);
-    return { success: false, error: e.message || 'Erreur interne' };
+    return { success: false, error: 'Une erreur interne est survenue lors du matching.' };
   }
 }
 
@@ -385,5 +352,64 @@ export async function awardAuction(input: {
   } catch (e: any) {
     console.error('awardAuction error:', e);
     return { success: false, error: e.message || 'Erreur de concurrence' };
+  }
+}
+
+// Récupère une enchère par id
+export async function getAuctionById(id: string) {
+  try {
+    const auction = await db.query.auctions.findFirst({
+      where: eq(schema.auctions.id, id),
+      with: {
+        buyer: { columns: { id: true, name: true } },
+        subCategory: { columns: { id: true, name: true } },
+        targetZone: { columns: { id: true, name: true } },
+        bids: { columns: { id: true, offeredPrice: true, producerId: true, createdAt: true } },
+      },
+    });
+    return auction ?? null;
+  } catch (e) {
+    console.error('getAuctionById error', e);
+    return null;
+  }
+}
+
+// Liste les enchères OPEN (avec filtres optionnels)
+export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: string }) {
+  try {
+    const conditions = [eq(schema.auctions.status, 'OPEN')];
+    
+    if (opts?.subCategoryId) conditions.push(eq(schema.auctions.subCategoryId, opts.subCategoryId));
+    if (opts?.zoneId) conditions.push(eq(schema.auctions.targetZoneId, opts.zoneId));
+
+    const results = await db.query.auctions.findMany({
+      where: and(...conditions),
+      orderBy: (t, { asc }) => [asc(t.deadline)],
+      with: {
+        // Ces clés doivent correspondre EXACTEMENT aux noms dans auctionsRelations
+        subCategory: { 
+          columns: { id: true, name: true } 
+        },
+        bids: { 
+          columns: { id: true } 
+        },
+      },
+    });
+
+    // Plus besoin de "as any", TypeScript comprend maintenant la structure
+    return results.map(a => ({
+      id: a.id,
+      subCategoryName: a.subCategory?.name || "Produit inconnu",
+      quantity: a.quantity,
+      unit: a.unit,
+      maxPricePerUnit: a.maxPricePerUnit,
+      deadline: a.deadline,
+      bidsCount: a.bids.length,
+      targetZoneId: a.targetZoneId,
+      status: a.status,
+    }));
+  } catch (e) {
+    console.error('getOpenAuctions error:', e);
+    return [];
   }
 }

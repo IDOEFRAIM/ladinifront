@@ -36,7 +36,12 @@ function getInitialData(producer: any) {
     name: producer.businessName || producer.user?.name || '',
     email: producer.user?.email || '',
     phone: producer.user?.phone || '',
-    location: [producer.region, producer.province, producer.commune].filter(Boolean).join(', ') || ''
+    location: [producer.region, producer.province, producer.commune].filter(Boolean).join(', ') || '',
+    whatsappEnabled: producer.user?.whatsappEnabled ?? false,
+    dailyAdviceTime: producer.user?.dailyAdviceTime ?? '',
+    latitude: producer.user?.latitude ?? 0,
+    longitude: producer.user?.longitude ?? 0,
+    cnibNumber: producer.user?.cnibNumber ?? '',
   };
 }
 
