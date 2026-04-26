@@ -18,7 +18,7 @@ const C = {
 
 const NAV_LINKS = [
   { name: 'Accueil', href: '/' },
-  { name: 'Produits', href: '/products' },
+  { name: 'Encheres', href: '/auction/' },
   { name: 'Catalogue', href: '/catalogue' },
 ];
 
