@@ -21,8 +21,8 @@ export default function StockDetailPage({ params }: { params: Promise<{ stockId:
     useEffect(() => {
         async function fetchDetail() {
             const res = await getAdminProducts(); // Dans un vrai cas, tu ferais getProductById(stockId)
-            if (res.success) {
-                const found = res.data.find((p: any) => p.id === stockId);
+            if ((res as any).success) {
+                const found = (res as any).data.find((p: any) => p.id === stockId);
                 setProduct(found);
             }
             setLoading(false);

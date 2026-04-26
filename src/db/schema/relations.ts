@@ -296,6 +296,10 @@ export const auctionsRelations = relations(auctions, ({ one, many }) => ({
     fields: [auctions.buyerId],
     references: [users.id],
   }),
+  subCategory: one(subCategories, {
+    fields: [auctions.subCategoryId],
+    references: [subCategories.id],
+  }),
   targetZone: one(zones, {
     fields: [auctions.targetZoneId],
     references: [zones.id],

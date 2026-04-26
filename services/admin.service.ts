@@ -3,6 +3,8 @@
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq, sql, count, sum, gte, countDistinct, desc } from 'drizzle-orm';
+import { audit } from '@/lib/audit';
+import getUserIdFromSession from '@/lib/get-userId';
 
 export async function getAdminDashboardStats() {
   try {
@@ -179,7 +181,7 @@ export async function getAdminProducers() {
       if (prod) {
         orderCountByProducer.set(
           prod.producerId,
-          (orderCountByProducer.get(prod.producerId)) + Number(po.count)
+          (orderCountByProducer.get(prod.producerId) ?? 0) + Number(po.count)
         );
       }
     }
@@ -211,9 +213,9 @@ export async function getAdminProducers() {
       phone: p.user?.phone || '',
       zone: p.zone?.name || 'Non assigné',
       zoneId: p.zone?.id || null,
-      productsCount: prodCountMap.get(p.id),
-      farmsCount: farmCountMap.get(p.id),
-      totalOrders: orderCountByProducer.get(p.id),
+      productsCount: prodCountMap.get(p.id) ?? 0,
+      farmsCount: farmCountMap.get(p.id) ?? 0,
+      totalOrders: orderCountByProducer.get(p.id) ?? 0,
       registrationDate: p.user && p.user.createdAt ? p.user.createdAt.toISOString() : '',
     }));
 
@@ -367,7 +369,7 @@ export async function getAdminProducts() {
       quantityForSale: p.quantityForSale,
       producerName: p.producer?.businessName || 'Inconnu',
       location: p.producer?.zone?.name || 'Non assigné',
-      totalOrders: orderItemCountMap.get(p.id),
+      totalOrders: orderItemCountMap.get(p.id) ?? 0,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
     }));

@@ -105,19 +105,16 @@ import getUserIdFromSession from '@/lib/get-userId';
     // 4. Filtrer les producteurs (Actifs + Pas encore de bid)
     const allZoneIds = zonePriority.flatMap(zp => zp.zoneIds);
     
+    // Do NOT exclude producers who already submitted bids — we want to display them too.
     const existingBids = await db
       .select({ producerId: schema.bids.producerId })
       .from(schema.bids)
       .where(eq(schema.bids.auctionId, auctionId));
-    
-    const excludeProducerIds = existingBids.map(b => b.producerId);
+    const existingBidSet = new Set(existingBids.map(b => b.producerId));
 
-    const producerConditions = [eq(schema.producers.status, 'ACTIVE')];
-    if (allZoneIds.length > 0) producerConditions.push(inArray(schema.producers.zoneId, allZoneIds));
-    if (excludeProducerIds.length > 0) producerConditions.push(notInArray(schema.producers.id, excludeProducerIds));
-
+    // Fetch active producers across zones (we'll sort by geo priority afterwards so zone producers come first)
     const producers = await db.query.producers.findMany({
-      where: and(...producerConditions),
+      where: eq(schema.producers.status, 'ACTIVE'),
       with: {
         user: {
           columns: { id: true, name: true },
@@ -128,7 +125,7 @@ import getUserIdFromSession from '@/lib/get-userId';
           limit: 1,
         } : undefined,
       },
-      limit: limit * 2,
+      limit: Math.max(100, limit * 5),
     });
 
     // 5. Scoring et Tri
@@ -146,6 +143,7 @@ import getUserIdFromSession from '@/lib/get-userId';
         geoPriority: p.zoneId ? (zoneToPriority.get(p.zoneId) ?? 99) : 99,
         trustScore: p.user.trustScore,
         hasMatchingProduct: subCatId ? (p.products?.length > 0) : null,
+        hasBid: existingBidSet.has(p.id),
       }))
       .sort((a, b) => {
         if (a.geoPriority !== b.geoPriority) return a.geoPriority - b.geoPriority;
@@ -358,16 +356,28 @@ export async function awardAuction(input: {
 // Récupère une enchère par id
 export async function getAuctionById(id: string) {
   try {
+    // Fetch auction with basic relations (buyer, targetZone, bids)
     const auction = await db.query.auctions.findFirst({
       where: eq(schema.auctions.id, id),
       with: {
-        buyer: { columns: { id: true, name: true } },
-        subCategory: { columns: { id: true, name: true } },
-        targetZone: { columns: { id: true, name: true } },
-        bids: { columns: { id: true, offeredPrice: true, producerId: true, createdAt: true } },
+        buyer: true,
+        targetZone: true,
+        bids: true,
       },
     });
-    return auction ?? null;
+
+    if (!auction) return null;
+
+    // Fetch subCategory name separately to avoid relying on Drizzle 'with' typing
+    let subCategory = null;
+    if (auction.subCategoryId) {
+      subCategory = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, auction.subCategoryId), columns: { id: true, name: true } });
+    }
+
+    return {
+      ...auction,
+      subCategory: subCategory ?? null,
+    } as any;
   } catch (e) {
     console.error('getAuctionById error', e);
     return null;
@@ -409,7 +419,37 @@ export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: 
       status: a.status,
     }));
   } catch (e) {
-    console.error('getOpenAuctions error:', e);
-    return [];
+    const conditions: any[] = [];
+    conditions.push(eq(schema.auctions.status, 'OPEN'));
+    if (opts?.subCategoryId) conditions.push(eq(schema.auctions.subCategoryId, opts.subCategoryId));
+    if (opts?.zoneId) conditions.push(eq(schema.auctions.targetZoneId, opts.zoneId));
+
+    const auctions = await db.query.auctions.findMany({
+      where: conditions.length > 0 ? and(...conditions) : undefined,
+      orderBy: (t, { asc }) => [asc(t.deadline)],
+      with: {
+        bids: true,
+      },
+    });
+
+    // Collect subCategoryIds and fetch names in bulk
+    const subCatIds = Array.from(new Set(auctions.map(a => a.subCategoryId).filter(Boolean) as string[]));
+    const subCats = subCatIds.length > 0
+      ? (await db.query.subCategories.findMany({ where: (t) => (subCatIds.length ? inArray(t.id, subCatIds) : undefined), columns: { id: true, name: true } as any })) as { id: string; name: string }[]
+      : [];
+    const subCatMap = new Map(subCats.map(s => [s.id, s.name]));
+
+    // normalize
+    return auctions.map(a => ({
+      id: a.id,
+      subCategoryName: a.subCategoryId ? subCatMap.get(a.subCategoryId) ?? null : null,
+      quantity: a.quantity,
+      unit: a.unit,
+      maxPricePerUnit: a.maxPricePerUnit,
+      deadline: a.deadline,
+      bidsCount: Array.isArray(a.bids) ? a.bids.length : 0,
+      targetZoneId: a.targetZoneId,
+      status: a.status,
+    }));
   }
 }
