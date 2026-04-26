@@ -42,6 +42,7 @@ type ProducerItem = {
   zoneId: string | null;
   geoPriority: number;
   trustScore?: { globalScore?: number; reliabilityIndex?: number } | null;
+  hasBid?: boolean;
   hasMatchingProduct?: boolean | null;
 };
 
@@ -403,6 +404,11 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
                           <span className={`${geo.color} text-[10px] font-bold px-2 py-0.5 rounded-full`}>
                             {geo.text}
                           </span>
+                          {p.hasBid && (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              Offre soumise
+                            </span>
+                          )}
                           {score != null && (
                             <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                               <Star size={10} /> {score.toFixed(1)}
