@@ -4,6 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { uploadBufferToSupabase } from '@/lib/supabase.server';
+import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
 
 const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -57,12 +58,13 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
   }
 
   // Create order row (simple example; real app may have order_items table)
+  const buyerProfileId = await resolveBuyerProfileId(buyerId ?? null);
   const [order] = await db.insert(schema.orders).values({
     customerName: payload.customer.name,
     customerPhone: payload.customer.phone,
     totalAmount: payload.totalAmount || 0,
     audioUrl,
-    buyerId: buyerId || null,
+    buyerId: buyerProfileId,
   }).returning();
 
   return { success: true, orderId: order.id };
@@ -85,7 +87,6 @@ export async function fetchProducerOrders(userId?: string) {
     with: {
       order: {
         columns: { id: true, status: true, createdAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, buyerId: true },
-        with: { buyer: { columns: { name: true, phone: true } } }
       },
       product: { columns: { name: true, unit: true } }
     }
@@ -98,8 +99,8 @@ export async function fetchProducerOrders(userId?: string) {
     if (!ordersMap.has(orderId)) {
       ordersMap.set(orderId, {
         id: orderId,
-        customerName: item.order.buyer?.name || item.order.customerName || 'Client',
-        customerPhone: item.order.buyer?.phone || item.order.customerPhone || '',
+        customerName: item.order.customerName || 'Client',
+        customerPhone: item.order.customerPhone || '',
         location: item.order.city || item.order.deliveryDesc || '',
         buyerId: item.order.buyerId || null,
         date: item.order.createdAt,
@@ -122,7 +123,10 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
   const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId), columns: { id: true } });
   if (!producer) return null;
 
-  const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId), columns: { id: true, createdAt: true, updatedAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, status: true }, with: { buyer: { columns: { name: true, phone: true } } } });
+  const order = await db.query.orders.findFirst({
+    where: eq(schema.orders.id, orderId),
+    columns: { id: true, createdAt: true, updatedAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, status: true },
+  });
   if (!order) return null;
 
   const producerProducts = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.producerId, producer.id));
@@ -136,8 +140,8 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
 
   return {
     id: order.id,
-    customerName: order.buyer?.name || order.customerName || 'Client',
-    customerPhone: order.buyer?.phone || order.customerPhone || '',
+    customerName: order.customerName || 'Client',
+    customerPhone: order.customerPhone || '',
     location: order.city || order.deliveryDesc || '',
     date: order.createdAt,
     total: producerSubtotal,

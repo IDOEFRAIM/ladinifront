@@ -14,6 +14,8 @@ import {
   marketplaceSchema,
   producerStatusEnum,
   orderStatusEnum,
+  deliveryAgentStatusEnum,
+  deliveryStatusEnum,
   unitEnum,
   stockTypeEnum,
   movementTypeEnum,
@@ -22,6 +24,7 @@ import {
   paymentStatusEnum,
   orderSourceEnum,
   auctionStatusEnum,
+  escrowStatusEnum,
 } from './_config';
 import { type InferModel } from 'drizzle-orm';
 
@@ -73,6 +76,67 @@ export const clients = marketplaceSchema.table('clients', {
   index('clients_phone_idx').on(t.phone),
   index('clients_name_idx').on(t.name),
   index('clients_producer_idx').on(t.producerId),
+]);
+
+// ── Buyers (B2B segmentation) ─────────────────────────────────────────
+
+export const buyerTypes = marketplaceSchema.table('buyer_types', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').unique().notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export const buyerProfiles = marketplaceSchema.table('buyer_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').unique().notNull(),
+  buyerTypeId: uuid('buyer_type_id'),
+  establishmentName: text('establishment_name'),
+  defaultDeliveryAddress: text('default_delivery_address'),
+  isVerified: boolean('is_verified').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('buyer_profiles_user_idx').on(t.userId),
+  index('buyer_profiles_type_idx').on(t.buyerTypeId),
+  index('buyer_profiles_verified_idx').on(t.isVerified),
+]);
+
+// ── Deliveries (Logistics) ────────────────────────────────────────────
+
+export const deliveryAgents = marketplaceSchema.table('delivery_agents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').unique().notNull(),
+  vehicleType: text('vehicle_type'),
+  licenseNumber: text('license_number'),
+  zoneId: uuid('zone_id'),
+  status: deliveryAgentStatusEnum('status').default('OFFLINE').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('delivery_agents_zone_idx').on(t.zoneId),
+  index('delivery_agents_status_idx').on(t.status),
+]);
+
+export const deliveries = marketplaceSchema.table('deliveries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orderId: uuid('order_id').notNull(),
+  deliveryAgentId: uuid('delivery_agent_id'),
+  status: deliveryStatusEnum('status').default('ASSIGNED').notNull(),
+  destinationGpsLat: doublePrecision('destination_gps_lat'),
+  destinationGpsLng: doublePrecision('destination_gps_lng'),
+  destinationDesc: text('destination_desc'),
+  assignedAt: timestamp('assigned_at'),
+  pickedUpAt: timestamp('picked_up_at'),
+  deliveredAt: timestamp('delivered_at'),
+  failedAt: timestamp('failed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex('deliveries_order_unique').on(t.orderId),
+  index('deliveries_agent_idx').on(t.deliveryAgentId),
+  index('deliveries_status_idx').on(t.status),
 ]);
 
 export const farms = marketplaceSchema.table('farms', {
@@ -208,20 +272,26 @@ export const orders = marketplaceSchema.table('orders', {
   deliveryDesc: text('delivery_desc'),
   audioUrl: text('audio_url'),
   status: orderStatusEnum('status').default('PENDING').notNull(),
+  deliveryStatus: deliveryStatusEnum('delivery_status').default('PENDING').notNull(),
   source: orderSourceEnum('source').default('APP').notNull(),
   whatsappId: text('whatsapp_id'),
   totalAmount: doublePrecision('total_amount').notNull(),
   isAgentOrder: boolean('is_agent_order').default(false).notNull(),
   clientId: uuid('client_id'),
+  auctionId: uuid('auction_id'),
+  winningBidId: uuid('winning_bid_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('orders_buyer_idx').on(t.buyerId),
   index('orders_org_idx').on(t.organizationId),
   index('orders_status_idx').on(t.status),
+  index('orders_delivery_status_idx').on(t.deliveryStatus),
   index('orders_zone_idx').on(t.zoneId),
   index('orders_created_idx').on(t.createdAt),
   index('orders_phone_idx').on(t.customerPhone),
+  uniqueIndex('orders_auction_unique').on(t.auctionId),
+  index('orders_winning_bid_idx').on(t.winningBidId),
 ]);
 
 export const orderItems = marketplaceSchema.table('order_items', {
@@ -243,6 +313,8 @@ export const auctions = marketplaceSchema.table('auctions', {
   unit: unitEnum('unit').default('TONNE').notNull(),
   maxPricePerUnit: doublePrecision('max_price_per_unit').notNull(),
   deadline: timestamp('deadline').notNull(),
+  autoExtend: boolean('auto_extend').default(true).notNull(),
+  escrowStatus: escrowStatusEnum('escrow_status').default('NONE').notNull(),
   status: auctionStatusEnum('status').default('OPEN').notNull(),
   targetZoneId: uuid('target_zone_id'),
   version: integer('version').default(0).notNull(),
@@ -250,6 +322,7 @@ export const auctions = marketplaceSchema.table('auctions', {
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('auctions_status_idx').on(t.status),
+  index('auctions_escrow_status_idx').on(t.escrowStatus),
   index('auctions_zone_idx').on(t.targetZoneId),
   index('auctions_deadline_idx').on(t.deadline),
 ]);
@@ -259,18 +332,24 @@ export const bids = marketplaceSchema.table('bids', {
   auctionId: uuid('auction_id').notNull(),
   producerId: uuid('producer_id').notNull(),
   offeredPrice: doublePrecision('offered_price').notNull(),
+  linkedStockId: uuid('linked_stock_id'),
   isWinner: boolean('is_winner').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [
   uniqueIndex('bids_auction_producer_unique').on(t.auctionId, t.producerId),
   index('bids_auction_idx').on(t.auctionId),
   index('bids_producer_idx').on(t.producerId),
+  index('bids_linked_stock_idx').on(t.linkedStockId),
 ]);
 
 export default {
   warehouses,
   producers,
   clients,
+  buyerTypes,
+  buyerProfiles,
+  deliveryAgents,
+  deliveries,
   farms,
   cropCycles,
   stocks,
@@ -288,6 +367,12 @@ export default {
 export type Producer = InferModel<typeof producers>;
 export type Product = InferModel<typeof products>;
 export type Order = InferModel<typeof orders>;
+export type BuyerType = InferModel<typeof buyerTypes>;
+export type BuyerProfile = InferModel<typeof buyerProfiles>;
+export type DeliveryAgent = InferModel<typeof deliveryAgents>;
+export type Delivery = InferModel<typeof deliveries>;
+export type Auction = InferModel<typeof auctions>;
+export type Bid = InferModel<typeof bids>;
 export type OrderItem = InferModel<typeof orderItems>;
 export type Warehouse = InferModel<typeof warehouses>;
 // marketplace schema proxy

@@ -220,6 +220,7 @@ export async function createAuction(input: {
 export async function submitBid(input: {
   auctionId: string;
   offeredPrice: number;
+  linkedStockId?: string | null;
 }) {
   const userId = await getUserIdFromSession();
   if (!userId) return { success: false, error: 'Session expirée' };
@@ -228,14 +229,17 @@ export async function submitBid(input: {
     const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId) });
     if (!producer) return { success: false, error: 'Profil producteur introuvable' };
 
-    const auction = await db.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
-    if (!auction || auction.status !== 'OPEN') {
-      return { success: false, error: 'Enchère fermée ou introuvable' };
-    }
+    // Use a transaction to safely apply anti-snipe + bid upsert.
+    return await db.transaction(async (tx) => {
+      const auction = await tx.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
+      if (!auction || auction.status !== 'OPEN') {
+        return { success: false, error: 'Enchère fermée ou introuvable' };
+      }
 
-    if (new Date() > auction.deadline) {
-      return { success: false, error: 'Délai dépassé' };
-    }
+      const now = new Date();
+      if (now > auction.deadline) {
+        return { success: false, error: 'Délai dépassé' };
+      }
 
     if (input.offeredPrice <= 0) {
       return { success: false, error: 'Le prix doit être supérieur à 0' };
@@ -245,29 +249,54 @@ export async function submitBid(input: {
       return { success: false, error: `Le prix ne peut dépasser le plafond de ${auction.maxPricePerUnit}` };
     }
 
-    const [bid] = await db.insert(schema.bids)
-      .values({
-        auctionId: input.auctionId,
-        producerId: producer.id,
-        offeredPrice: input.offeredPrice,
-      })
-      .onConflictDoUpdate({
-        target: [schema.bids.auctionId, schema.bids.producerId],
-        set: {
+      // Optional stock linkage validation
+      const linkedStockId = input.linkedStockId ?? null;
+      if (linkedStockId) {
+        const stock = await tx.query.stocks.findFirst({
+          where: eq(schema.stocks.id, linkedStockId),
+          columns: { id: true },
+        });
+        if (!stock) return { success: false, error: 'Stock lié introuvable' };
+      }
+
+      // Anti-snipe: if bid is placed within last 2 minutes, extend deadline by 5 minutes.
+      if (auction.autoExtend) {
+        const msRemaining = auction.deadline.getTime() - now.getTime();
+        if (msRemaining <= 2 * 60 * 1000) {
+          const newDeadline = new Date(auction.deadline.getTime() + 5 * 60 * 1000);
+          await tx
+            .update(schema.auctions)
+            .set({ deadline: newDeadline })
+            .where(and(eq(schema.auctions.id, auction.id), eq(schema.auctions.deadline, auction.deadline)));
+        }
+      }
+
+      const [bid] = await tx.insert(schema.bids)
+        .values({
+          auctionId: input.auctionId,
+          producerId: producer.id,
           offeredPrice: input.offeredPrice,
-        },
-      })
-      .returning();
+          linkedStockId,
+        })
+        .onConflictDoUpdate({
+          target: [schema.bids.auctionId, schema.bids.producerId],
+          set: {
+            offeredPrice: input.offeredPrice,
+            linkedStockId,
+          },
+        })
+        .returning();
 
-    await audit({
-      action: 'SUBMIT_BID',
-      entityType: 'Bid',
-      entityId: bid.id,
-      actorId: userId,
-      newValue: { auctionId: input.auctionId, offeredPrice: input.offeredPrice },
+      await audit({
+        action: 'SUBMIT_BID',
+        entityType: 'Bid',
+        entityId: bid.id,
+        actorId: userId,
+        newValue: { auctionId: input.auctionId, offeredPrice: input.offeredPrice, linkedStockId },
+      });
+
+      return { success: true, data: bid };
     });
-
-    return { success: true, data: bid };
   } catch (e: any) {
     console.error('submitBid error:', e);
     return { success: false, error: e.message || 'Erreur interne' };
@@ -332,6 +361,58 @@ export async function awardAuction(input: {
       await tx.update(schema.bids)
         .set({ isWinner: true })
         .where(eq(schema.bids.id, input.winnerBidId));
+
+      // 3b. Générer automatiquement une commande liée à l'enchère (idempotent)
+      const existingOrder = await tx.query.orders.findFirst({
+        where: eq(schema.orders.auctionId, input.auctionId),
+        columns: { id: true },
+      });
+
+      if (!existingOrder) {
+        const winnerBid = await tx.query.bids.findFirst({
+          where: eq(schema.bids.id, input.winnerBidId),
+          columns: { id: true, offeredPrice: true },
+        });
+
+        // Resolve / create buyer profile from auction.buyerId (auth.users.id)
+        let buyerProfile = await tx.query.buyerProfiles.findFirst({
+          where: eq(schema.buyerProfiles.userId, auction.buyerId),
+          columns: { id: true },
+        });
+        if (!buyerProfile) {
+          const [createdProfile] = await tx
+            .insert(schema.buyerProfiles)
+            .values({
+              userId: auction.buyerId,
+              buyerTypeId: null,
+              establishmentName: null,
+              defaultDeliveryAddress: null,
+              isVerified: false,
+            })
+            .returning({ id: schema.buyerProfiles.id });
+          buyerProfile = createdProfile ?? null;
+        }
+
+        const buyerUser = await tx.query.users.findFirst({
+          where: eq(schema.users.id, auction.buyerId),
+          columns: { name: true, phone: true },
+        });
+
+        const totalAmount = winnerBid ? Number(winnerBid.offeredPrice) * Number(auction.quantity) : 0;
+
+        await tx.insert(schema.orders).values({
+          buyerId: buyerProfile?.id ?? null,
+          customerName: buyerUser?.name ?? null,
+          customerPhone: buyerUser?.phone ?? null,
+          totalAmount,
+          source: 'AUCTION',
+          status: 'PENDING',
+          deliveryStatus: 'PENDING',
+          zoneId: auction.targetZoneId ?? null,
+          auctionId: auction.id,
+          winningBidId: input.winnerBidId,
+        });
+      }
 
       // 4. Audit (via helper standard)
       await audit({

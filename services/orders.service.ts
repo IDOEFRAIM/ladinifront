@@ -4,6 +4,7 @@ import * as schema from '@/src/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { audit, snapshot } from "@/lib/audit";
 import getUserIdFromSession from "@/lib/get-userId";
+import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
 
 // Type pour la création de commande (agnostique de la source)
 interface CreateOrderParams {
@@ -82,9 +83,10 @@ async function validateInventory(tx: any, items: CreateOrderParams['items']): Pr
  * Creates the order record in the database.
  */
 async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethodCode: string): Promise<OrderCreated> {
+  const buyerProfileId = await resolveBuyerProfileId(data.buyerId ?? null);
   // Look up ref IDs for status and payment method
   const [order] = await tx.insert(schema.orders).values({
-    buyerId: data.buyerId,
+    buyerId: buyerProfileId,
     customerName: data.customerName,
     customerPhone: data.customerPhone,
     totalAmount: data.totalAmount,

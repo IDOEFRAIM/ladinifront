@@ -42,6 +42,11 @@ export const validationPriorityEnum = (name: string) => text(name);
 
 export const auctionStatusEnum = (name: string) => text(name);
 
+// B2B / Logistics / Auctions
+export const deliveryAgentStatusEnum = (name: string) => text(name);
+export const deliveryStatusEnum = (name: string) => text(name);
+export const escrowStatusEnum = (name: string) => text(name);
+
 // Exported schemas and enums for per-schema modules to import.
 export type Schemas = {
   authSchema: typeof authSchema;

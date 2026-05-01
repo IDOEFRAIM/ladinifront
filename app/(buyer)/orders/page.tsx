@@ -13,9 +13,15 @@ export default async function OrdersPage() {
   if (error || !ctx) return <OrdersAccessRequired />;
   const user: any = { id: ctx.userId, role: ctx.role };
 
+  const buyerProfile = await db.query.buyerProfiles.findFirst({
+    where: eq(schema.buyerProfiles.userId, user.id),
+    columns: { id: true },
+  });
+  if (!buyerProfile) return <OrdersEmptyState />;
+
   // Load orders and then load items + products explicitly to avoid relying on relation metadata
   const rawOrders = await db.query.orders.findMany({
-    where: eq(schema.orders.buyerId, user.id),
+    where: eq(schema.orders.buyerId, buyerProfile.id),
     orderBy: (t, { desc }) => [desc(t.createdAt)],
   });
 

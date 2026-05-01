@@ -18,6 +18,7 @@ export async function POST(
     }
     const res = await submitAuctionBid({ auctionId: id, offeredPrice });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
+    if (!('data' in res)) return NextResponse.json({ error: 'Réponse invalide du serveur' }, { status: 500 });
     return NextResponse.json({ data: res.data });
   } catch (e: any) {
     console.error('POST /bids error', e);

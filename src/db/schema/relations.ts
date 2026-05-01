@@ -35,6 +35,10 @@ import {
   warehouses,
   producers,
   clients,
+  buyerTypes,
+  buyerProfiles,
+  deliveryAgents,
+  deliveries,
   farms,
   cropCycles,
   stocks,
@@ -75,6 +79,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   producer: one(producers, {
     fields: [users.id],
     references: [producers.userId],
+  }),
+  buyerProfile: one(buyerProfiles, {
+    fields: [users.id],
+    references: [buyerProfiles.userId],
+  }),
+  deliveryAgent: one(deliveryAgents, {
+    fields: [users.id],
+    references: [deliveryAgents.userId],
   }),
   userOrganizations: many(userOrganizations),
   trustScore: one(trustScores, {
@@ -265,9 +277,9 @@ export const productsRelations = relations(products, ({ one }) => ({
 }));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
-  buyer: one(users, {
+  buyerProfile: one(buyerProfiles, {
     fields: [orders.buyerId],
-    references: [users.id],
+    references: [buyerProfiles.id],
   }),
   zone: one(zones, {
     fields: [orders.zoneId],
@@ -276,6 +288,18 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   client: one(clients, {
     fields: [orders.clientId],
     references: [clients.id],
+  }),
+  auction: one(auctions, {
+    fields: [orders.auctionId],
+    references: [auctions.id],
+  }),
+  winningBid: one(bids, {
+    fields: [orders.winningBidId],
+    references: [bids.id],
+  }),
+  delivery: one(deliveries, {
+    fields: [orders.id],
+    references: [deliveries.orderId],
   }),
   items: many(orderItems),
 }));
@@ -305,6 +329,7 @@ export const auctionsRelations = relations(auctions, ({ one, many }) => ({
     references: [zones.id],
   }),
   bids: many(bids),
+  orders: many(orders),
 }));
 
 export const bidsRelations = relations(bids, ({ one }) => ({
@@ -315,6 +340,49 @@ export const bidsRelations = relations(bids, ({ one }) => ({
   producer: one(producers, {
     fields: [bids.producerId],
     references: [producers.id],
+  }),
+  linkedStock: one(stocks, {
+    fields: [bids.linkedStockId],
+    references: [stocks.id],
+  }),
+}));
+
+export const buyerTypesRelations = relations(buyerTypes, ({ many }) => ({
+  profiles: many(buyerProfiles),
+}));
+
+export const buyerProfilesRelations = relations(buyerProfiles, ({ one, many }) => ({
+  user: one(users, {
+    fields: [buyerProfiles.userId],
+    references: [users.id],
+  }),
+  buyerType: one(buyerTypes, {
+    fields: [buyerProfiles.buyerTypeId],
+    references: [buyerTypes.id],
+  }),
+  orders: many(orders),
+}));
+
+export const deliveryAgentsRelations = relations(deliveryAgents, ({ one, many }) => ({
+  user: one(users, {
+    fields: [deliveryAgents.userId],
+    references: [users.id],
+  }),
+  zone: one(zones, {
+    fields: [deliveryAgents.zoneId],
+    references: [zones.id],
+  }),
+  deliveries: many(deliveries),
+}));
+
+export const deliveriesRelations = relations(deliveries, ({ one }) => ({
+  order: one(orders, {
+    fields: [deliveries.orderId],
+    references: [orders.id],
+  }),
+  agent: one(deliveryAgents, {
+    fields: [deliveries.deliveryAgentId],
+    references: [deliveryAgents.id],
   }),
 }));
 

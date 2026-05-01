@@ -74,7 +74,8 @@ export default async function OrdersPage() {
     .from(schema.orderItems)
     .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
     .leftJoin(schema.orders, eq(schema.orders.id, schema.orderItems.orderId))
-    .leftJoin(schema.users, eq(schema.users.id, schema.orders.buyerId))
+    .leftJoin(schema.buyerProfiles, eq(schema.buyerProfiles.id, schema.orders.buyerId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.buyerProfiles.userId))
     .where(eq(schema.products.producerId, producerId))
     .orderBy(desc(schema.orderItems.orderId));
 
