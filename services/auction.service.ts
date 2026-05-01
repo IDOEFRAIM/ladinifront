@@ -335,11 +335,11 @@ export async function awardAuction(input: {
       if (auction.status !== 'OPEN') throw new Error('Enchère déjà attribuée ou fermée');
 
       // 2. Tentative d'attribution avec optimistic lock
-      //    On incrémente la version ET on passe le statut à AWARDED
+      //    On incrémente la version ET on clôture l'enchère.
       //    SEULEMENT si la version n'a pas changé entre-temps.
       const updated = await tx.update(schema.auctions)
         .set({
-          status: 'AWARDED',
+          status: 'CLOSED',
           version: auction.version + 1,
         })
         .where(
