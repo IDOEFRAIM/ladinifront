@@ -19,12 +19,11 @@ export default async function OrdersPage() {
   });
   if (!buyerProfile) return <OrdersEmptyState />;
 
-  // Load orders and then load items + products explicitly to avoid relying on relation metadata
+  // Load orders with items + products + delivery info
   const rawOrders = await db.query.orders.findMany({
     where: eq(schema.orders.buyerId, buyerProfile.id),
     orderBy: (t, { desc }) => [desc(t.createdAt)],
   });
-
   const orderIds = rawOrders.map(o => o.id);
   const rawItems = orderIds.length > 0
     ? await db.query.orderItems.findMany({ where: (t, { inArray }) => inArray(t.orderId, orderIds) })
@@ -36,6 +35,15 @@ export default async function OrdersPage() {
     : [];
   const productMap = new Map(products.map(p => [p.id, p]));
 
+  // Load delivery info for all orders
+  const rawDeliveries = orderIds.length > 0
+    ? await db.query.deliveries.findMany({
+        where: (t, { inArray }) => inArray(t.orderId, orderIds),
+        columns: { id: true, orderId: true, status: true, deliveryCode: true, estimatedDistanceKm: true, assignedAt: true, pickedUpAt: true, deliveredAt: true },
+      })
+    : [];
+  const deliveryMap = new Map(rawDeliveries.map(d => [d.orderId, d]));
+
   const orders = rawOrders.map(order => ({
     ...order,
     createdAt: order.createdAt.toISOString(),
@@ -43,7 +51,8 @@ export default async function OrdersPage() {
       ...item,
       priceAtSale: Number(item.priceAtSale),
       product: productMap.get(item.productId) ?? null,
-    }))
+    })),
+    delivery: deliveryMap.get(order.id) ?? null,
   }));
 
   return (

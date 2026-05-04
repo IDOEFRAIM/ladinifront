@@ -116,7 +116,7 @@ function SuccessContent() {
 
         {/* Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Link href="/market" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, color: 'white', padding: 18, borderRadius: 100, textDecoration: 'none', fontFamily: F.body, fontWeight: 800 }}>
+          <Link href="/catalogue" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, color: 'white', padding: 18, borderRadius: 100, textDecoration: 'none', fontFamily: F.body, fontWeight: 800 }}>
             Continuer mes achats <ArrowRight size={20} />
           </Link>
           <div style={{ display: 'flex', gap: 12 }}>

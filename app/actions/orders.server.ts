@@ -5,10 +5,16 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { uploadBufferToSupabase } from '@/lib/supabase.server';
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
+import { getInitialStatus, shouldCreateDelivery } from '@/lib/orderStateMachine';
 
 const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export async function createOrderFromForm(formData: FormData, buyerId?: string) {
+  if (!buyerId) {
+    const e: any = new Error('UNAUTHENTICATED');
+    e.code = 'UNAUTHENTICATED';
+    throw e;
+  }
   // Expecting 'data' field with JSON metadata and optional 'voiceNote' file
   const raw = formData.get('data') as string | null;
   if (!raw) throw new Error('MISSING_DATA');
@@ -57,17 +63,62 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
     console.warn('Warning: failed to save voice note:', e);
   }
 
-  // Create order row (simple example; real app may have order_items table)
+  // Resolve buyer profile for buyer link
   const buyerProfileId = await resolveBuyerProfileId(buyerId ?? null);
-  const [order] = await db.insert(schema.orders).values({
-    customerName: payload.customer.name,
-    customerPhone: payload.customer.phone,
-    totalAmount: payload.totalAmount || 0,
-    audioUrl,
-    buyerId: buyerProfileId,
-  }).returning();
+  if (!buyerProfileId) {
+    const e: any = new Error('BUYER_PROFILE_NOT_FOUND');
+    e.code = 'BUYER_PROFILE_NOT_FOUND';
+    throw e;
+  }
 
-  return { success: true, orderId: order.id };
+  // State machine determines initial status based on payment method
+  const paymentMethod = payload.paymentMethod || 'CASH';
+  const initialStatus = getInitialStatus(paymentMethod);
+
+  // Insert order + order items in a transaction for atomicity
+  const result = await db.transaction(async (tx) => {
+    const [order] = await tx.insert(schema.orders).values({
+      customerName: payload.customer.name,
+      customerPhone: payload.customer.phone,
+      totalAmount: payload.totalAmount || 0,
+      city: payload.delivery?.city ?? null,
+      gpsLat: payload.delivery?.lat ?? null,
+      gpsLng: payload.delivery?.lng ?? null,
+      deliveryDesc: payload.delivery?.description ?? null,
+      paymentMethod: paymentMethod.toUpperCase() as any,
+      status: initialStatus as any,
+      audioUrl,
+      buyerId: buyerProfileId,
+    }).returning();
+
+    // Insert order items — required for fetchProducerOrders to work
+    if (payload.items?.length > 0) {
+      const itemRows = payload.items.map((item: any) => {
+        const product = products.find((p: any) => p.id === item.id);
+        return {
+          orderId: order.id,
+          productId: item.id,
+          quantity: item.qty,
+          priceAtSale: product?.price ?? item.price ?? 0,
+        };
+      });
+      await tx.insert(schema.orderItems).values(itemRows);
+    }
+
+    return order;
+  });
+
+  // Auto-create delivery if initial status is deliverable (e.g. CONFIRMED for COD)
+  if (shouldCreateDelivery(initialStatus)) {
+    try {
+      const { createDeliveryForConfirmedOrder } = await import('@/services/delivery.service');
+      await createDeliveryForConfirmedOrder(result.id);
+    } catch (err) {
+      console.error('Auto-delivery creation failed for order', result.id, err);
+    }
+  }
+
+  return { success: true, orderId: result.id };
 }
 
 export async function fetchProducerOrders(userId?: string) {
@@ -152,19 +203,41 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
 }
 
 import { userHasPermission } from '@/services/role.service';
+import { assertTransition } from '@/lib/orderStateMachine';
+import { runOrderStatusHooks } from '@/services/order.hooks';
 
-export async function updateOrderStatusAction(orderId: string, statusId: string, userId?: string) {
+export async function updateOrderStatusAction(orderId: string, newStatus: string, userId?: string) {
   if (!orderId) return null;
 
-  // If userId provided, perform ownership/permission checks server-side
+  // 1. Load current order to validate transition
+  const current = await db.query.orders.findFirst({
+    where: eq(schema.orders.id, orderId),
+    columns: { id: true, status: true },
+  });
+  if (!current) throw new Error('ORDER_NOT_FOUND');
+
+  // 2. State machine guard — throws on invalid transition
+  const validatedStatus = assertTransition(current.status as string, newStatus);
+
+  // 3. Ownership / permission check
   if (userId) {
-    const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId), columns: { id: true } });
-    const producerProducts = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.producerId, producer?.id ?? ''));
+    const producer = await db.query.producers.findFirst({
+      where: eq(schema.producers.userId, userId),
+      columns: { id: true },
+    });
+    const producerProducts = await db.select({ id: schema.products.id })
+      .from(schema.products)
+      .where(eq(schema.products.producerId, producer?.id ?? ''));
     const productIds = producerProducts.map((p: any) => p.id);
 
     let ownershipCheck = null;
     if (productIds.length > 0) {
-      ownershipCheck = await db.query.orderItems.findFirst({ where: (t, { and }) => and(eq(schema.orderItems.orderId, orderId), inArray(schema.orderItems.productId, productIds)) });
+      ownershipCheck = await db.query.orderItems.findFirst({
+        where: (t, { and }) => and(
+          eq(schema.orderItems.orderId, orderId),
+          inArray(schema.orderItems.productId, productIds),
+        ),
+      });
     }
 
     if (!ownershipCheck) {
@@ -177,8 +250,16 @@ export async function updateOrderStatusAction(orderId: string, statusId: string,
     }
   }
 
-  const [updated] = await db.update(schema.orders).set({ status: statusId as any }).where(eq(schema.orders.id, orderId)).returning({ id: schema.orders.id, status: schema.orders.status, updatedAt: schema.orders.updatedAt });
+  // 4. Persist
+  const [updated] = await db.update(schema.orders)
+    .set({ status: validatedStatus as any })
+    .where(eq(schema.orders.id, orderId))
+    .returning({ id: schema.orders.id, status: schema.orders.status, updatedAt: schema.orders.updatedAt });
+
+  // 5. Post-transition hooks (delivery creation + buyer notification)
+  if (updated) {
+    await runOrderStatusHooks(updated.id, validatedStatus);
+  }
+
   return updated;
 }
-
-export default { createOrderFromForm };

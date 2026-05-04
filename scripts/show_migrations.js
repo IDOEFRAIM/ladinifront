@@ -7,9 +7,36 @@ if (!url) {
   process.exit(2);
 }
 
-const rejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' ? false : true;
+function buildSslFromEnv() {
+  const allowSelfSigned = process.env.DB_ALLOW_SELF_SIGNED === '1' || String(process.env.DB_ALLOW_SELF_SIGNED).toLowerCase() === 'true';
+  const rejectUnauthorized = allowSelfSigned ? false : process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' ? false : true;
 
-const client = new Client({ connectionString: url, ssl: { rejectUnauthorized } });
+  let ca;
+  const caInline = process.env.DATABASE_SSL_CA || process.env.DB_SSL_CA;
+  const caPath = process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH;
+  if (caInline) {
+    const raw = String(caInline).trim();
+    if (raw.includes('BEGIN CERT')) ca = raw;
+    else {
+      try {
+        const decoded = Buffer.from(raw, 'base64').toString('utf8');
+        if (decoded.includes('BEGIN CERT')) ca = decoded;
+      } catch {}
+    }
+  }
+  if (!ca && caPath) {
+    try {
+      const fs = require('fs');
+      ca = fs.readFileSync(caPath, 'utf8');
+    } catch (e) {
+      console.warn('Could not read SSL CA path', caPath);
+    }
+  }
+
+  return { rejectUnauthorized, ...(ca ? { ca } : {}) };
+}
+
+const client = new Client({ connectionString: url, ssl: buildSslFromEnv() });
 
 (async () => {
   try {

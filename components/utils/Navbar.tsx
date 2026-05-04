@@ -43,6 +43,9 @@ export default function Navbar() {
     switch (userRole?.toUpperCase()) {
       case 'SUPERADMIN': return '/admin';
       case 'ADMIN': return '/admin';
+      case 'PRODUCER': return '/dashboard';
+      case 'BUYER': return '/buyer-dashboard';
+      case 'AGENT': return '/agent/deliveries';
       case 'USER': return '/market';
       default: return '/login';
     }

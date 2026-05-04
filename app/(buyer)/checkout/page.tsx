@@ -36,7 +36,7 @@ export default function CheckoutPage() {
   const { items, cartTotal, clearCart } = useCart();
   const router = useRouter();
   const isOnline = useNetwork();
-  const { userLocation } = useAuth();
+  const { userLocation, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -101,6 +101,14 @@ export default function CheckoutPage() {
   const onSubmit: SubmitHandler<CheckoutFormData> = async (formData) => {
     setIsProcessing(true); setGlobalError('');
     try {
+      if (isAuthLoading) {
+        throw new Error('Chargement de session en cours. Réessayez dans un instant.');
+      }
+      if (!isAuthenticated) {
+        setGlobalError('Veuillez vous connecter pour passer commande.');
+        router.push('/login');
+        return;
+      }
       const metadata = formatOrderMetadata({ data: formData, items, total: cartTotal, geo: geoData, locationId: userLocation?.id });
       if (isOnline) await processOnlineOrder(metadata, items, formData);
       else await processOfflineOrder(formData, items);

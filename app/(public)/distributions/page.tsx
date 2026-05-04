@@ -3,6 +3,8 @@ import { db, schema } from '@/src/db';
 import { eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Page() {
   let rows: any[] = [];
   let dbError: any = null;
@@ -64,7 +66,7 @@ export default async function Page() {
     }
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[distributions/verify] DB query failed:', err);
+    console.error('[distributions/page] DB query failed:', err);
     dbError = err;
     rows = [];
   }

@@ -32,9 +32,15 @@ export default function LoginPage() {
 
   const redirectUserByRole = (role: string) => {
     const n = role?.toUpperCase();
-    if (n === 'ADMIN') router.push('/admin');
-    else if (n === 'PRODUCER') router.push('/dashboard');
-    else router.push('/market');
+    const map: Record<string, string> = {
+      SUPERADMIN: '/admin',
+      ADMIN: '/admin',
+      PRODUCER: '/dashboard',
+      AGENT: '/agent/deliveries',
+      BUYER: '/buyer-dashboard',
+      USER: '/market',
+    };
+    router.push(map[n] || '/market');
   };
 
   useEffect(() => {

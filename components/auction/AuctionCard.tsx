@@ -20,7 +20,15 @@ export default function AuctionCard({ auction }: { auction: any }) {
       <Countdown deadline={auction.deadline} />
       
       <div className="mt-4 flex justify-between items-center">
-        <span className="text-sm text-slate-400">{auction.bidsCount} offre(s)</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400">{auction.bidsCount} offre(s)</span>
+          {auction.autoExtend ? (
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-1 rounded-lg">Anti-snipe</span>
+          ) : null}
+          {auction.escrowStatus && auction.escrowStatus !== 'NONE' ? (
+            <span className="text-xs font-bold text-blue-800 bg-blue-100 px-2 py-1 rounded-lg">Escrow: {String(auction.escrowStatus)}</span>
+          ) : null}
+        </div>
         <Link 
           href={`/auction/${auction.id}`} 
           className="bg-[#064E3B] text-white px-4 py-2 rounded-xl font-bold text-sm"

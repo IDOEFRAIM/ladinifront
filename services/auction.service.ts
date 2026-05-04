@@ -2,7 +2,7 @@
 
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, ne, inArray, notInArray, gt } from 'drizzle-orm';
+import { eq, and, ne, inArray, notInArray, gt, sql } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
@@ -29,7 +29,8 @@ import getUserIdFromSession from '@/lib/get-userId';
  *   - Producteur ACTIVE uniquement
  *   - Non bloqué dans la zone (SubCategory.blockedZoneIds)
  *   - Trié par TrustScore décroissant (si présent)
- */export async function getEligibleProducers(input: {
+ */
+export async function getEligibleProducers(input: {
   auctionId: string;
   subCategoryId?: string;
   targetZoneId?: string;
@@ -135,16 +136,25 @@ import getUserIdFromSession from '@/lib/get-userId';
     }));
 
     const result = producers
-      .map(p => ({
-        producerId: p.id,
-        userId: p.user.id,
-        name: p.user.name,
-        zoneId: p.zoneId,
-        geoPriority: p.zoneId ? (zoneToPriority.get(p.zoneId) ?? 99) : 99,
-        trustScore: p.user.trustScore,
-        hasMatchingProduct: subCatId ? (p.products?.length > 0) : null,
-        hasBid: existingBidSet.has(p.id),
-      }))
+      .map(p => {
+        // Some producer rows may lack the eager-loaded `user` relation (null) due to data inconsistency.
+        // Use safe fallbacks to avoid runtime TypeErrors.
+        const uid = p.user?.id ?? p.userId ?? null;
+        const uname = p.user?.name ?? (p as any).name ?? 'Producteur';
+        const tscore = p.user?.trustScore ?? null;
+        if (!p.user) console.warn('Producer missing user relation for producer id', p.id);
+
+        return {
+          producerId: p.id,
+          userId: uid,
+          name: uname,
+          zoneId: p.zoneId,
+          geoPriority: p.zoneId ? (zoneToPriority.get(p.zoneId) ?? 99) : 99,
+          trustScore: tscore,
+          hasMatchingProduct: subCatId ? (p.products?.length > 0) : null,
+          hasBid: existingBidSet.has(p.id),
+        };
+      })
       .sort((a, b) => {
         if (a.geoPriority !== b.geoPriority) return a.geoPriority - b.geoPriority;
         return (b.trustScore?.globalScore ?? 0) - (a.trustScore?.globalScore ?? 0);
@@ -371,7 +381,7 @@ export async function awardAuction(input: {
       if (!existingOrder) {
         const winnerBid = await tx.query.bids.findFirst({
           where: eq(schema.bids.id, input.winnerBidId),
-          columns: { id: true, offeredPrice: true },
+          columns: { id: true, offeredPrice: true, linkedStockId: true },
         });
 
         // Resolve / create buyer profile from auction.buyerId (auth.users.id)
@@ -412,6 +422,25 @@ export async function awardAuction(input: {
           auctionId: auction.id,
           winningBidId: input.winnerBidId,
         });
+
+        // LOCK STOCK — Déduire immédiatement la quantité du stock lié
+        if (winnerBid?.linkedStockId) {
+          const stock = await tx.query.stocks.findFirst({
+            where: eq(schema.stocks.id, winnerBid.linkedStockId),
+            columns: { id: true, quantity: true },
+          });
+          if (stock && stock.quantity >= auction.quantity) {
+            await tx.update(schema.stocks)
+              .set({ quantity: sql`${schema.stocks.quantity} - ${auction.quantity}` })
+              .where(eq(schema.stocks.id, winnerBid.linkedStockId));
+            await tx.insert(schema.stockMovements).values({
+              stockId: winnerBid.linkedStockId,
+              type: 'SALE',
+              quantity: -auction.quantity,
+              reason: `Enchère #${auction.id.slice(0, 8)} — Attribution manuelle`,
+            });
+          }
+        }
       }
 
       // 4. Audit (via helper standard)

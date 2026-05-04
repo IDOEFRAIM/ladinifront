@@ -126,6 +126,10 @@ export async function registerUser(data: {
     orgType?: string;
     orgTaxId?: string | null;
     orgDescription?: string | null;
+    // buyer B2B onboarding
+    buyerTypeId?: string;
+    establishmentName?: string;
+    defaultDeliveryAddress?: string;
 }) {
     try {
         // Normalize incoming role to the allowed system roles to avoid zod enum mismatches
@@ -180,7 +184,7 @@ export async function registerUser(data: {
             dailyAdviceTime: dailyAdviceTime || undefined,
             latitude: latitude ?? undefined,
             longitude: longitude ?? undefined,
-            cnibNumber: cnibNumber ?? undefined,
+            cnibNumber: cnibNumber && cnibNumber.trim() !== "" ? cnibNumber : null,
             zoneId: zoneId ?? undefined,
         }).returning();
 
@@ -191,6 +195,17 @@ export async function registerUser(data: {
                 businessName: name || "Nouveau Producteur",
                 status: 'PENDING' as any,
                 zoneId: locationId || undefined,
+            });
+        }
+
+        // Create buyer profile for BUYER role (B2B onboarding)
+        if (String(role).toUpperCase() === 'BUYER') {
+            await db.insert(schema.buyerProfiles).values({
+                userId: newUser.id,
+                buyerTypeId: data.buyerTypeId || null,
+                establishmentName: data.establishmentName || null,
+                defaultDeliveryAddress: data.defaultDeliveryAddress || null,
+                isVerified: false,
             });
         }
 

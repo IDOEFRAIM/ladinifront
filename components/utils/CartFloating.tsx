@@ -38,7 +38,7 @@ export default function CartFloatingIcon() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    zIndex: 2000,
+                    zIndex: 30,
                     transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                     border: '2px solid rgba(255, 255, 255, 0.2)'
                 }}

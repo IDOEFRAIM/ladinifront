@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Loader2, AlertTriangle, Gavel, Clock, TrendingUp, Users, Send, RefreshCw, Shield, MapPin, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { validateBid, getNextBidAmount } from '@/logic/auctionValidator';
 
 // ─── Design tokens (aligne sur le style-guide AgriConnect) ───────────
 const C = {
@@ -163,8 +164,12 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
       setBidMessage({ type: 'error', text: 'Entrez un prix valide supérieur à 0' });
       return;
     }
-    if (auction?.maxPricePerUnit && numPrice > auction.maxPricePerUnit) {
-      setBidMessage({ type: 'error', text: `Le prix dépasse le plafond de ${auction.maxPricePerUnit}` });
+
+    // Bid validation with minimum increment (50 FCFA default)
+    const currentBest = producers.find(p => p.hasBid)?.trustScore?.globalScore ?? null;
+    const validation = validateBid(null, numPrice, 50, auction?.maxPricePerUnit ?? null, true);
+    if (!validation.valid) {
+      setBidMessage({ type: 'error', text: validation.error || 'Enchère invalide' });
       return;
     }
 

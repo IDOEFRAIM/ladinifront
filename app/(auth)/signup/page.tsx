@@ -10,7 +10,8 @@ import { toast } from 'react-hot-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useGeoLocation } from '@/hooks/useGeoLocalisation';
-import { Sprout, Loader2, User, Mail, Lock, ShieldAlert, ShoppingCart, Leaf } from 'lucide-react';
+import { Sprout, Loader2, User, Mail, Lock, ShieldAlert, ShoppingCart, Leaf, Truck, Building2, MapPin } from 'lucide-react';
+import { fetchBuyerTypes } from '@/app/actions/buyerTypes.server';
 
 const C = {
   forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
@@ -21,8 +22,12 @@ const signupSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caracteres"),
   email: z.string().email("Email invalide"),
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caracteres"),
-  role: z.enum(['USER', 'ADMIN', 'PRODUCER']),
+  role: z.enum(['USER', 'ADMIN', 'PRODUCER', 'BUYER', 'AGENT']),
   adminSecret: z.string().optional(),
+  // buyer B2B onboarding
+  buyerTypeId: z.string().optional(),
+  establishmentName: z.string().optional(),
+  defaultDeliveryAddress: z.string().optional(),
   // optional org request fields for producers
   wantsOrganization: z.boolean().optional(),
   orgName: z.string().min(2).optional(),
@@ -45,17 +50,24 @@ const signupSchema = z.object({
 
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
-const ROLE_REDIRECTS: Record<string, string> = { ADMIN: '/admin', USER: '/market', PRODUCER: '/dashboard' };
+const ROLE_REDIRECTS: Record<string, string> = { ADMIN: '/admin', USER: '/market', BUYER: '/buyer-dashboard', PRODUCER: '/dashboard', AGENT: '/agent/deliveries' };
 
 const ROLES = [
-  { value: 'USER', label: 'Acheteur', icon: ShoppingCart },
+  { value: 'USER', label: 'Particulier', icon: ShoppingCart },
+  { value: 'BUYER', label: 'Acheteur Pro', icon: Building2 },
   { value: 'PRODUCER', label: 'Producteur', icon: Leaf },
+  { value: 'AGENT', label: 'Livreur', icon: Truck },
   { value: 'ADMIN', label: 'Staff', icon: ShieldAlert },
 ];
 
 function SignupPageContent() {
   const { register: registerUser, isAuthenticated, isLoading, userRole } = useAuth();
   const router = useRouter();
+  const [buyerTypes, setBuyerTypes] = React.useState<{id:string;name:string;description?:string|null}[]>([]);
+
+  React.useEffect(() => {
+    fetchBuyerTypes().then(setBuyerTypes).catch(() => {});
+  }, []);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
     // zodResolver typing is strict; cast to any to avoid inferred optional mismatch
@@ -76,9 +88,14 @@ function SignupPageContent() {
   }, [isAuthenticated, isLoading, userRole, router]);
 
   const onSubmit = async (data: SignupFormInputs) => {
-    // mark producer registrations explicitly so server creates Producer record
     const payload: any = { ...data, role: data.role as SystemRole };
     if (data.role === 'PRODUCER') payload.isProducer = true;
+    // Buyer B2B fields
+    if (data.role === 'BUYER') {
+      payload.buyerTypeId = (data as any).buyerTypeId || undefined;
+      payload.establishmentName = (data as any).establishmentName || undefined;
+      payload.defaultDeliveryAddress = (data as any).defaultDeliveryAddress || undefined;
+    }
     // include org creation request if applicable
     if ((data as any).wantsOrganization) {
       payload.wantsOrganization = true;
@@ -201,6 +218,39 @@ function SignupPageContent() {
                 <ShieldAlert size={16} style={iconStyle(!!errors.adminSecret, true)} />
                 <input type="password" {...register("adminSecret")} disabled={isSubmitting} placeholder="Cle Admin" style={inputStyle(!!errors.adminSecret, true)} />
                 {errors.adminSecret && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.adminSecret.message}</p>}
+              </div>
+            )}
+
+            {selectedRole === 'BUYER' && (
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(16,185,129,0.03)', padding: 16, borderRadius: 16, border: `1px solid ${C.border}` }}>
+                <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Type d'établissement</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {buyerTypes.length > 0 ? buyerTypes.map(bt => {
+                    const isActive = watch('buyerTypeId' as any) === bt.id;
+                    return (
+                      <button key={bt.id} type="button" onClick={() => setValue('buyerTypeId' as any, bt.id)}
+                        style={{
+                          padding: '10px 18px', borderRadius: 100, cursor: 'pointer', transition: 'all 0.2s',
+                          border: `2px solid ${isActive ? C.forest : C.border}`,
+                          background: isActive ? 'rgba(16,185,129,0.08)' : '#fff',
+                          fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 700,
+                          color: isActive ? C.forest : C.muted,
+                        }}>
+                        {bt.name}
+                      </button>
+                    );
+                  }) : (
+                    <span style={{ fontSize: 12, color: C.muted }}>Chargement des types...</span>
+                  )}
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <Building2 size={16} style={iconStyle(false)} />
+                  <input {...register('establishmentName' as any)} placeholder="Nom de l'établissement (ex: Hôtel Splendid)" style={inputStyle(false)} />
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <MapPin size={16} style={iconStyle(false)} />
+                  <input {...register('defaultDeliveryAddress' as any)} placeholder="Adresse de livraison par défaut" style={inputStyle(false)} />
+                </div>
               </div>
             )}
 

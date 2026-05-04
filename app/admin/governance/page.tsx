@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import CategoryManager from '@/components/admin/governance/CategoryManager';
 import StandardPriceManager from '@/components/admin/governance/StandardPriceManager';
+import BuyerTypeManager from '@/components/admin/governance/BuyerTypeManager';
 import ZoneProvider from '@/context/ZoneContext';
-import { Tags, DollarSign, ShieldBan } from 'lucide-react';
+import { Tags, DollarSign, Users } from 'lucide-react';
 
 const C = {
   forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
@@ -14,6 +15,7 @@ const C = {
 const TABS = [
   { key: 'categories', label: 'Catégories & Sous-catégories', icon: Tags },
   { key: 'prices', label: 'Prix Standards (Indice DRDR)', icon: DollarSign },
+  { key: 'buyer-types', label: 'Types d\'acheteur', icon: Users },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -60,6 +62,7 @@ export default function GovernancePage() {
         {/* Tab content */}
         {activeTab === 'categories' && <CategoryManager />}
         {activeTab === 'prices' && <StandardPriceManager />}
+        {activeTab === 'buyer-types' && <BuyerTypeManager />}
       </div>
     </ZoneProvider>
   );

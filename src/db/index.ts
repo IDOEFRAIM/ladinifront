@@ -26,8 +26,9 @@ const sslOptions: Record<string, unknown> = {};
 // SSL support options (try multiple input methods)
 try {
   // 1) DB_SSL_CA_PATH -> read PEM file from disk
-  if (process.env.DB_SSL_CA_PATH) {
-    const p = path.resolve(process.env.DB_SSL_CA_PATH);
+  const caPath = process.env.DB_SSL_CA_PATH || process.env.DATABASE_SSL_CA_PATH;
+  if (caPath) {
+    const p = path.resolve(caPath);
     if (fs.existsSync(p)) {
       const pem = fs.readFileSync(p, 'utf8');
       sslOptions.ssl = { rejectUnauthorized: true, ca: pem };
@@ -37,8 +38,9 @@ try {
   }
 
   // 2) DB_SSL_CA -> accept either raw PEM or base64-encoded PEM
-  if (!sslOptions.ssl && process.env.DB_SSL_CA) {
-    const raw = process.env.DB_SSL_CA.trim();
+  const caInline = process.env.DB_SSL_CA || process.env.DATABASE_SSL_CA;
+  if (!sslOptions.ssl && caInline) {
+    const raw = caInline.trim();
     // Heuristic: if it contains "BEGIN CERT", assume PEM; otherwise try base64 decode
     if (raw.includes('BEGIN CERT')) {
       sslOptions.ssl = { rejectUnauthorized: true, ca: raw };
@@ -57,7 +59,10 @@ try {
   }
 
   // 3) Legacy insecure fallback
-  if (!sslOptions.ssl && process.env.DB_ALLOW_SELF_SIGNED === 'true') {
+  const allowSelfSigned =
+    process.env.DB_ALLOW_SELF_SIGNED === '1' ||
+    String(process.env.DB_ALLOW_SELF_SIGNED).toLowerCase() === 'true';
+  if (!sslOptions.ssl && allowSelfSigned) {
     sslOptions.ssl = { rejectUnauthorized: false };
   }
 } catch (e) {

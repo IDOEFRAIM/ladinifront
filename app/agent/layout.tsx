@@ -3,93 +3,67 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Package, History, Menu, X } from 'lucide-react';
+import { Package, History, Menu, X, Truck, ClipboardList, Bell } from 'lucide-react';
+import { AgentMobileTabBar } from '@/components/ui/MobileTabBar';
 
-const C = { forest: '#064E3B', emerald: '#10B981', sand: '#F9FBF8', border: 'rgba(6,78,59,0.07)', text: '#1F2937' };
-const F = { heading: "'Space Grotesk', sans-serif", body: "'Inter', sans-serif" };
-
+// On utilise Tailwind pour tout, c'est plus propre pour l'agent
 const NAV_ITEMS = [
-  { href: '/agent/distributions', label: 'Nouvelle distribution', icon: Package },
+  { href: '/agent/deliveries', label: 'Missions dispo', icon: Truck },
+  { href: '/agent/deliveries/active', label: 'En cours', icon: ClipboardList },
+  { href: '/agent/distributions', label: 'Distributions', icon: Package },
   { href: '/agent/history', label: 'Historique', icon: History },
 ];
 
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const currentPath = pathname ?? '';
 
   return (
-    <div style={{ minHeight: '100vh', background: C.sand, fontFamily: F.body }}>
-      {/* Header */}
-      <header style={{
-        position: 'sticky', top: 0, zIndex: 40,
-        background: C.forest, color: '#fff', padding: '12px 20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        fontFamily: F.heading,
-      }}>
-        <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>FrontAg · Agent</span>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex' }}
-          aria-label="Menu"
-        >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+    <div className="min-h-screen bg-[#F9FBF8] font-sans">
+
+      {/* HEADER — always visible, all breakpoints */}
+      <header className="sticky top-0 z-40 bg-[#064E3B] text-white px-4 h-16 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-2">
+          <div className="bg-emerald-500 p-1.5 rounded-lg">
+            <Truck size={20} className="text-white" />
+          </div>
+          <span className="font-bold tracking-tight text-lg">
+            FrontAg <span className="font-light opacity-80">Logistique</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="relative p-2 hover:bg-white/10 rounded-full transition-colors" aria-label="Notifications">
+            <Bell size={20} />
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-[#064E3B] rounded-full" />
+          </button>
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden p-2 hover:bg-white/10 rounded-full transition-colors"
+            aria-label="Ouvrir le menu"
+          >
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </header>
 
-      {/* Mobile nav */}
-      {menuOpen && (
-        <nav style={{
-          background: '#fff', borderBottom: `1px solid ${C.border}`,
-          padding: '8px 0',
-        }}>
+      {/* DESKTOP NAV — hidden on mobile */}
+      <nav className="hidden md:block bg-white border-b border-slate-200 sticky top-16 z-30">
+        <div className="max-w-5xl mx-auto flex">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = currentPath === href || currentPath.startsWith(href + '/');
             return (
               <Link
                 key={href}
                 href={href}
-                onClick={() => setMenuOpen(false)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 20px', textDecoration: 'none',
-                  color: active ? C.emerald : C.text,
-                  fontWeight: active ? 600 : 400,
-                  background: active ? 'rgba(16,185,129,0.06)' : 'transparent',
-                }}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 ${
+                  active
+                    ? 'text-emerald-600 border-emerald-600 bg-emerald-50/30'
+                    : 'text-slate-600 border-transparent hover:text-emerald-600 hover:bg-slate-50'
+                }`}
               >
                 <Icon size={18} />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
-
-      {/* Desktop nav */}
-      <nav style={{
-        display: 'none', background: '#fff', borderBottom: `1px solid ${C.border}`,
-        padding: '0 20px',
-      }}
-        className="agent-desktop-nav"
-      >
-        <div style={{ display: 'flex', gap: 4 }}>
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = currentPath === href || currentPath.startsWith(href + '/');
-            return (
-              <Link
-                key={href}
-                href={href}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '12px 16px', textDecoration: 'none',
-                  color: active ? C.emerald : C.text,
-                  fontWeight: active ? 600 : 400,
-                  borderBottom: active ? `2px solid ${C.emerald}` : '2px solid transparent',
-                  fontSize: '0.9rem',
-                }}
-              >
-                <Icon size={16} />
                 {label}
               </Link>
             );
@@ -97,16 +71,38 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         </div>
       </nav>
 
-      {/* Content */}
-      <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+      {/* MOBILE FULLSCREEN MENU — overlays on top when open */}
+      {isMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 bg-[#064E3B] p-6">
+          <div className="flex justify-end mb-8">
+            <button onClick={() => setIsMenuOpen(false)} aria-label="Fermer le menu">
+              <X size={32} className="text-white" />
+            </button>
+          </div>
+          <nav className="flex flex-col gap-6">
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-4 text-white text-xl font-semibold"
+              >
+                <Icon size={28} /> {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {/* MAIN CONTENT — pb-24 on mobile for TabBar */}
+      <main className="max-w-5xl mx-auto p-4 md:p-8 pb-24 md:pb-8">
         {children}
       </main>
 
-      <style>{`
-        @media (min-width: 768px) {
-          .agent-desktop-nav { display: block !important; }
-        }
-      `}</style>
+      {/* MOBILE TAB BAR — mobile only, fixed bottom */}
+      <footer className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <AgentMobileTabBar />
+      </footer>
     </div>
   );
 }

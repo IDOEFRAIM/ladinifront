@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req as any);
     const buyerId = session?.userId;
+    if (!buyerId) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
+    }
 
     const formData = await req.formData();
     const rawData = formData.get('data') as string | null;
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     // Delegate creation to server action which handles validation, audio and DB
     const { createOrderFromForm } = await import('@/app/actions/orders.server');
-    const result = await createOrderFromForm(formData, buyerId || undefined);
+    const result = await createOrderFromForm(formData, buyerId);
     return NextResponse.json({ success: true, orderId: result.orderId }, { status: 201 });
   } catch (error: any) {
     console.error('POST /api/orders Error:', error);

@@ -2,6 +2,8 @@ import SeedDistributionForm from '@/components/SeedDistributionForm';
 import { db, schema } from '@/src/db';
 import { getOrgMembers } from '@/services/org-manager.service';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Page() {
   // load allocations for the active org (server-side)
   let allocations: any[] = [];

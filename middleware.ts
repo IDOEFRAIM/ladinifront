@@ -31,11 +31,14 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/market':        [],
   //'/orders':        ['ORDER_VIEW'],
   '/conversations': [],
+  '/agent':         [],
+  '/buyer-dashboard': [],
+  '/tracking':      [],
 };
 
 // ─── Rôles autorisés par préfixe (contrôle haut niveau) ───────────────────
 const ROUTE_ROLES: Record<string, string[]> = {
-  '/dashboard':  ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
+  '/dashboard':  ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
   '/products':   ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
   '/inventory':  ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
   '/sales':      ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
@@ -45,6 +48,9 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/admin':      ['ADMIN', 'SUPERADMIN'],
   '/org':        ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
   '/checkout':   ['BUYER', 'PRODUCER', 'ADMIN', 'SUPERADMIN'],
+  '/agent':      ['AGENT', 'ADMIN', 'SUPERADMIN'],
+  '/buyer-dashboard': ['BUYER', 'ADMIN', 'SUPERADMIN'],
+  '/tracking':   ['BUYER', 'ADMIN', 'SUPERADMIN'],
 };
 
 function parsePermissions(raw: string | undefined): string[] {
@@ -176,9 +182,9 @@ export async function middleware(request: NextRequest) {
       'SUPERADMIN': '/admin',
       'ADMIN': '/admin',
       'PRODUCER': '/dashboard',
-      'AGENT': '/dashboard',
+      'AGENT': '/agent/deliveries',
       'USER': '/market',
-      'BUYER': '/market',
+      'BUYER': '/buyer-dashboard',
     };
     // Prefer role from signed session token, then cookie-derived role.
     const sessionRole = roleFromToken ? String(roleFromToken).toUpperCase() : undefined;
@@ -246,6 +252,9 @@ export const config = {
     //'/orders/:path*',
     '/conversations/:path*',
     '/org/:path*',
+    '/agent/:path*',
+    '/buyer-dashboard/:path*',
+    '/tracking/:path*',
     '/signup',
     '/login',
     ],

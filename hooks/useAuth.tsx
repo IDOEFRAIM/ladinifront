@@ -156,8 +156,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [hydrateSession]);
 
   const handleRedirect = (userData: any) => {
-    const isAdmin = userData.role === 'ADMIN' || userData.role === 'SUPERADMIN';
-    const target = isAdmin ? '/admin' : '/dashboard';
+    const role = (userData.role || '').toString().toUpperCase();
+    const redirectMap: Record<string, string> = {
+      SUPERADMIN: '/admin',
+      ADMIN: '/admin',
+      PRODUCER: '/dashboard',
+      AGENT: '/agent/deliveries',
+      BUYER: '/buyer-dashboard',
+      USER: '/market',
+    };
+    const target = redirectMap[role] || '/market';
     if (typeof window !== 'undefined') window.location.href = target;
   };
 
@@ -189,7 +197,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.success && result.user) {
         hydrateSession(result.user);
         if (result.pendingOrgCreated) {
-          window.location.href = '/dashboard';
+          const role = (result.user.role || '').toString().toUpperCase();
+          window.location.href = role === 'PRODUCER' ? '/dashboard' : '/market';
         } else {
           handleRedirect(result.user);
         }

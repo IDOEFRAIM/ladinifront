@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { ShoppingBasket, User, LogOut, Bot, ClipboardList, ChevronDown } from 'lucide-react';
+import { ShoppingBasket, User, LogOut, Bot, ClipboardList, ChevronDown, LayoutDashboard, Truck } from 'lucide-react';
 
 const C = {
   forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
@@ -12,8 +12,10 @@ const C = {
 };
 
 const BUYER_LINKS = [
-  { name: 'Le Marche', href: '/catalogue' },
-  { name: 'Commandes', href: '/orders' },
+  { name: 'Accueil', href: '/' },
+  { name: 'Le Marché', href: '/catalogue' },
+  { name: 'Tableau de bord', href: '/buyer-dashboard', icon: LayoutDashboard },
+  { name: 'Commandes', href: '/orders', icon: ClipboardList },
   { name: 'Suivi Agent', href: '/conversations', icon: Bot },
 ];
 
@@ -114,13 +116,17 @@ export default function BuyerNavbar() {
                     padding: 6, opacity: 0, pointerEvents: 'none', transition: 'all 0.2s',
                     zIndex: 50,
                   }} className="group-hover:!opacity-100 group-hover:!pointer-events-auto">
-                    {userRole !== 'USER' && (
-                      <Link href={['ADMIN', 'SUPERADMIN'].includes(userRole as string) ? '/admin' : '/dashboard'} style={{
+                    {userRole !== 'USER' && userRole !== 'BUYER' && (
+                      <Link href={
+                        ['ADMIN', 'SUPERADMIN'].includes(userRole as string) ? '/admin'
+                        : userRole === 'AGENT' ? '/agent/deliveries'
+                        : '/dashboard'
+                      } style={{
                         display: 'block', padding: '10px 14px', borderRadius: 10,
                         fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 500,
                         color: C.forest, textDecoration: 'none', transition: 'background 0.2s',
                       }} className="hover:!bg-[rgba(16,185,129,0.06)]">
-                        Basculer vers {['ADMIN', 'SUPERADMIN'].includes(userRole as string) ? 'Admin' : 'Dashboard'}
+                        Basculer vers {['ADMIN', 'SUPERADMIN'].includes(userRole as string) ? 'Admin' : userRole === 'AGENT' ? 'Livraisons' : 'Dashboard'}
                       </Link>
                     )}
                     <button onClick={handleLogout} style={{
