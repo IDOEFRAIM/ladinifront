@@ -1,11 +1,22 @@
 import { db, schema } from '@/src/db';
+import { cookies } from 'next/headers';
+import { getSessionFromRequest } from '@/lib/session';
+import { COOKIE_NAMES } from '@/lib/cookie-helpers';
+import { eq } from 'drizzle-orm';
+
+export const dynamic = 'force-dynamic';
 
 export default async function Page() {
+  const cookieStore = await cookies();
+  const session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  const activeOrgId = cookieStore.get(COOKIE_NAMES.ACTIVE_ORG_ID)?.value ?? session?.activeOrgId ?? null;
+
   let rows: any[] = [];
   let dbError: any = null;
   try {
     // Load distributions with related allocation, producer and agent info
     const rowsWith = await db.query.seedDistributions.findMany({
+      where: activeOrgId ? eq(schema.seedDistributions.organizationId, activeOrgId) : undefined,
       limit: 200,
       orderBy: (t, ops) => [ops.desc(t.createdAt)],
       with: {
@@ -50,6 +61,12 @@ export default async function Page() {
     <div style={{ padding: 20 }}>
       <h1>Distributions — Monitoring</h1>
       <p>Latest seed distributions (most recent first). Use this view to monitor handovers and failures.</p>
+
+      {!activeOrgId ? (
+        <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'white', color: 'var(--muted)' }}>
+          No active organization selected.
+        </div>
+      ) : null}
 
       {dbError ? (
         <div style={{ color: 'crimson', marginBottom: 12 }}>

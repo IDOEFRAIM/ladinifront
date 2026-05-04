@@ -1,14 +1,22 @@
 ﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Bot, Map, Users, Warehouse, CheckCircle, Settings, LogOut, Eye, ClipboardList, Tags } from 'lucide-react';
+import { 
+  LayoutDashboard, Bot, Map, Users, Warehouse, 
+  CheckCircle, Settings, LogOut, Eye, ClipboardList, 
+  Tags, Menu, X 
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const C = {
-  forest: '#064E3B', emerald: '#10B981', amber: '#D97706',
-  glass: 'rgba(255, 255, 255, 0.72)', border: 'rgba(6, 78, 59, 0.07)', muted: '#64748B',
+  forest: '#064E3B',
+  emerald: '#10B981',
+  amber: '#D97706',
+  glass: 'rgba(255, 255, 255, 0.85)',
+  border: 'rgba(6, 78, 59, 0.1)',
+  muted: '#64748B',
 };
 
 const adminNavItems = [
@@ -21,120 +29,140 @@ const adminNavItems = [
   { name: 'Producteurs', href: '/admin/producers', icon: Users },
   { name: 'Stocks', href: '/admin/stock', icon: Warehouse },
   { name: 'Validations', href: '/admin/validations', icon: CheckCircle },
-  { name: 'Parametres', href: '/admin/settings', icon: Settings },
+  { name: 'Paramètres', href: '/admin/settings', icon: Settings },
 ];
 
 export default function AdminNavbar() {
   const pathname = usePathname();
   const currentPath = pathname ?? '';
-  const { logout } = useAuth();
-  const { userRole } = useAuth();
+  const { logout, userRole } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Build nav items and include admin-only actions
-  const items = [...adminNavItems];
+  // Empêcher le scroll quand le menu mobile est ouvert
+  useEffect(() => {
+    if (mobileOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'unset';
+  }, [mobileOpen]);
+
   const roleUpper = (userRole || '').toString().toUpperCase();
+  const items = [...adminNavItems];
   if (roleUpper === 'ADMIN' || roleUpper === 'SUPERADMIN') {
-    items.push({ name: 'Gérer les Organisation', href: '/admin/organizations/', icon: LayoutDashboard });
+    items.push({ name: 'Organisations', href: '/admin/organizations', icon: LayoutDashboard });
   }
 
-  const handleLogout = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
+  const handleLogout = () => {
     logout();
   };
 
   return (
     <>
-      {/* Desktop / medium+ nav (unchanged) */}
-      <nav style={{
-        background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-        borderTop: `1px solid ${C.border}`,
-        boxShadow: '0 -4px 24px rgba(6,78,59,0.04)',
-        zIndex: 40,
-      }} className="bg-red-500 z-[9999] hidden md:block md:relative md:border-t-0 md:border-b md:shadow-none md:!bottom-auto sticky top-0 z-10 px-6 py-5">
-        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 64, maxWidth: 1280, margin: '0 auto' }}
-          className="md:!justify-start md:!gap-2 md:!h-auto md:!py-2 md:!px-0">
-          {items.map((item) => {
-          const isActive = item.exact
-            ? currentPath === item.href
-            : currentPath.startsWith(item.href) && currentPath !== '/admin';
+      {/* --- DESKTOP & TABLET NAVBAR --- */}
+      <nav 
+        className="sticky top-0 z-[100] w-full border-b backdrop-blur-md"
+        style={{ background: C.glass, borderColor: C.border }}
+      >
+        <div className="max-w-[1400px] mx-auto px-4 flex items-center justify-between h-16">
+          
+          {/* Logo / Mobile Trigger */}
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setMobileOpen(true)}
+              className="md:hidden p-2 hover:bg-black/5 rounded-lg"
+            >
+              <Menu size={24} color={C.forest} />
+            </button>
+            <div className="font-bold text-emerald-900 hidden sm:block">Admin<span className="text-emerald-500">Panel</span></div>
+          </div>
 
-          return (
-            <Link key={item.name} href={item.href} style={{ textDecoration: 'none', flex: '1', maxWidth: 100 }} className="md:!flex-none md:!max-w-none">
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                padding: '8px 4px', textAlign: 'center', transition: 'all 0.2s', borderRadius: 12,
-                background: isActive ? 'rgba(16,185,129,0.08)' : 'transparent',
-              }} className="md:!flex-row md:!p-2 md:!px-3 md:!gap-2">
-                <item.icon size={18} style={{ color: isActive ? C.forest : C.muted, transition: 'color 0.2s' }} />
-                <span style={{
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: 10, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? C.forest : C.muted,
-                  transition: 'color 0.2s',
-                }} className="md:!text-[13px]">
-                  {item.name}
-                </span>
-              </div>
-            </Link>
-          );
-        })}
+          {/* Navigation Items (Scrollable horizontalement sur petits écrans) */}
+          <div className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar px-2 flex-1 max-w-4xl">
+            {items.map((item) => {
+              const isActive = item.exact
+                ? currentPath === item.href
+                : currentPath.startsWith(item.href) && currentPath !== '/admin';
 
-          <button onClick={handleLogout} style={{
-            display: 'none', alignItems: 'center', gap: 8,
-            padding: '8px 14px', borderRadius: 12,
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 500,
-            color: '#DC2626', transition: 'all 0.2s',
-          }} className="md:!flex hover:!bg-red-50" aria-label="Deconnexion">
-            <LogOut size={16} />
+              return (
+                <Link 
+                  key={item.name} 
+                  href={item.href}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all whitespace-nowrap"
+                  style={{ 
+                    background: isActive ? 'rgba(16,185,129,0.1)' : 'transparent',
+                    color: isActive ? C.forest : C.muted 
+                  }}
+                >
+                  <item.icon size={18} />
+                  <span className="text-sm font-semibold">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Logout Button */}
+          <button 
+            onClick={handleLogout}
+            className="hidden md:flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-semibold text-sm"
+          >
+            <LogOut size={18} />
             <span>Quitter</span>
           </button>
         </div>
       </nav>
 
-      {/* Mobile: small screen button toggles nav panel */}
-      <div className="md:hidden">
-        <button
-          onClick={() => setMobileOpen((s) => !s)}
-          aria-label="Ouvrir le menu admin"
-          style={{
-            position: 'fixed', bottom: 16, right: 16, zIndex: 50,
-            background: C.forest, color: 'white', border: 'none', borderRadius: 999, width: 56, height: 56,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 20px rgba(6,78,59,0.16)'
-          }}
-        >
-          {/* simple icon: use LayoutDashboard */}
-          <LayoutDashboard size={20} />
-        </button>
+      {/* --- MOBILE DRAWER (SIDEBAR) --- */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[110] md:hidden">
+          {/* Overlay */}
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileOpen(false)}
+          />
+          
+          {/* Drawer Content */}
+          <div className="absolute top-0 left-0 bottom-0 w-[280px] bg-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
+            <div className="p-6 border-b flex justify-between items-center">
+              <span className="font-black text-emerald-800">MENU ADMIN</span>
+              <button onClick={() => setMobileOpen(false)} className="p-2 bg-slate-50 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
 
-        {mobileOpen && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 45 }}>
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} onClick={() => setMobileOpen(false)} />
-            <div style={{ position: 'absolute', left: 12, right: 12, bottom: 86, background: C.glass, borderRadius: 12, padding: 12, maxHeight: '60vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {items.map((item) => {
-                  const isActive = item.exact
-                    ? currentPath === item.href
-                    : currentPath.startsWith(item.href) && currentPath !== '/admin';
-                  return (
-                    <Link key={item.name} href={item.href} onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, background: isActive ? 'rgba(16,185,129,0.06)' : 'transparent' }}>
-                        <item.icon size={18} style={{ color: isActive ? C.forest : C.muted }} />
-                        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: isActive ? C.forest : C.muted, fontWeight: isActive ? 700 : 600 }}>{item.name}</span>
-                      </div>
-                    </Link>
-                  );
-                })}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {items.map((item) => {
+                const isActive = item.exact
+                  ? currentPath === item.href
+                  : currentPath.startsWith(item.href) && currentPath !== '/admin';
+                
+                return (
+                  <Link 
+                    key={item.name} 
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition-colors"
+                    style={{ 
+                      background: isActive ? 'rgba(16,185,129,0.1)' : 'transparent',
+                      color: isActive ? C.forest : C.muted 
+                    }}
+                  >
+                    <item.icon size={20} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
 
-                <button onClick={(e) => { setMobileOpen(false); handleLogout(e); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'transparent', border: 'none', color: '#DC2626', marginTop: 6 }}>
-                  <LogOut size={18} /> <span style={{ fontWeight: 700 }}>Quitter</span>
-                </button>
-              </div>
+            <div className="p-4 border-t">
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-4 px-4 py-3 text-red-600 font-bold hover:bg-red-50 rounded-xl transition-colors"
+              >
+                <LogOut size={20} />
+                <span>Déconnexion</span>
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }

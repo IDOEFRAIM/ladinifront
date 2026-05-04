@@ -1,12 +1,24 @@
 import SeedDistributionForm from '@/components/SeedDistributionForm';
 import { db, schema } from '@/src/db';
+import { cookies } from 'next/headers';
+import { getSessionFromRequest } from '@/lib/session';
+import { COOKIE_NAMES } from '@/lib/cookie-helpers';
+import { eq } from 'drizzle-orm';
+
+export const dynamic = 'force-dynamic';
 
 export default async function Page() {
+  const cookieStore = await cookies();
+  const session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  const activeOrgId = cookieStore.get(COOKIE_NAMES.ACTIVE_ORG_ID)?.value ?? session?.activeOrgId ?? null;
+
   // fetch some allocations to show in the UI
   let rows: any[] = [];
   let dbError: any = null;
   try {
-    rows = await db.select().from(schema.seedAllocations).limit(50);
+    rows = activeOrgId
+      ? await db.select().from(schema.seedAllocations).where(eq(schema.seedAllocations.organizationId, activeOrgId)).limit(50)
+      : [];
   } catch (err) {
     dbError = err;
     // eslint-disable-next-line no-console
@@ -21,6 +33,12 @@ export default async function Page() {
     <div style={{ padding: 20 }}>
       <h1>Agent — Distributions</h1>
       <p>Select an allocation, enter producer ID and quantity, then create distribution.</p>
+
+      {!activeOrgId ? (
+        <div style={{ marginBottom: 12, padding: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'white', color: 'var(--muted)' }}>
+          No active organization selected.
+        </div>
+      ) : null}
 
       {dbError ? (
         <div style={{ color: 'crimson', marginBottom: 12 }}>

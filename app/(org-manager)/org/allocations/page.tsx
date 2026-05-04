@@ -1,11 +1,21 @@
 import { db, schema } from '@/src/db';
 import Link from 'next/link';
 import AllocationRow from '@/components/AllocationRow';
+import { cookies } from 'next/headers';
+import { getSessionFromRequest } from '@/lib/session';
+import { COOKIE_NAMES } from '@/lib/cookie-helpers';
+import { eq } from 'drizzle-orm';
 
 export default async function Page() {
+  const cookieStore = await cookies();
+  const session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  const activeOrgId = cookieStore.get(COOKIE_NAMES.ACTIVE_ORG_ID)?.value ?? session?.activeOrgId ?? null;
+
   let rows: any[] = [];
   try {
-    rows = await db.select().from(schema.seedAllocations).limit(200);
+    rows = activeOrgId
+      ? await db.select().from(schema.seedAllocations).where(eq(schema.seedAllocations.organizationId, activeOrgId)).limit(200)
+      : [];
   } catch (e) {
     console.error('[org/allocations] failed to load allocations', e);
     rows = [];
@@ -33,7 +43,7 @@ export default async function Page() {
 
       {allocations.length === 0 ? (
         <div style={{ padding: 20, background: 'white', borderRadius: 12, border: '1px solid var(--border)' }}>
-          No allocations found. Create one using the button above.
+          {!activeOrgId ? 'No active organization selected.' : 'No allocations found. Create one using the button above.'}
         </div>
       ) : (
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--border)' }}>

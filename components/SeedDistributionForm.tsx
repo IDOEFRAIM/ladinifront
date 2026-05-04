@@ -41,27 +41,9 @@ export default function SeedDistributionForm({ allocations = [], members = [] }:
   const [distributionId, setDistributionId] = useState<string | null>(null);
 
   useEffect(() => {
-    // if no members passed as prop, try to fetch members for current org/user
-    if ((!members || members.length === 0) && (assignedTo === '' || !assignedTo)) {
-      (async () => {
-        try {
-          const res = await fetch('/api/org/members');
-          if (res.ok) {
-            const j = await res.json();
-            // API returns { success: true, data: [...] }
-            const list = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.members) ? j.members : []);
-            if (list.length) {
-              setLoadedMembers(list);
-              setAssignedTo(list[0].userId ?? list[0].id ?? '');
-            }
-          }
-        } catch (e) {
-          // ignore fetch errors; UI still usable if admin passes members prop
-          console.debug('Could not fetch members for SeedDistributionForm', e);
-        }
-      })();
-    } else if (members && members.length) {
-      // normalize members passed as prop into loadedMembers
+    // Only use members provided by the server page (org-manager).
+    // Agent pages should not auto-fetch org members to avoid confusing assignment UX.
+    if (members && members.length) {
       setLoadedMembers(members);
       if (!assignedTo) setAssignedTo(members[0].userId ?? members[0].id ?? '');
     }
@@ -102,15 +84,16 @@ export default function SeedDistributionForm({ allocations = [], members = [] }:
   async function createDistribution(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    // include organizationId and zoneId from the selected allocation so
-    // server-side authorization can validate org/zone membership
-    const selAlloc = allocations.find(a => String(a.id) === String(selectedAllocation));
-    const organizationId = selAlloc?.organizationId ?? selAlloc?.orgId ?? null;
-    const zoneId = selAlloc?.zoneId ?? selAlloc?.zone ?? null;
+
     const res = await fetch('/api/inventory/distribute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ allocationId: selectedAllocation, producerId, agentId: 'agent-placeholder', quantity, assignedTo, organizationId, zoneId }),
+      body: JSON.stringify({
+        allocationId: selectedAllocation,
+        producerId,
+        quantity,
+        assignedTo: loadedMembers.length > 0 ? assignedTo : undefined,
+      }),
     });
     const j = await res.json();
     if (res.ok && j.distributionId) {
@@ -128,6 +111,10 @@ export default function SeedDistributionForm({ allocations = [], members = [] }:
   async function verifyCode(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    if (!distributionId) {
+      setMessage('No distribution selected/created yet.');
+      return;
+    }
     const res = await fetch('/api/inventory/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,17 +182,19 @@ export default function SeedDistributionForm({ allocations = [], members = [] }:
             <input type="number" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label style={{ fontWeight: 700, marginBottom: 6 }}>Assign to member</label>
-            <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'white', color: 'var(--foreground)' }}>
-              <option value="">-- select member --</option>
-              {loadedMembers.map((m) => {
-                const id = m.userId ?? m.id ?? m.user?.id;
-                const label = m.name ?? m.displayName ?? m.user?.name ?? m.email ?? m.user?.email ?? id;
-                return <option key={id} value={id}>{label}</option>;
-              })}
-            </select>
-          </div>
+          {loadedMembers.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={{ fontWeight: 700, marginBottom: 6 }}>Assign to member</label>
+              <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'white', color: 'var(--foreground)' }}>
+                <option value="">-- select member --</option>
+                {loadedMembers.map((m) => {
+                  const id = m.userId ?? m.id ?? m.user?.id;
+                  const label = m.name ?? m.displayName ?? m.user?.name ?? m.email ?? m.user?.email ?? id;
+                  return <option key={id} value={id}>{label}</option>;
+                })}
+              </select>
+            </div>
+          ) : null}
 
           <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 12, marginTop: 6 }}>
             <button type="submit" style={{ background: 'var(--foreground)', color: 'white', padding: '10px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700 }}>Create Distribution</button>
@@ -216,15 +205,15 @@ export default function SeedDistributionForm({ allocations = [], members = [] }:
         <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: '#f8faf8', border: '1px solid var(--border)' }}>
           <strong>Confirmation :</strong>
           <div style={{ marginTop: 8, color: 'var(--muted)' }}>
-            {selectedProducer && selectedAllocation && assignedTo && quantity ? (
+            {selectedProducer && selectedAllocation && quantity && (loadedMembers.length === 0 || assignedTo) ? (
               <div>
                 Le producteur <strong>{selectedProducer.businessName || selectedProducer.email || selectedProducer.id}</strong>
                 {selectedProducer.email ? ` (${selectedProducer.email})` : selectedProducer.phone ? ` (${selectedProducer.phone})` : ''}
                 {' '}recevra <strong>{quantity}</strong> unité(s) de <strong>{allocations.find(a => String(a.id) === String(selectedAllocation))?.seedType || 'cet article'}</strong>.
-                {' '}Le lot sera remis par <strong>{(loadedMembers.find(m => (m.userId ?? m.id) === assignedTo)?.name) || assignedTo}</strong> (agent).
+                {' '}Le lot sera remis par <strong>{loadedMembers.length > 0 ? ((loadedMembers.find(m => (m.userId ?? m.id) === assignedTo)?.name) || assignedTo) : 'l\'agent connecté'}</strong>.
               </div>
             ) : (
-              <div>Choisissez un producteur, une allocation, une quantité et un agent pour voir le récapitulatif ici.</div>
+              <div>Choisissez un producteur, une allocation et une quantité pour voir le récapitulatif ici.</div>
             )}
           </div>
         </div>

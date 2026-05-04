@@ -7,166 +7,185 @@ import { uploadBufferToSupabase } from '@/lib/supabase.server';
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
 import { getInitialStatus, shouldCreateDelivery } from '@/lib/orderStateMachine';
 
+
 const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export async function createOrderFromForm(formData: FormData, buyerId?: string) {
+  // 1. Vérification de l'authentification
   if (!buyerId) {
-    const e: any = new Error('UNAUTHENTICATED');
-    e.code = 'UNAUTHENTICATED';
-    throw e;
+    throw new Error('UNAUTHENTICATED');
   }
-  // Expecting 'data' field with JSON metadata and optional 'voiceNote' file
+
   const raw = formData.get('data') as string | null;
   if (!raw) throw new Error('MISSING_DATA');
+  
   const payload = JSON.parse(raw);
-
   const productIds = payload.items.map((i: any) => i.id);
-  // Validate availability
-  const products = await db.query.products.findMany({ where: inArray(schema.products.id, productIds) });
-  // Simple availability check
+
+  // 2. Récupération des produits depuis la DB (Source de vérité pour les prix)
+  const products = await db.query.products.findMany({ 
+    where: inArray(schema.products.id, productIds) 
+  });
+
+  // --- VALIDATION DE SÉCURITÉ ---
+  let calculatedTotal = 0;
+
   for (const it of payload.items) {
     const p = products.find((x: any) => x.id === it.id);
+    
+    // Vérifier l'existence et le stock
     if (!p || (p.quantityForSale ?? 0) < it.qty) {
-      const e = new Error('PRODUCT_UNAVAILABLE');
-      (e as any).code = 'PRODUCT_UNAVAILABLE';
-      throw e;
+      throw new Error('PRODUCT_UNAVAILABLE');
     }
+
+    // Vérifier les valeurs aberrantes
+    if (it.qty <= 0 || p.price <= 0) {
+      throw new Error('INVALID_VALUES_ABERRANT');
+    }
+
+    // Calculer le total réel basé sur les prix de la BASE DE DONNÉES
+    calculatedTotal += Number(p.price) * it.qty;
   }
 
-  // Save optional voice note file if present (upload to Supabase storage)
+  // Vérifier si le total envoyé par le client correspond au total réel (± 1 unité pour les arrondis)
+  if (Math.abs(calculatedTotal - payload.totalAmount) > 1) {
+    console.error(`Fraude possible: Total reçu ${payload.totalAmount}, Total réel ${calculatedTotal}`);
+    throw new Error('PRICE_MISMATCH_FRAUD_DETECTED');
+  }
+
+  // 3. Gestion du fichier Audio (Voice Note)
   let audioUrl: string | null = null;
-  try {
-    const voiceFile = formData.get('voiceNote') as File | null;
-    if (voiceFile && (voiceFile as any).size > 0) {
-      if ((voiceFile as any).size > MAX_AUDIO_SIZE) {
-        const e: any = new Error('AUDIO_TOO_LARGE');
-        e.code = 'AUDIO_TOO_LARGE';
-        throw e;
-      }
-      const fileName = `${Date.now()}_order.webm`;
-      try {
-        const buffer = Buffer.from(await (voiceFile as any).arrayBuffer());
-        const remotePath = `audio/${fileName}`;
-        const publicUrl = await uploadBufferToSupabase(remotePath, buffer, (voiceFile as any).type || 'audio/webm');
-        if (publicUrl) audioUrl = publicUrl;
-      } catch (err) {
-        // Fallback to local disk if Supabase upload fails
-        console.warn('Supabase upload failed, falling back to local disk:', err);
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'audio');
-        await mkdir(uploadDir, { recursive: true });
-        const fileName = `${Date.now()}_order.webm`;
-        await writeFile(path.join(uploadDir, fileName), Buffer.from(await (voiceFile as any).arrayBuffer()));
-        audioUrl = `/uploads/audio/${fileName}`;
-      }
+  const voiceFile = formData.get('voiceNote') as File | null;
+
+  if (voiceFile && voiceFile.size > 0) {
+    if (voiceFile.size > MAX_AUDIO_SIZE) throw new Error('AUDIO_TOO_LARGE');
+
+    const fileName = `${Date.now()}_order.webm`;
+    try {
+      const buffer = Buffer.from(await voiceFile.arrayBuffer());
+      const remotePath = `audio/${fileName}`;
+      // Tentative d'upload Cloud
+      const publicUrl = await uploadBufferToSupabase(remotePath, buffer, voiceFile.type || 'audio/webm');
+      audioUrl = publicUrl || null;
+    } catch (err) {
+      // Fallback Local
+      console.warn('Fallback local pour l\'audio');
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'audio');
+      await mkdir(uploadDir, { recursive: true });
+      await writeFile(path.join(uploadDir, fileName), Buffer.from(await voiceFile.arrayBuffer()));
+      audioUrl = `/uploads/audio/${fileName}`;
     }
-  } catch (e) {
-    console.warn('Warning: failed to save voice note:', e);
   }
 
-  // Resolve buyer profile for buyer link
-  const buyerProfileId = await resolveBuyerProfileId(buyerId ?? null);
-  if (!buyerProfileId) {
-    const e: any = new Error('BUYER_PROFILE_NOT_FOUND');
-    e.code = 'BUYER_PROFILE_NOT_FOUND';
-    throw e;
-  }
+  // 4. Résolution du profil acheteur
+  // @ts-ignore (Utilise ta logique resolveBuyerProfileId)
+  const buyerProfileId = await resolveBuyerProfileId(buyerId);
+  if (!buyerProfileId) throw new Error('BUYER_PROFILE_NOT_FOUND');
 
-  // State machine determines initial status based on payment method
-  const paymentMethod = payload.paymentMethod || 'CASH';
+  const paymentMethod = (payload.paymentMethod || 'CASH').toUpperCase();
+  // @ts-ignore (Utilise ta logique de machine à état)
   const initialStatus = getInitialStatus(paymentMethod);
 
-  // Insert order + order items in a transaction for atomicity
+  // 5. TRANSACTION ATOMIQUE (Insertion Order + Items)
   const result = await db.transaction(async (tx) => {
     const [order] = await tx.insert(schema.orders).values({
       customerName: payload.customer.name,
       customerPhone: payload.customer.phone,
-      totalAmount: payload.totalAmount || 0,
+      totalAmount: calculatedTotal, // On utilise le total calculé sécurisé
       city: payload.delivery?.city ?? null,
-      gpsLat: payload.delivery?.lat ?? null,
-      gpsLng: payload.delivery?.lng ?? null,
+      gpsLat: payload.delivery?.lat?.toString() ?? null,
+      gpsLng: payload.delivery?.lng?.toString() ?? null,
       deliveryDesc: payload.delivery?.description ?? null,
-      paymentMethod: paymentMethod.toUpperCase() as any,
+      paymentMethod: paymentMethod as any,
       status: initialStatus as any,
       audioUrl,
       buyerId: buyerProfileId,
     }).returning();
 
-    // Insert order items — required for fetchProducerOrders to work
-    if (payload.items?.length > 0) {
-      const itemRows = payload.items.map((item: any) => {
-        const product = products.find((p: any) => p.id === item.id);
-        return {
-          orderId: order.id,
-          productId: item.id,
-          quantity: item.qty,
-          priceAtSale: product?.price ?? item.price ?? 0,
-        };
-      });
-      await tx.insert(schema.orderItems).values(itemRows);
-    }
+    const itemRows = payload.items.map((item: any) => {
+      const product = products.find((p: any) => p.id === item.id);
+      return {
+        orderId: order.id,
+        productId: item.id,
+        quantity: item.qty,
+        priceAtSale: product?.price ?? 0, // Prix figé au moment de la vente
+      };
+    });
 
+    await tx.insert(schema.orderItems).values(itemRows);
     return order;
   });
 
-  // Auto-create delivery if initial status is deliverable (e.g. CONFIRMED for COD)
+  // 6. Déclenchement automatique de la livraison
+  // @ts-ignore
   if (shouldCreateDelivery(initialStatus)) {
     try {
       const { createDeliveryForConfirmedOrder } = await import('@/services/delivery.service');
       await createDeliveryForConfirmedOrder(result.id);
     } catch (err) {
-      console.error('Auto-delivery creation failed for order', result.id, err);
+      console.error('Erreur création livraison auto:', err);
     }
   }
 
   return { success: true, orderId: result.id };
 }
 
+/**
+ * Récupère les commandes pour un producteur spécifique
+ */
 export async function fetchProducerOrders(userId?: string) {
   if (!userId) return [];
 
-  // Find producer by user id
-  const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId), columns: { id: true } });
+  const producer = await db.query.producers.findFirst({ 
+    where: eq(schema.producers.userId, userId),
+    columns: { id: true } 
+  });
+  
   if (!producer) return [];
 
-  // Get product ids for this producer
-  const producerProducts = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.producerId, producer.id));
-  const productIds = producerProducts.map((p: any) => p.id);
+  const producerProducts = await db.select({ id: schema.products.id })
+    .from(schema.products)
+    .where(eq(schema.products.producerId, producer.id));
+
+  const productIds = producerProducts.map(p => p.id);
   if (productIds.length === 0) return [];
 
   const orderItems = await db.query.orderItems.findMany({
     where: inArray(schema.orderItems.productId, productIds),
     with: {
-      order: {
-        columns: { id: true, status: true, createdAt: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, buyerId: true },
-      },
+      order: true,
       product: { columns: { name: true, unit: true } }
     }
   });
 
-  // Group by order
+  // Groupement par commande pour une interface propre
   const ordersMap = new Map();
   for (const item of orderItems) {
-    const orderId = item.orderId;
-    if (!ordersMap.has(orderId)) {
-      ordersMap.set(orderId, {
-        id: orderId,
+    if (!ordersMap.has(item.orderId)) {
+      ordersMap.set(item.orderId, {
+        id: item.orderId,
         customerName: item.order.customerName || 'Client',
         customerPhone: item.order.customerPhone || '',
         location: item.order.city || item.order.deliveryDesc || '',
-        buyerId: item.order.buyerId || null,
         date: item.order.createdAt,
+        status: (item.order.status as string).toLowerCase(),
         total: 0,
-        status: (item.order.status as string || 'PENDING').toLowerCase(),
         items: []
       });
     }
-    const order = ordersMap.get(orderId);
-    order.items.push({ name: item.product.name, quantity: item.quantity, unit: item.product.unit, price: item.priceAtSale });
-    order.total += item.quantity * item.priceAtSale;
+    const order = ordersMap.get(item.orderId);
+    order.items.push({
+      name: item.product.name,
+      quantity: item.quantity,
+      unit: item.product.unit,
+      price: item.priceAtSale
+    });
+    order.total += Number(item.priceAtSale) * item.quantity;
   }
 
-  return Array.from(ordersMap.values());
+  return Array.from(ordersMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
 }
+
 
 export async function fetchOrderDetailsForProducer(orderId: string, userId?: string) {
   if (!orderId || !userId) return null;

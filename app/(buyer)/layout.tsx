@@ -10,33 +10,46 @@ import { BuyerMobileTabBar } from '@/components/ui/MobileTabBar';
 export default function BuyerLayout({ children }: { children: React.ReactNode }) {
   return (
     <AccountTypeGuard>
+      {/* 
+        Le SyncProvider est placé ici pour s'assurer que la synchronisation 
+        ne tourne que pour les utilisateurs authentifiés par le Guard. 
+      */}
       <SyncProvider />
 
-      {/* NAVBAR — desktop only (hidden on mobile to avoid conflict with TabBar) */}
-      <header className="hidden md:block sticky top-0 z-40">
+      {/* NAVBAR — Desktop uniquement */}
+      <header className="hidden md:block sticky top-0 z-40 w-full">
         <BuyerNavbar />
       </header>
 
-      {/* 
-          BANNER DE TYPE DE COMPTE :
-          Ajustement du padding pour ne pas être collé au bord
-      */}
-      <AccountTypeBanner />
+      {/* BANNER DE TYPE DE COMPTE (Alerte mode test ou rôle) */}
+      <div className="w-full px-4 md:px-6 pt-2">
+        <AccountTypeBanner />
+      </div>
 
-      {/* MAIN — pb-24 on mobile (space for TabBar), normal on desktop */}
-      <main className="min-h-[calc(100vh-64px)] bg-[#F9FBF8] p-4 pb-24 md:p-6 md:pb-6">
-        <div className="max-w-7xl mx-auto">
+      {/* 
+          MAIN CONTENT 
+          - pb-24 sur mobile pour ne pas être caché par la TabBar
+          - bg-[#F9FBF8] (Sable) pour le confort visuel
+      */}
+      <main className="min-h-screen bg-[#F9FBF8] transition-colors duration-300">
+        <div className="max-w-7xl mx-auto p-4 pb-28 md:p-8">
           {children}
         </div>
       </main>
 
-      {/* CART FLOATING — hidden on mobile (TabBar has Panier), visible on desktop */}
-      <div className="hidden md:block">
+      {/* CART FLOATING — Visible uniquement sur Desktop (Le mobile utilise la TabBar) */}
+      <aside className="hidden md:block">
         <CartFloatingIcon />
-      </div>
+      </aside>
 
-      {/* MOBILE TAB BAR — mobile only, fixed bottom */}
-      <footer className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {/* 
+          MOBILE TAB BAR 
+          - Utilisation de safe-area-inset-bottom pour les iPhone récents (Dynamic Island/Home bar)
+      */}
+      <footer 
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-t border-emerald-900/5 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
+      >
         <BuyerMobileTabBar />
       </footer>
       

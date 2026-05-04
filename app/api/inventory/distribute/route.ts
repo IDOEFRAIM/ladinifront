@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server';
-import { randomBytes, createHash } from 'crypto';
 import { db, schema } from '@/src/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { buildAccessContext } from '@/lib/access-context';
 import { AccessManager } from '@/lib/access-manager';
 import { PERMISSIONS } from '@/lib/permissions';
+import { initializeSeedDistribution } from '@/services/seedDistribution.service';
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { allocationId, producerId, agentId, assignedTo, organizationId, zoneId, quantity } = body;
-  // allow API callers to pass `assignedTo` (user id of member who will dispatch)
-  // and treat it as the agent responsible for the distribution
-  const effectiveAgentId = assignedTo ?? agentId;
-  if (!allocationId || !producerId || !effectiveAgentId || !quantity) {
+  const { allocationId, producerId, assignedTo, quantity, cnibProvided, channel } = body;
+  if (!allocationId || !producerId || !quantity) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }
 
@@ -22,8 +19,25 @@ export async function POST(req: Request) {
   if (!session || !session.userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   const ctx = await buildAccessContext(session.userId);
 
-  // We'll first determine if the user is an org or system admin. Admins
-  // are allowed to create distributions without the STOCK_VERIFY permission.
+  // Load allocation to derive org/zone from DB (never trust client payload)
+  const allocation = await db.query.seedAllocations.findFirst({
+    where: eq(schema.seedAllocations.id, allocationId),
+    columns: { id: true, organizationId: true, zoneId: true },
+  });
+  if (!allocation) return NextResponse.json({ error: 'allocation_not_found' }, { status: 404 });
+
+  const organizationId = allocation.organizationId;
+  const zoneId = allocation.zoneId;
+
+  // Determine effective agent:
+  // - default: the authenticated user is the agent
+  // - if assignedTo is provided: only org/system admins can assign to someone else
+  let effectiveAgentId = session.userId;
+  if (assignedTo) {
+    effectiveAgentId = String(assignedTo);
+  }
+
+  // Determine if caller is org/system admin. Admins can create/assign without STOCK_VERIFY.
   let isOrgOrSystemAdmin = false;
 
   // Enforce that ONLY an organization ADMIN (or system ADMIN) can create distributions.
@@ -47,9 +61,6 @@ export async function POST(req: Request) {
         isOrgOrSystemAdmin = true;
       } else {
         isOrgOrSystemAdmin = false;
-      }
-      if (!isOrgOrSystemAdmin) {
-        // Not an admin: fallthrough, we'll later enforce agent permissions.
       }
     }
   } catch (e) {
@@ -82,6 +93,11 @@ export async function POST(req: Request) {
     }
   }
 
+  // Non-admin callers cannot assign distributions to other members.
+  if (assignedTo && !isOrgOrSystemAdmin) {
+    effectiveAgentId = session.userId;
+  }
+
   // If the caller assigned the distribution to another member, verify that the
   // assigned user belongs to the same organization and has an allowed role.
   if (assignedTo) {
@@ -100,50 +116,26 @@ export async function POST(req: Request) {
     }
   }
 
-  // generate 6-digit numeric code
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const salt = randomBytes(16).toString('hex');
-  const hash = createHash('sha256').update(salt + code).digest('hex');
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-  const now = new Date();
-
-  // insert distribution record
-  const inserted = await db.insert(schema.seedDistributions).values({
-    allocationId,
-    producerId,
-    agentId: effectiveAgentId,
-    organizationId,
-    zoneId,
-    quantity,
-    verificationCodeHash: hash,
-    verificationCodeExpiresAt: expiresAt,
-    verificationChannel: 'IN_APP',
-    attemptsCount: 0,
-    status: 'PENDING',
-    metadata: { salt },
-    createdAt: now,
-    updatedAt: now,
-  }).returning({ id: schema.seedDistributions.id });
-
-  const distributionId = inserted?.[0]?.id ?? null;
-
-  // Enqueue agent action to deliver the verification code via secure channel
   try {
-    await db.insert(schema.agentActions).values({
-      agentName: 'DISTRIBUTION_VERIFICATION',
-      actionType: 'SEND_VERIFICATION',
-      payload: { distributionId, producerId, channel: 'IN_APP', assignedTo: effectiveAgentId, verificationCode: code },
-      status: 'PENDING',
-      userId: session.userId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  } catch (e) {
-    // non-fatal: log and continue
-    console.error('Failed to enqueue agent action for distribution verification', e);
+    const result = await initializeSeedDistribution(
+      effectiveAgentId,
+      producerId,
+      allocationId,
+      Number(quantity),
+      cnibProvided,
+      channel || 'IN_APP'
+    );
+    return NextResponse.json({ ok: true, distributionId: result.distributionId });
+  } catch (e: any) {
+    const msg = String(e?.message || 'server_error');
+    if (msg.toLowerCase().includes('introuvable')) return NextResponse.json({ error: msg }, { status: 404 });
+    if (msg.toLowerCase().includes('stock') || msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('missing')) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    if (msg.toLowerCase().includes('accès') || msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('hors zone')) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
+    console.error('inventory/distribute failed', e);
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
-
-  // Do NOT return the OTP code in responses. Return only distribution id.
-  return NextResponse.json({ ok: true, distributionId });
 }
