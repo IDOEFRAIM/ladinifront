@@ -16,6 +16,7 @@ const ORG_ROLES = [
   { value: 'ZONE_MANAGER', label: 'Gestionnaire de Zone' },
   { value: 'SALES_MANAGER', label: 'Responsable Ventes' },
   { value: 'FIELD_AGENT', label: 'Agent de Terrain' },
+  { value: 'DELIVERY_AGENT', label: 'Livreur' },
 ] as const;
 
 interface MemberItem {
@@ -52,6 +53,7 @@ export default function OrgMembersPage() {
   // Invite modal
   const [showInvite, setShowInvite] = useState(false);
   const [inviteId, setInviteId] = useState('');
+  const [inviteType, setInviteType] = useState<'producer' | 'other'>('producer');
   const [producerOptions, setProducerOptions] = useState<Array<{ id: string; businessName: string; email: string; phone?: string }>>([]);
   const [inviteOrgRole, setInviteOrgRole] = useState('FIELD_AGENT');
   const [inviteRoleDefId, setInviteRoleDefId] = useState('');
@@ -131,6 +133,11 @@ export default function OrgMembersPage() {
     }
     setLoading(false);
   }, []);
+
+  // Default role when inviting a non-producer (e.g., livreur)
+  useEffect(() => {
+    if (inviteType === 'other') setInviteOrgRole((prev) => prev === 'FIELD_AGENT' ? 'DELIVERY_AGENT' : prev);
+  }, [inviteType]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -395,19 +402,41 @@ export default function OrgMembersPage() {
 
             <div className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">
-                  Sélectionner un producteur à inviter *
-                </label>
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Type de membre</label>
                 <select
-                  value={inviteId}
-                  onChange={e => setInviteId(e.target.value)}
+                  value={inviteType}
+                  onChange={e => setInviteType(e.target.value as any)}
                   className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
-                  <option value="">Choisir un producteur...</option>
-                  {producerOptions.map(p => (
-                    <option key={p.id} value={p.email || p.phone}>{p.businessName} — {p.email || p.phone}</option>
-                  ))}
+                  <option value="producer">Producteur</option>
+                  <option value="other">Livreur / Autre (email ou téléphone)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">
+                  {inviteType === 'producer' ? 'Sélectionner un producteur à inviter *' : 'Email ou téléphone du membre à inviter *'}
+                </label>
+                {inviteType === 'producer' ? (
+                  <select
+                    value={inviteId}
+                    onChange={e => setInviteId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  >
+                    <option value="">Choisir un producteur...</option>
+                    {producerOptions.map(p => (
+                      <option key={p.id} value={p.email || p.phone}>{p.businessName} — {p.email || p.phone}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={inviteId}
+                    onChange={e => setInviteId(e.target.value)}
+                    placeholder="email ou téléphone du livreur"
+                    className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                )}
               </div>
 
               <div>

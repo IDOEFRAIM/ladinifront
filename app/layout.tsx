@@ -1,12 +1,9 @@
 import type { Metadata, Viewport } from "next";
-// Removed next/font/google imports to avoid runtime export issues in this environment.
 import "./globals.css";
 
 import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/context/CartContext';
 import { Toaster } from 'react-hot-toast';
-
-// Use system fonts / CSS fallbacks for now; font loading can be reintroduced later.
 
 export const metadata: Metadata = {
   title: 'Ladini — Marché Agricole du Burkina Faso',
@@ -14,17 +11,17 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
-    title: 'FrontAg',
+    statusBarStyle: 'black-translucent', // Meilleur look sur iPhone
+    title: 'Ladini',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#166534',
+  themeColor: '#166534', // Vert forêt
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1, // Évite le zoom auto sur les inputs en mobile
+  viewportFit: 'cover', // Utilise tout l'écran (encoches incluses)
 };
 
 export default function RootLayout({
@@ -33,12 +30,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr"> 
-      <body className={`antialiased`}>
+    <html lang="fr" className="h-full"> 
+      <body className="antialiased min-h-screen bg-slate-50 flex flex-col text-slate-900 overflow-x-hidden">
         <AuthProvider>
           <CartProvider>
-            <Toaster position="top-center" />
-            {children}
+            {/* Toaster optimisé pour mobile (en bas sur mobile pour être accessible au pouce) */}
+            <Toaster 
+              position="top-center"
+              toastOptions={{
+                className: 'text-sm font-medium shadow-xl border border-slate-100 rounded-2xl',
+                duration: 4000,
+              }} 
+            />
+            
+            {/* Conteneur principal avec padding adaptatif */}
+            <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-safe">
+              {children}
+            </main>
+
+            {/* Navigation mobile (facultatif si tu en as une) */}
+            {/* <MobileNavBar /> */}
           </CartProvider>
         </AuthProvider>
       </body>

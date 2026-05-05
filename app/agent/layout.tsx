@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Package, History, Menu, X, Truck, ClipboardList, Bell } from 'lucide-react';
+import { 
+  Package, History, Menu, X, Truck, 
+  ClipboardList, Bell, Home, LogOut, User 
+} from 'lucide-react';
 import { AgentMobileTabBar } from '@/components/ui/MobileTabBar';
 
-// On utilise Tailwind pour tout, c'est plus propre pour l'agent
 const NAV_ITEMS = [
   { href: '/agent/deliveries', label: 'Missions dispo', icon: Truck },
   { href: '/agent/deliveries/active', label: 'En cours', icon: ClipboardList },
@@ -19,90 +21,134 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const currentPath = pathname ?? '';
 
-  return (
-    <div className="min-h-screen bg-[#F9FBF8] font-sans">
+  // Fermer le menu mobile si la route change
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [pathname]);
 
-      {/* HEADER — always visible, all breakpoints */}
-      <header className="sticky top-0 z-40 bg-[#064E3B] text-white px-4 h-16 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-2">
-          <div className="bg-emerald-500 p-1.5 rounded-lg">
-            <Truck size={20} className="text-white" />
-          </div>
-          <span className="font-bold tracking-tight text-lg">
-            FrontAg <span className="font-light opacity-80">Logistique</span>
-          </span>
-        </div>
+  return (
+    <div className="min-h-screen bg-[#F9FBF8] font-sans text-slate-900">
+
+      {/* HEADER — Mobile & Desktop */}
+      <header className="sticky top-0 z-50 bg-[#064E3B] text-white px-4 h-16 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
-          <button className="relative p-2 hover:bg-white/10 rounded-full transition-colors" aria-label="Notifications">
+          {/* Logo cliquable pour retour rapide accueil console */}
+          <Link href="/agent/deliveries" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <div className="bg-emerald-500 p-1.5 rounded-xl shadow-inner">
+              <Truck size={20} className="text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black tracking-tight text-sm leading-none">FRONTAG</span>
+              <span className="text-[10px] font-medium opacity-70 tracking-widest uppercase">Logistique</span>
+            </div>
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-1 sm:gap-3">
+          {/* Retour Portail Public (La Boutique) */}
+          <Link 
+            href="/" 
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs font-bold transition-colors border border-white/20"
+          >
+            <Home size={14} /> Quitter la console
+          </Link>
+
+          <button className="relative p-2 hover:bg-white/10 rounded-full transition-colors">
             <Bell size={20} />
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-[#064E3B] rounded-full" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-amber-500 border-2 border-[#064E3B] rounded-full" />
           </button>
-          {/* Hamburger — mobile only */}
+
+          {/* Menu Hamburger — Mobile uniquement */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="md:hidden p-2 hover:bg-white/10 rounded-full transition-colors"
-            aria-label="Ouvrir le menu"
           >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {isMenuOpen ? <X size={26} /> : <Menu size={26} />}
           </button>
         </div>
       </header>
 
-      {/* DESKTOP NAV — hidden on mobile */}
-      <nav className="hidden md:block bg-white border-b border-slate-200 sticky top-16 z-30">
-        <div className="max-w-5xl mx-auto flex">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = currentPath === href || currentPath.startsWith(href + '/');
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 ${
-                  active
-                    ? 'text-emerald-600 border-emerald-600 bg-emerald-50/30'
-                    : 'text-slate-600 border-transparent hover:text-emerald-600 hover:bg-slate-50'
-                }`}
-              >
-                <Icon size={18} />
-                {label}
-              </Link>
-            );
-          })}
+      {/* DESKTOP SIDEBAR / SUB-NAV */}
+      <nav className="hidden md:block bg-white border-b border-slate-200 sticky top-16 z-40">
+        <div className="max-w-6xl mx-auto flex items-center justify-between px-4">
+          <div className="flex">
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const active = currentPath === href || currentPath.startsWith(href + '/');
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-2 px-5 py-4 text-sm font-bold transition-all border-b-2 ${
+                    active
+                      ? 'text-emerald-700 border-emerald-700 bg-emerald-50/30'
+                      : 'text-slate-500 border-transparent hover:text-emerald-600'
+                  }`}
+                >
+                  <Icon size={18} />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+          
+          <Link href="/profile" className="flex items-center gap-2 text-slate-500 hover:text-emerald-700 font-bold text-sm">
+            <User size={18} /> Profil
+          </Link>
         </div>
       </nav>
 
-      {/* MOBILE FULLSCREEN MENU — overlays on top when open */}
-      {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-[#064E3B] p-6">
-          <div className="flex justify-end mb-8">
-            <button onClick={() => setIsMenuOpen(false)} aria-label="Fermer le menu">
-              <X size={32} className="text-white" />
-            </button>
-          </div>
-          <nav className="flex flex-col gap-6">
+      {/* MOBILE OVERLAY MENU */}
+      <AnimateMenu isOpen={isMenuOpen}>
+        <div className="flex flex-col h-full">
+          <div className="flex flex-col gap-2 mt-4">
+            <p className="text-emerald-400/50 text-[10px] font-black uppercase tracking-[0.2em] px-2 mb-2">Navigation Logistique</p>
             {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-4 text-white text-xl font-semibold"
+                className="flex items-center gap-4 text-white p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-lg font-bold"
               >
-                <Icon size={28} /> {label}
+                <Icon size={24} className="text-emerald-400" /> {label}
               </Link>
             ))}
-          </nav>
-        </div>
-      )}
+          </div>
 
-      {/* MAIN CONTENT — pb-24 on mobile for TabBar */}
-      <main className="max-w-5xl mx-auto p-4 md:p-8 pb-24 md:pb-8">
+          <div className="mt-auto space-y-3 pb-10">
+            <div className="h-px bg-white/10 w-full my-6" />
+            
+            <Link
+              href="/"
+              className="flex items-center gap-4 text-emerald-100 p-4 rounded-2xl border border-white/10 hover:bg-white/5 transition-colors font-bold"
+            >
+              <Home size={22} /> Retour à l'accueil client
+            </Link>
+
+            <button className="flex items-center gap-4 text-red-300 p-4 w-full font-bold">
+              <LogOut size={22} /> Déconnexion
+            </button>
+          </div>
+        </div>
+      </AnimateMenu>
+
+      {/* CONTENU PRINCIPAL */}
+      <main className="max-w-6xl mx-auto p-4 md:p-8 pb-32 md:pb-12">
         {children}
       </main>
 
-      {/* MOBILE TAB BAR — mobile only, fixed bottom */}
-      <footer className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {/* MOBILE TAB BAR (Bas de l'écran) */}
+      <footer className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-slate-200 pb-safe">
         <AgentMobileTabBar />
       </footer>
+    </div>
+  );
+}
+
+// Petit composant helper pour l'animation simple du menu mobile
+function AnimateMenu({ isOpen, children }: { isOpen: boolean, children: React.ReactNode }) {
+  if (!isOpen) return null;
+  return (
+    <div className="md:hidden fixed inset-0 z-[60] bg-[#064E3B] p-6 pt-20 animate-in fade-in slide-in-from-top-4 duration-200">
+      {children}
     </div>
   );
 }

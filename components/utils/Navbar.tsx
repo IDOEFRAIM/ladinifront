@@ -4,16 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { Leaf, Menu, X, LayoutDashboard, LogOut, ArrowRight } from 'lucide-react';
-
-const C = {
-  forest: '#064E3B',
-  emerald: '#10B981',
-  amber: '#D97706',
-  glass: 'rgba(255, 255, 255, 0.85)',
-  border: 'rgba(6, 78, 59, 0.08)',
-  muted: '#64748B',
-};
+import { Leaf, Menu, X, LayoutDashboard, LogOut, ArrowRight, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const NAV_LINKS = [
   { name: 'Accueil', href: '/' },
@@ -28,12 +20,10 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Fermer le menu mobile lors du changement de route
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  // Gestion du scroll avec optimisation
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -56,80 +46,67 @@ export default function Navbar() {
 
   return (
     <nav
-      style={{
-        position: 'sticky', top: 0, zIndex: 100,
-        background: scrolled ? C.glass : 'white',
-        backdropFilter: scrolled ? 'blur(12px)' : 'none',
-        WebkitBackdropFilter: scrolled ? 'blur(12px)' : 'none',
-        borderBottom: `1px solid ${scrolled ? C.border : 'transparent'}`,
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        padding: scrolled ? '0px 0' : '8px 0',
-      }}
+      className={`sticky top-0 z-[100] w-full transition-all duration-300 ${
+        scrolled 
+          ? 'bg-white/80 backdrop-blur-md py-2 shadow-sm border-b border-emerald-900/5' 
+          : 'bg-white py-4 border-b border-transparent'
+      }`}
     >
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 64 }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
           
           {/* LOGO */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', transition: 'transform 0.2s' }} className="hover:scale-105 active:scale-95">
-            <div style={{ 
-              background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, 
-              color: '#fff', padding: 8, borderRadius: 12, 
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: `0 4px 12px ${C.emerald}33`
-            }}>
-              <Leaf size={20} />
+          <Link href="/" className="flex items-center gap-2 group transition-transform active:scale-95">
+            <div className="bg-gradient-to-br from-emerald-900 to-emerald-500 p-2 rounded-xl text-white shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform">
+              <Leaf size={22} />
             </div>
-            <span style={{ 
-              fontFamily: "'Space Grotesk', sans-serif", 
-              fontWeight: 800, fontSize: '1.4rem', 
-              color: C.forest, letterSpacing: '-0.03em' 
-            }}>
-              Front<span style={{ color: C.emerald }}>Ag</span>
+            <span className="font-space font-extrabold text-xl tracking-tighter text-emerald-900">
+              Front<span className="text-emerald-500">Ag</span>
             </span>
           </Link>
 
-          {/* DESKTOP NAV */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} className="hidden md:flex">
-            {NAV_LINKS.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link key={link.name} href={link.href} style={{
-                  fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600,
-                  color: isActive ? C.forest : C.muted, textDecoration: 'none',
-                  padding: '8px 16px', borderRadius: 100, transition: 'all 0.2s',
-                  background: isActive ? 'rgba(16,185,129,0.08)' : 'transparent',
-                }}>
-                  {link.name}
-                </Link>
-              );
-            })}
+          {/* DESKTOP NAV - Hidden on Mobile */}
+          <div className="hidden md:flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
+                  pathname === link.href
+                    ? 'bg-white text-emerald-900 shadow-sm'
+                    : 'text-slate-500 hover:text-emerald-700'
+                }`}
+              >
+                {link.name}
+              </Link>
+            ))}
           </div>
 
           {/* ACTIONS */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="flex items-center gap-3">
             {isAuthenticated ? (
-              <Link href={getUserDashboardPath()} className="hidden md:flex" style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: C.forest, color: '#fff', padding: '10px 22px', borderRadius: 100,
-                fontFamily: "'Inter', sans-serif", fontWeight: 700, fontSize: 13, textDecoration: 'none',
-                boxShadow: `0 8px 20px ${C.forest}25`, transition: 'transform 0.2s'
-              }}>
-                <LayoutDashboard size={16} /> Mon Espace
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link 
+                  href={getUserDashboardPath()} 
+                  className="hidden sm:flex items-center gap-2 bg-emerald-900 text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-emerald-800 transition-all shadow-md shadow-emerald-900/10"
+                >
+                  <LayoutDashboard size={14} /> <span>Mon Espace</span>
+                </Link>
+                <button 
+                  onClick={handleLogout}
+                  className="hidden md:flex p-2.5 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Déconnexion"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             ) : (
-              <div className="hidden md:flex" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Link href="/login" style={{ 
-                  fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600, 
-                  color: C.forest, textDecoration: 'none', padding: '10px 20px' 
-                }}>
+              <div className="hidden sm:flex items-center gap-2">
+                <Link href="/login" className="px-4 py-2 text-sm font-bold text-emerald-900 hover:text-emerald-600 transition-colors">
                   Connexion
                 </Link>
-                <Link href="/signup" style={{ 
-                  fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 700, 
-                  color: '#fff', background: C.forest, textDecoration: 'none', 
-                  padding: '10px 22px', borderRadius: 100, boxShadow: `0 8px 20px ${C.forest}25`
-                }}>
-                  Rejoindre <ArrowRight size={14} style={{ marginLeft: 6, display: 'inline' }} />
+                <Link href="/signup" className="flex items-center gap-2 bg-emerald-900 text-white px-5 py-2.5 rounded-full text-xs font-bold hover:shadow-lg transition-all">
+                  Rejoindre <ArrowRight size={14} />
                 </Link>
               </div>
             )}
@@ -137,94 +114,77 @@ export default function Navbar() {
             {/* BTN MOBILE MENU */}
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-              className="md:hidden" 
-              style={{ 
-                padding: 10, borderRadius: 12, border: 'none', 
-                background: isMobileMenuOpen ? 'rgba(6,78,59,0.05)' : 'transparent', 
-                cursor: 'pointer', color: C.forest, display: 'flex' 
-              }}
+              className="md:hidden p-2 rounded-xl text-emerald-900 bg-emerald-50 hover:bg-emerald-100 transition-colors"
             >
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
+      </div>
 
-        {/* MOBILE MENU PANEL */}
+      {/* MOBILE MENU PANEL with Framer Motion for smooth entry */}
+      <AnimatePresence>
         {isMobileMenuOpen && (
-          <div 
-            style={{ 
-              position: 'absolute', top: '100%', left: 0, right: 0, 
-              background: 'white', padding: '16px 20px 32px',
-              borderBottom: `1px solid ${C.border}`,
-              display: 'flex', flexDirection: 'column', gap: 8,
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-              animation: 'slideDown 0.3s ease-out'
-            }} 
-            className="md:hidden"
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden bg-white border-t border-slate-50 overflow-hidden shadow-2xl"
           >
-            <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Menu Principal</div>
-            {NAV_LINKS.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link key={link.name} href={link.href} style={{
-                  fontFamily: "'Inter', sans-serif", fontSize: 15, fontWeight: isActive ? 700 : 600,
-                  color: isActive ? C.forest : C.muted, textDecoration: 'none',
-                  padding: '14px 16px', borderRadius: 12,
-                  background: isActive ? 'rgba(16,185,129,0.08)' : 'rgba(249, 251, 248, 0.5)',
-                }}>
+            <div className="px-4 pt-4 pb-8 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 mb-2">Navigation</p>
+              
+              {NAV_LINKS.map((link) => (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className={`flex items-center px-4 py-3.5 rounded-2xl font-bold transition-all ${
+                    pathname === link.href
+                      ? 'bg-emerald-50 text-emerald-900'
+                      : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
                   {link.name}
                 </Link>
-              );
-            })}
+              ))}
 
-            <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
+              <div className="my-4 border-t border-slate-100" />
 
-            {isAuthenticated ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Link href={getUserDashboardPath()} style={{ 
-                  fontFamily: "'Inter', sans-serif", fontSize: 15, fontWeight: 700, 
-                  color: 'white', background: C.forest, textDecoration: 'none', 
-                  padding: '14px 16px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12 
-                }}>
-                  <LayoutDashboard size={18} /> Mon Tableau de Bord
-                </Link>
-                <button onClick={handleLogout} style={{ 
-                  fontFamily: "'Inter', sans-serif", fontSize: 15, fontWeight: 600, 
-                  color: '#DC2626', padding: '14px 16px', borderRadius: 12, 
-                  background: '#FEF2F2', border: 'none', cursor: 'pointer', 
-                  display: 'flex', alignItems: 'center', gap: 12 
-                }}>
-                  <LogOut size={18} /> Déconnexion
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <Link href="/signup" style={{ 
-                  textAlign: 'center', fontFamily: "'Inter', sans-serif", fontSize: 15, 
-                  fontWeight: 700, color: '#fff', background: C.forest, 
-                  textDecoration: 'none', padding: '14px 16px', borderRadius: 12 
-                }}>
-                  Créer un compte
-                </Link>
-                <Link href="/login" style={{ 
-                  textAlign: 'center', fontFamily: "'Inter', sans-serif", fontSize: 15, 
-                  fontWeight: 600, color: C.forest, textDecoration: 'none', 
-                  padding: '14px 16px', borderRadius: 12, border: `1px solid ${C.border}` 
-                }}>
-                  Se connecter
-                </Link>
-              </div>
-            )}
-          </div>
+              {isAuthenticated ? (
+                <div className="grid gap-2">
+                  <Link 
+                    href={getUserDashboardPath()} 
+                    className="flex items-center justify-center gap-3 w-full bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg"
+                  >
+                    <LayoutDashboard size={20} /> Mon Tableau de Bord
+                  </Link>
+                  <button 
+                    onClick={handleLogout}
+                    className="flex items-center justify-center gap-3 w-full bg-red-50 text-red-600 p-4 rounded-2xl font-bold transition-colors"
+                  >
+                    <LogOut size={20} /> Se déconnecter
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Link 
+                    href="/signup" 
+                    className="w-full text-center bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg"
+                  >
+                    Créer un compte
+                  </Link>
+                  <Link 
+                    href="/login" 
+                    className="w-full text-center bg-white border border-slate-200 text-emerald-900 p-4 rounded-2xl font-bold"
+                  >
+                    Se connecter
+                  </Link>
+                </div>
+              )}
+            </div>
+          </motion.div>
         )}
-      </div>
-      <style jsx>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-      `}</style>
+      </AnimatePresence>
     </nav>
   );
 }

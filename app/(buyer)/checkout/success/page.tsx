@@ -7,6 +7,12 @@ import { useCart } from '@/context/CartContext';
 import { CheckCircle, Truck, Smartphone, ArrowRight, MessageCircle, Printer, Edit2, ShieldCheck, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface OrderState {
+  orderId: string;
+  phone: string;
+  orderItems: any[];
+  isInitialized: boolean;
+}
 export default function OrderSuccessPage() {
   const { clearCart, items: cartItems } = useCart();
   const searchParams = useSearchParams();
@@ -57,7 +63,7 @@ export default function OrderSuccessPage() {
   };
 
   const subtotal = useMemo(() => 
-    state.orderItems.reduce((acc, it) => acc + (it.price * it.quantity), 0), 
+    state.orderItems.reduce((acc:any, it:any) => acc + (it.price * it.quantity), 0), 
   [state.orderItems]);
 
   if (!state.isInitialized) return <div className="min-h-screen bg-[#F9FBF8] animate-pulse" />;
@@ -126,7 +132,7 @@ export default function OrderSuccessPage() {
                   type="tel"
                   placeholder="Entrez le nouveau numéro"
                   className="w-full p-4 bg-white border-2 border-emerald-500 rounded-xl outline-none shadow-inner"
-                  onChange={(e) => setState(s => ({...s, phone: e.target.value}))}
+                  onChange={(e:any) => setState((s:any) => ({...s, phone: e.target.value}))}
                   onBlur={() => setIsEditingPhone(false)}
                 />
               </motion.div>
@@ -142,7 +148,7 @@ export default function OrderSuccessPage() {
           <h3 className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 border-b pb-4">Résumé de la commande</h3>
           
           <div className="space-y-4">
-            {state.orderItems.map((item, idx) => (
+            {state.orderItems.map((item:any, idx:any) => (
               <div key={idx} className="flex justify-between items-start">
                 <div>
                   <p className="font-bold text-slate-800 text-sm">{item.name}</p>
