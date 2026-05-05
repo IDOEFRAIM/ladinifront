@@ -14,7 +14,7 @@
 import { cookies } from 'next/headers';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, or, count } from 'drizzle-orm';
+import { eq, and, or, count, desc, gte, sql } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { audit, snapshot } from '@/lib/audit';
@@ -28,7 +28,11 @@ import {
   UpdateMemberSchema,
   AssignWorkZoneSchema,
   UpdateWorkZoneSchema,
+  CreateAllocationSchema,
+  UpdateAllocationSchema,
+  CreateDistributionSchema,
 } from '@/lib/validators';
+import { assertDistTransition, isCancellable } from '@/lib/distributionStateMachine';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -1044,5 +1048,434 @@ export async function getAvailableZones(): Promise<ServiceResult> {
   } catch (err) {
     console.error('[OrgManager] getAvailableZones:', err);
     return { success: false, error: 'Impossible de charger les zones.' };
+  }
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║  SEED ALLOCATIONS                             ║
+// ╚══════════════════════════════════════════════╝
+
+/**
+ * Liste les allocations de l'organisation active avec zone et allocatedBy.
+ */
+export async function getOrgAllocations(): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgManager();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+
+  try {
+    const rows = await db.query.seedAllocations.findMany({
+      where: eq(schema.seedAllocations.organizationId, ctx.orgId),
+      orderBy: (t, ops) => [ops.desc(t.createdAt)],
+      limit: 300,
+      with: {
+        zone: { columns: { id: true, name: true, code: true } },
+        allocatedBy: { columns: { id: true, name: true } },
+      },
+    });
+
+    const data = rows.map((r: any) => ({
+      id: r.id,
+      seedType: r.seedType,
+      totalQuantity: r.totalQuantity,
+      remainingQuantity: r.remainingQuantity,
+      unit: r.unit,
+      zone: r.zone ? { id: r.zone.id, name: r.zone.name, code: r.zone.code } : null,
+      allocatedBy: r.allocatedBy ? { id: r.allocatedBy.id, name: r.allocatedBy.name } : null,
+      createdAt: r.createdAt?.toISOString?.() ?? String(r.createdAt),
+      updatedAt: r.updatedAt?.toISOString?.() ?? String(r.updatedAt),
+    }));
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('[OrgManager] getOrgAllocations:', err);
+    return { success: false, error: 'Impossible de charger les allocations.' };
+  }
+}
+
+/**
+ * Cree une allocation. ADMIN uniquement.
+ */
+export async function createOrgAllocation(data: {
+  seedType: string;
+  totalQuantity: number;
+  unit?: string;
+  zoneId: string;
+}): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgAdmin();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+
+  const validation = CreateAllocationSchema.safeParse(data);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues.map(e => e.message).join(', ') };
+  }
+
+  const { seedType, totalQuantity, unit, zoneId } = validation.data;
+
+  try {
+    const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, zoneId), columns: { id: true, name: true } });
+    if (!zone) return { success: false, error: 'Zone introuvable.' };
+
+    const [created] = await db.insert(schema.seedAllocations).values({
+      organizationId: ctx.orgId,
+      zoneId,
+      seedType,
+      totalQuantity,
+      remainingQuantity: totalQuantity,
+      unit: unit ?? 'KG',
+      allocatedById: ctx.userId,
+    }).returning();
+
+    await audit({
+      actorId: ctx.userId,
+      action: 'CREATE_ALLOCATION',
+      entityId: created.id,
+      entityType: 'SeedAllocation',
+      newValue: { seedType, totalQuantity, unit, zoneId, zoneName: zone.name },
+    });
+
+    return { success: true, data: { ...created, zone } };
+  } catch (err) {
+    console.error('[OrgManager] createOrgAllocation:', err);
+    return { success: false, error: 'Impossible de creer l\'allocation.' };
+  }
+}
+
+/**
+ * Met a jour une allocation. ADMIN uniquement.
+ */
+export async function updateOrgAllocation(allocationId: string, data: {
+  seedType?: string;
+  totalQuantity?: number;
+  unit?: string;
+  zoneId?: string;
+}): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgAdmin();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+  if (!allocationId) return { success: false, error: 'ID requis.' };
+
+  const validation = UpdateAllocationSchema.safeParse(data);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues.map(e => e.message).join(', ') };
+  }
+
+  try {
+    const existing = await db.query.seedAllocations.findFirst({
+      where: eq(schema.seedAllocations.id, allocationId),
+    });
+    if (!existing) return { success: false, error: 'Allocation introuvable.' };
+    if (existing.organizationId !== ctx.orgId) {
+      return { success: false, error: 'Cette allocation n\'appartient pas a votre organisation.' };
+    }
+
+    const oldValue = await snapshot(existing as unknown as Record<string, unknown>);
+    const updates: Record<string, unknown> = {};
+
+    if (validation.data.seedType !== undefined) updates.seedType = validation.data.seedType;
+    if (validation.data.unit !== undefined) updates.unit = validation.data.unit;
+    if (validation.data.zoneId !== undefined) {
+      const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, validation.data.zoneId), columns: { id: true } });
+      if (!zone) return { success: false, error: 'Zone introuvable.' };
+      updates.zoneId = validation.data.zoneId;
+    }
+    if (validation.data.totalQuantity !== undefined) {
+      const newTotal = validation.data.totalQuantity;
+      const diff = newTotal - (existing.totalQuantity ?? 0);
+      const newRemaining = (existing.remainingQuantity ?? 0) + diff;
+      if (newRemaining < 0) return { success: false, error: 'Le stock restant ne peut pas etre negatif.' };
+      updates.totalQuantity = newTotal;
+      updates.remainingQuantity = newRemaining;
+    }
+
+    await db.update(schema.seedAllocations)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.seedAllocations.id, allocationId));
+
+    await audit({
+      actorId: ctx.userId,
+      action: 'UPDATE_ALLOCATION',
+      entityId: allocationId,
+      entityType: 'SeedAllocation',
+      oldValue,
+      newValue: updates,
+    });
+
+    return { success: true, data: { id: allocationId, ...updates } };
+  } catch (err) {
+    console.error('[OrgManager] updateOrgAllocation:', err);
+    return { success: false, error: 'Impossible de mettre a jour l\'allocation.' };
+  }
+}
+
+/**
+ * Supprime une allocation. ADMIN uniquement. Interdit si des distributions existent.
+ */
+export async function deleteOrgAllocation(allocationId: string): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgAdmin();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+  if (!allocationId) return { success: false, error: 'ID requis.' };
+
+  try {
+    const existing = await db.query.seedAllocations.findFirst({
+      where: eq(schema.seedAllocations.id, allocationId),
+    });
+    if (!existing) return { success: false, error: 'Allocation introuvable.' };
+    if (existing.organizationId !== ctx.orgId) {
+      return { success: false, error: 'Cette allocation n\'appartient pas a votre organisation.' };
+    }
+
+    const distCount = await db.select({ c: count() })
+      .from(schema.seedDistributions)
+      .where(eq(schema.seedDistributions.allocationId, allocationId));
+    if (distCount[0]?.c > 0) {
+      return { success: false, error: `Impossible de supprimer : ${distCount[0].c} distribution(s) liee(s).` };
+    }
+
+    const oldValue = await snapshot(existing as unknown as Record<string, unknown>);
+    await db.delete(schema.seedAllocations).where(eq(schema.seedAllocations.id, allocationId));
+
+    await audit({
+      actorId: ctx.userId,
+      action: 'DELETE_ALLOCATION',
+      entityId: allocationId,
+      entityType: 'SeedAllocation',
+      oldValue,
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error('[OrgManager] deleteOrgAllocation:', err);
+    return { success: false, error: 'Impossible de supprimer l\'allocation.' };
+  }
+}
+
+// ╔══════════════════════════════════════════════╗
+// ║  SEED DISTRIBUTIONS                           ║
+// ╚══════════════════════════════════════════════╝
+
+/**
+ * Liste les distributions de l'organisation active.
+ */
+export async function getOrgDistributions(filters?: {
+  status?: string;
+  allocationId?: string;
+}): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgManager();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+
+  try {
+    const rows = await db.query.seedDistributions.findMany({
+      where: eq(schema.seedDistributions.organizationId, ctx.orgId),
+      orderBy: (t, ops) => [ops.desc(t.createdAt)],
+      limit: 300,
+      with: {
+        allocation: { columns: { id: true, seedType: true, remainingQuantity: true } },
+        producer: {
+          columns: { id: true, businessName: true },
+          with: { user: { columns: { id: true, name: true, email: true, phone: true } } },
+        },
+        agent: { columns: { id: true, name: true, email: true } },
+        zone: { columns: { id: true, name: true } },
+      },
+    });
+
+    let filtered = rows as any[];
+    if (filters?.status) {
+      filtered = filtered.filter((r: any) => r.status === String(filters.status).toUpperCase());
+    }
+    if (filters?.allocationId) {
+      filtered = filtered.filter((r: any) => r.allocationId === filters.allocationId);
+    }
+
+    const data = filtered.map((r: any) => ({
+      id: r.id,
+      allocationId: r.allocationId,
+      seedType: r.allocation?.seedType ?? null,
+      producer: r.producer ? {
+        id: r.producer.id,
+        businessName: r.producer.businessName,
+        userName: r.producer.user?.name ?? null,
+        email: r.producer.user?.email ?? null,
+        phone: r.producer.user?.phone ?? null,
+      } : null,
+      agent: r.agent ? { id: r.agent.id, name: r.agent.name, email: r.agent.email } : null,
+      zone: r.zone ? { id: r.zone.id, name: r.zone.name } : null,
+      quantity: r.quantity,
+      status: r.status,
+      attemptsCount: r.attemptsCount ?? 0,
+      createdAt: r.createdAt?.toISOString?.() ?? null,
+      receiptAt: r.receiptAt?.toISOString?.() ?? null,
+    }));
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('[OrgManager] getOrgDistributions:', err);
+    return { success: false, error: 'Impossible de charger les distributions.' };
+  }
+}
+
+/**
+ * Cree une distribution. Delegue au service metier existant.
+ * ADMIN ou ZONE_MANAGER uniquement.
+ */
+export async function createOrgDistribution(data: {
+  allocationId: string;
+  producerId: string;
+  quantity: number;
+  assignedTo?: string | null;
+  cnibProvided?: string | null;
+  channel?: string;
+}): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgManager();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+
+  const validation = CreateDistributionSchema.safeParse(data);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues.map(e => e.message).join(', ') };
+  }
+
+  const { allocationId, producerId, quantity, assignedTo, cnibProvided, channel } = validation.data;
+
+  try {
+    const allocation = await db.query.seedAllocations.findFirst({
+      where: eq(schema.seedAllocations.id, allocationId),
+      columns: { id: true, organizationId: true },
+    });
+    if (!allocation) return { success: false, error: 'Allocation introuvable.' };
+    if (allocation.organizationId !== ctx.orgId) {
+      return { success: false, error: 'Cette allocation n\'appartient pas a votre organisation.' };
+    }
+
+    const effectiveAgentId = (assignedTo && ctx.isOrgAdmin) ? assignedTo : ctx.userId;
+
+    if (assignedTo && assignedTo !== ctx.userId) {
+      const membership = await db.query.userOrganizations.findFirst({
+        where: and(
+          eq(schema.userOrganizations.userId, assignedTo),
+          eq(schema.userOrganizations.organizationId, ctx.orgId),
+        ),
+      });
+      if (!membership) return { success: false, error: 'L\'agent assigne n\'est pas membre de l\'organisation.' };
+    }
+
+    const { initializeSeedDistribution } = await import('@/services/seedDistribution.service');
+    const result = await initializeSeedDistribution(
+      effectiveAgentId,
+      producerId,
+      allocationId,
+      quantity,
+      cnibProvided ?? undefined,
+      channel ?? 'IN_APP',
+    );
+
+    return { success: true, data: result };
+  } catch (err: any) {
+    console.error('[OrgManager] createOrgDistribution:', err);
+    return { success: false, error: err?.message || 'Impossible de creer la distribution.' };
+  }
+}
+
+/**
+ * Annule une distribution PENDING. ADMIN uniquement.
+ */
+export async function cancelOrgDistribution(distributionId: string): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgAdmin();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+  if (!distributionId) return { success: false, error: 'ID requis.' };
+
+  try {
+    const dist = await db.query.seedDistributions.findFirst({
+      where: eq(schema.seedDistributions.id, distributionId),
+    });
+    if (!dist) return { success: false, error: 'Distribution introuvable.' };
+    if (dist.organizationId !== ctx.orgId) {
+      return { success: false, error: 'Cette distribution n\'appartient pas a votre organisation.' };
+    }
+
+    if (!isCancellable(dist.status)) {
+      return { success: false, error: `Impossible d'annuler une distribution au statut ${dist.status}.` };
+    }
+
+    assertDistTransition(dist.status, 'CANCELLED');
+
+    await db.update(schema.seedDistributions)
+      .set({ status: 'CANCELLED', updatedAt: new Date() } as any)
+      .where(eq(schema.seedDistributions.id, distributionId));
+
+    await audit({
+      actorId: ctx.userId,
+      action: 'CANCEL_DISTRIBUTION',
+      entityId: distributionId,
+      entityType: 'SeedDistribution',
+      oldValue: { status: dist.status },
+      newValue: { status: 'CANCELLED' },
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[OrgManager] cancelOrgDistribution:', err);
+    return { success: false, error: err?.message || 'Impossible d\'annuler la distribution.' };
+  }
+}
+
+/**
+ * Liste les producteurs de l'organisation (pour les dropdowns de distribution).
+ *
+ * producers.organizationId is nullable — many producers have NULL there because
+ * they were created at registration time, before being linked to an org.
+ * So we also match via userOrganizations membership to capture all org members
+ * who have a producer profile.
+ */
+export async function getOrgProducers(): Promise<ServiceResult> {
+  const { ctx, error } = await requireOrgManager();
+  if (error || !ctx) return { success: false, error: error || 'Acces refuse' };
+
+  try {
+    // Strategy: find all userIds that belong to this org, then fetch their producer profiles
+    const orgMembers = await db.query.userOrganizations.findMany({
+      where: eq(schema.userOrganizations.organizationId, ctx.orgId),
+      columns: { userId: true },
+    });
+    const memberUserIds = orgMembers.map(m => m.userId);
+
+    if (memberUserIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Also include producers directly linked via producers.organizationId (legacy)
+    const rows = await db.query.producers.findMany({
+      where: or(
+        eq(schema.producers.organizationId, ctx.orgId),
+        ...memberUserIds.map(uid => eq(schema.producers.userId, uid)),
+      ),
+      columns: { id: true, businessName: true, status: true, userId: true },
+      with: {
+        user: { columns: { id: true, name: true, email: true, phone: true } },
+        zone: { columns: { id: true, name: true } },
+      },
+      orderBy: (t, { asc }) => [asc(t.businessName)],
+      limit: 500,
+    });
+
+    // Deduplicate by producer id
+    const seen = new Set<string>();
+    const data: any[] = [];
+    for (const r of rows as any[]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      data.push({
+        id: r.id,
+        businessName: r.businessName,
+        status: r.status,
+        userName: r.user?.name ?? null,
+        email: r.user?.email ?? null,
+        phone: r.user?.phone ?? null,
+        zone: r.zone ? { id: r.zone.id, name: r.zone.name } : null,
+      });
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('[OrgManager] getOrgProducers:', err);
+    return { success: false, error: 'Impossible de charger les producteurs.' };
   }
 }

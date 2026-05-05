@@ -1,10 +1,5 @@
-import AllocationForm from '@/components/AllocationForm';
+import { redirect } from 'next/navigation';
 
-export default async function Page() {
-  return (
-    <div style={{ padding: 20 }}>
-      <h1>Create Allocation</h1>
-      <AllocationForm />
-    </div>
-  );
+export default function Page() {
+  redirect('/org/allocations');
 }

@@ -30,18 +30,36 @@ export async function initializeSeedDistribution(
     if (!allocation) throw new Error('Allocation introuvable');
 
     // Verify agent membership in the organization and zone
+    // System admins (ADMIN/SUPERADMIN) may not be in userOrganizations but should be allowed
     const agentMembership = await tx.query.userOrganizations.findFirst({
       where: and(
         eq(schema.userOrganizations.userId, agentUserId),
         eq(schema.userOrganizations.organizationId, allocation.organizationId)
       ),
     });
-    if (!agentMembership) throw new Error('Agent non rattaché à l\'organisation');
+
+    let isSystemAdmin = false;
+    if (!agentMembership) {
+      const agentUser = await tx.query.users.findFirst({
+        where: eq(schema.users.id, agentUserId),
+        columns: { role: true },
+      });
+      const sysRole = String(agentUser?.role || '').toUpperCase();
+      isSystemAdmin = sysRole === 'ADMIN' || sysRole === 'SUPERADMIN';
+      if (!isSystemAdmin) throw new Error('Agent non rattaché à l\'organisation');
+    }
 
     // Ensure agent manages the zone (managedZoneId) or has a permissive role
-    const allowedRoles = ['FIELD_AGENT', 'ZONE_AGENT', 'SUB_ZONE_AGENT', 'ZONE_MANAGER'];
-    if (String(agentMembership.managedZoneId) !== String(allocation.zoneId) && !allowedRoles.includes(agentMembership.role || '')) {
-      throw new Error('Agent hors zone autorisée');
+    // System admins and org ADMIN/ZONE_MANAGER can distribute to any zone
+    if (!isSystemAdmin) {
+      const adminRoles = ['ADMIN', 'ZONE_MANAGER'];
+      const fieldRoles = ['FIELD_AGENT', 'ZONE_AGENT', 'SUB_ZONE_AGENT'];
+      const agentRole = agentMembership!.role || '';
+      const isOrgAdmin = adminRoles.includes(agentRole);
+      const isFieldAgent = fieldRoles.includes(agentRole);
+      if (!isOrgAdmin && !(isFieldAgent && String(agentMembership!.managedZoneId) === String(allocation.zoneId))) {
+        throw new Error('Agent hors zone autorisée');
+      }
     }
 
     if ((allocation.remainingQuantity ?? 0) < quantity) throw new Error('Stock insuffisant sur cette allocation');

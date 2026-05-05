@@ -5,6 +5,7 @@ import DashboardHeader from '@/components/productorDashboard/dashboardHeader';
 import AssetInventory from '@/components/productorDashboard/AssetInventory';
 import OperationalTriggers from '@/components/productorDashboard/operationTrigger';
 import MarketArbitrage from '@/components/productorDashboard/marketArbitrage';
+import PendingSeedDistributions from '@/components/productorDashboard/PendingSeedDistributions';
 import { useInventory } from '@/hooks/useInventory';
 import { Leaf, Plus, HeartPulse, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -79,6 +80,7 @@ export default function DashboardShellClient({ assets, organizations, activeOrg,
                 <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 8 }}>Prix du marche en direct</span>
               </div>
             </div>
+            <PendingSeedDistributions />
             <OperationalTriggers activeUnit={activeUnit} />
             <MarketArbitrage activeUnit={activeUnit} />
           </div>

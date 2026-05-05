@@ -275,6 +275,35 @@ export const UpdateWorkZoneSchema = z.object({
 });
 
 // ╔══════════════════════════════════════════════╗
+// ║  ALLOCATIONS & DISTRIBUTIONS                  ║
+// ╚══════════════════════════════════════════════╝
+
+const VALID_ALLOC_UNITS = ['KG', 'G', 'PACK', 'TONNE', 'SACK'] as const;
+
+export const CreateAllocationSchema = z.object({
+  seedType: z.string().min(1, 'Type de semence requis').max(200),
+  totalQuantity: z.number().int().min(1, 'Quantite minimum : 1'),
+  unit: z.enum(VALID_ALLOC_UNITS).default('KG'),
+  zoneId: z.string().min(1, 'Zone requise'),
+});
+
+export const UpdateAllocationSchema = z.object({
+  seedType: z.string().min(1).max(200).optional(),
+  totalQuantity: z.number().int().min(1).optional(),
+  unit: z.enum(VALID_ALLOC_UNITS).optional(),
+  zoneId: z.string().min(1).optional(),
+});
+
+export const CreateDistributionSchema = z.object({
+  allocationId: z.string().min(1, 'Allocation requise'),
+  producerId: z.string().min(1, 'Producteur requis'),
+  quantity: z.number().int().min(1, 'Quantite minimum : 1'),
+  assignedTo: z.string().optional().nullable(),
+  cnibProvided: z.string().optional().nullable(),
+  channel: z.enum(['IN_APP', 'SMS', 'WHATSAPP']).default('IN_APP'),
+});
+
+// ╔══════════════════════════════════════════════╗
 // ║  TYPES DÉRIVÉS (pour le typage TypeScript)   ║
 // ╚══════════════════════════════════════════════╝
 
@@ -297,5 +326,8 @@ export type InviteMemberInput = z.infer<typeof InviteMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>;
 export type AssignWorkZoneInput = z.infer<typeof AssignWorkZoneSchema>;
 export type UpdateWorkZoneInput = z.infer<typeof UpdateWorkZoneSchema>;
+export type CreateAllocationInput = z.infer<typeof CreateAllocationSchema>;
+export type UpdateAllocationInput = z.infer<typeof UpdateAllocationSchema>;
+export type CreateDistributionInput = z.infer<typeof CreateDistributionSchema>;
 // Legacy alias
 export type CreateZoneInput = CreateLocationInput;
