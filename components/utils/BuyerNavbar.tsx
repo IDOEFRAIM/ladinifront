@@ -18,7 +18,7 @@ const C = {
 };
 
 const BUYER_LINKS = [
-  { name: 'Marché', href: '/market', icon: Store },
+  { name: 'Marché', href: '/catalogue', icon: Store },
   { name: 'Dashboard', href: '/buyer-dashboard', icon: LayoutDashboard },
   { name: 'Commandes', href: '/orders', icon: ClipboardList },
   { name: 'Suivi Agent', href: '/conversations', icon: Bot },
@@ -63,7 +63,7 @@ export default function BuyerNavbar() {
 
           {/* LOGO SECTION */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-            <Link href="/market" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            <Link href="catalogue" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
               <div style={{ 
                 width: 36, height: 36, borderRadius: 10, 
                 background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`,
