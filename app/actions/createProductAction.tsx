@@ -1,44 +1,43 @@
 "use server";
-import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createProductFromForm, updateProductFromForm } from './products.server';
 import { requireProducer } from '@/lib/api-guard';
 
-export async function createProductAction(formData: FormData) {
-  // Use requireProducer to build full access context and guarantee producerId
+// ── Shared auth guard ──────────────────────────────────────────────────
+async function getProducerId(): Promise<string> {
   const { user, error } = await requireProducer();
   if (error || !user) {
     const err = new Error('Unauthorized');
     (err as any).status = 401;
     throw err;
   }
-  const producerId = user.producerId || user.id;
+  return (user.producerId || user.id) as string;
+}
 
+// ── Server actions ─────────────────────────────────────────────────────
+
+export async function createProductAction(formData: FormData) {
+  const producerId = await getProducerId();
   try {
-    await createProductFromForm(formData, producerId as string);
-    return;
+    await createProductFromForm(formData, producerId);
   } catch (err: any) {
     console.error('createProductAction failed', err?.message ?? err, { validation: err?.validation, raw: err?.raw });
     throw err;
   }
+
+  // La redirection doit être en dehors du bloc try/catch 
+  // car redirect() lance techniquement une erreur interne à Next.js
+  redirect('/products');
 }
 
-
 export async function updateProductAction(formData: FormData) {
-  const { user, error } = await requireProducer();
-  if (error || !user) {
-    const err = new Error('Unauthorized');
-    (err as any).status = 401;
-    throw err;
-  }
-
-  // Ensure the server-side update function will validate ownership internally
+  const producerId = await getProducerId();
   try {
-    await updateProductFromForm(formData, user.producerId || user.id);
-    return;
+    await updateProductFromForm(formData, producerId);
   } catch (err: any) {
     console.error('updateProductAction failed', err?.message ?? err, { validation: err?.validation, raw: err?.raw });
     throw err;
   }
-}
 
-// Named exports only — server actions must export async functions directly
+  redirect('/products');
+}
