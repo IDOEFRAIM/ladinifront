@@ -8,7 +8,8 @@ import {
   deleteOrgRole,
 } from '@/services/org-manager.service';
 import { PERMISSIONS } from '@/lib/permissions';
-import { Shield, Plus, Pencil, Trash2, X, Loader2, Check, Users } from 'lucide-react';
+import { MessageBanner, PageSpinner, OrgModal, ModalFooter, type BannerMessage } from '@/components/org/shared';
+import { Shield, Plus, Pencil, Trash2, Loader2, Check, Users } from 'lucide-react';
 
 // ─── Permission groups for the multi-select UI ──────────────────────────────
 const PERMISSION_GROUPS: Record<string, string[]> = {
@@ -37,7 +38,7 @@ interface RoleItem {
 export default function OrgRolesPage() {
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -138,13 +139,7 @@ export default function OrgRolesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -167,18 +162,7 @@ export default function OrgRolesPage() {
         </button>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div
-          className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${
-            message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
       {/* Roles list */}
       {roles.length === 0 ? (
@@ -234,23 +218,12 @@ export default function OrgRolesPage() {
 
       {/* ─── Create/Edit Modal ──────────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">
-                {editingRole ? 'Modifier le rôle' : 'Nouveau rôle'}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-1 rounded-lg hover:bg-stone-100 text-stone-400"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <OrgModal
+          title={editingRole ? 'Modifier le rôle' : 'Nouveau rôle'}
+          onClose={() => setShowModal(false)}
+          maxWidth="max-w-2xl"
+          scrollable
+        >
               {/* Name */}
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">
@@ -330,27 +303,15 @@ export default function OrgRolesPage() {
                   })}
                 </div>
               </div>
-            </div>
-
-            {/* Modal footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={formSaving || !formName.trim() || formPermissions.size === 0}
-                className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 transition-colors disabled:opacity-50"
-              >
-                {formSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                {editingRole ? 'Mettre à jour' : 'Créer'}
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter
+            onCancel={() => setShowModal(false)}
+            onConfirm={handleSave}
+            confirmLabel={editingRole ? 'Mettre à jour' : 'Créer'}
+            saving={formSaving}
+            disabled={!formName.trim() || formPermissions.size === 0}
+            icon={<Check size={14} />}
+          />
+        </OrgModal>
       )}
     </div>
   );

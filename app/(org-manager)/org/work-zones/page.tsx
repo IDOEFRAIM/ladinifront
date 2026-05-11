@@ -9,7 +9,8 @@ import {
   updateWorkZone,
   removeWorkZone,
 } from '@/services/org-manager.service';
-import { MapPin, Plus, Pencil, Trash2, X, Loader2, Check, Search, User } from 'lucide-react';
+import { MessageBanner, PageSpinner, OrgModal, ModalFooter, type BannerMessage } from '@/components/org/shared';
+import { MapPin, Plus, Pencil, Trash2, Loader2, Check, Search, User } from 'lucide-react';
 
 interface WorkZoneItem {
   id: string;
@@ -41,7 +42,7 @@ export default function OrgWorkZonesPage() {
   const [zones, setZones] = useState<ZoneOption[]>([]);
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   // Assign modal
   const [showAssign, setShowAssign] = useState(false);
@@ -163,13 +164,7 @@ export default function OrgWorkZonesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -192,18 +187,7 @@ export default function OrgWorkZonesPage() {
         </button>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div
-          className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${
-            message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
       {/* Work zones grid */}
       {workZones.length === 0 ? (
@@ -269,18 +253,9 @@ export default function OrgWorkZonesPage() {
         </div>
       )}
 
-      {/* ─── Assign Modal (with zone combobox) ──────────────────────────── */}
+      {/* ─── Assign Modal (with zone combobox) ────────────────────────────── */}
       {showAssign && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Assigner une zone</h2>
-              <button onClick={() => setShowAssign(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+        <OrgModal title="Assigner une zone" onClose={() => setShowAssign(false)} scrollable>
               {/* Zone combobox */}
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">
@@ -358,40 +333,20 @@ export default function OrgWorkZonesPage() {
                   placeholder="Ex: Superviseur de collecte"
                 />
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button
-                onClick={() => setShowAssign(false)}
-                className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleAssign}
-                disabled={assignSaving || !assignZoneId}
-                className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {assignSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                Assigner
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter
+            onCancel={() => setShowAssign(false)}
+            onConfirm={handleAssign}
+            confirmLabel="Assigner"
+            saving={assignSaving}
+            disabled={!assignZoneId}
+            icon={<Check size={14} />}
+          />
+        </OrgModal>
       )}
 
       {/* ─── Edit Modal ─────────────────────────────────────────────────── */}
       {showEdit && editWz && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Modifier « {editWz.zoneName} »</h2>
-              <button onClick={() => setShowEdit(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
+        <OrgModal title={`Modifier « ${editWz.zoneName} »`} onClose={() => setShowEdit(false)}>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Manager</label>
                 <select
@@ -418,26 +373,14 @@ export default function OrgWorkZonesPage() {
                   placeholder="Ex: Superviseur de collecte"
                 />
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button
-                onClick={() => setShowEdit(false)}
-                className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleEdit}
-                disabled={editSaving}
-                className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                Enregistrer
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter
+            onCancel={() => setShowEdit(false)}
+            onConfirm={handleEdit}
+            confirmLabel="Enregistrer"
+            saving={editSaving}
+            icon={<Check size={14} />}
+          />
+        </OrgModal>
       )}
     </div>
   );

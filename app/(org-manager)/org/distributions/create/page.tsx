@@ -7,6 +7,7 @@ import {
   getOrgMembers,
   createOrgDistribution,
 } from '@/services/org-manager.service';
+import { MessageBanner, PageSpinner, type BannerMessage } from '@/components/org/shared';
 import { ArrowLeft, Send, Loader2, Check, Search, Package, User, Users } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,7 +21,7 @@ export default function CreateDistributionPage() {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   // Form state
   const [allocationId, setAllocationId] = useState('');
@@ -30,6 +31,16 @@ export default function CreateDistributionPage() {
   const [assignedTo, setAssignedTo] = useState('');
   const [producerFocused, setProducerFocused] = useState(false);
 
+  function mapAllocations(data: any[]): AllocOption[] {
+    return data.filter(a => a.remainingQuantity > 0).map(a => ({
+      id: a.id,
+      seedType: a.seedType,
+      remainingQuantity: a.remainingQuantity,
+      unit: a.unit ?? 'KG',
+      zone: a.zone,
+    }));
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     const [aRes, pRes, mRes] = await Promise.all([
@@ -38,13 +49,7 @@ export default function CreateDistributionPage() {
       getOrgMembers(),
     ]);
     if (aRes.success && aRes.data) {
-      const allocs = (aRes.data as any[]).filter(a => a.remainingQuantity > 0).map(a => ({
-        id: a.id,
-        seedType: a.seedType,
-        remainingQuantity: a.remainingQuantity,
-        unit: a.unit ?? 'KG',
-        zone: a.zone,
-      }));
+      const allocs = mapAllocations(aRes.data as any[]);
       setAllocations(allocs);
       if (allocs.length && !allocationId) setAllocationId(allocs[0].id);
     }
@@ -100,31 +105,22 @@ export default function CreateDistributionPage() {
     });
 
     if (result.success) {
-      setMessage({ type: 'success', text: 'Distribution creee avec succes. Le code de verification a ete envoye.' });
+      setMessage({ type: 'success', text: 'Distribution créée avec succès. Le code de vérification a été envoyé.' });
       setProducerId('');
       setProducerSearch('');
       setQuantity('');
       // Refresh allocations (remaining qty changed)
       const aRes = await getOrgAllocations();
       if (aRes.success && aRes.data) {
-        const allocs = (aRes.data as any[]).filter(a => a.remainingQuantity > 0).map(a => ({
-          id: a.id, seedType: a.seedType, remainingQuantity: a.remainingQuantity, unit: a.unit ?? 'KG', zone: a.zone,
-        }));
-        setAllocations(allocs);
+        setAllocations(mapAllocations(aRes.data as any[]));
       }
     } else {
-      setMessage({ type: 'error', text: result.error || 'Erreur lors de la creation.' });
+      setMessage({ type: 'error', text: result.error || 'Erreur lors de la création.' });
     }
     setSaving(false);
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -140,15 +136,12 @@ export default function CreateDistributionPage() {
             <Send size={20} className="text-emerald-700" />
             <h1 className="text-xl font-extrabold text-stone-900">Nouvelle distribution</h1>
           </div>
-          <p className="text-sm text-stone-500 mt-1">Attribuez des semences a un producteur depuis une allocation existante.</p>
+          <p className="text-sm text-stone-500 mt-1">Attribuez des semences à un producteur depuis une allocation existante.</p>
         </div>
 
-        {/* Message */}
-        {message && (
-          <div className={`mx-6 mt-5 px-4 py-3 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-            {message.text}
-          </div>
-        )}
+        <div className="mx-6 mt-5">
+          <MessageBanner message={message} />
+        </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Allocation */}
@@ -158,7 +151,7 @@ export default function CreateDistributionPage() {
             </label>
             {allocations.length === 0 ? (
               <div className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
-                Aucune allocation avec du stock disponible. <Link href="/org/allocations" className="underline font-bold">Creer une allocation</Link>.
+                Aucune allocation avec du stock disponible. <Link href="/org/allocations" className="underline font-bold">Créer une allocation</Link>.
               </div>
             ) : (
               <select
@@ -196,7 +189,7 @@ export default function CreateDistributionPage() {
             {!producerId && producerFocused && (
               <div className="mt-1 max-h-48 overflow-y-auto border border-stone-200 rounded-lg bg-white shadow-sm">
                 {filteredProducers.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-stone-400">Aucun producteur trouve.</div>
+                  <div className="px-4 py-3 text-sm text-stone-400">Aucun producteur trouvé.</div>
                 ) : filteredProducers.map(p => (
                   <button
                     key={p.id}
@@ -221,7 +214,7 @@ export default function CreateDistributionPage() {
 
           {/* Quantity */}
           <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Quantite *</label>
+            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Quantité *</label>
             <input
               type="number"
               value={quantity as any}
@@ -232,7 +225,7 @@ export default function CreateDistributionPage() {
               placeholder={selectedAllocation ? `Max: ${selectedAllocation.remainingQuantity} ${selectedAllocation.unit}` : ''}
             />
             {selectedAllocation && quantity && Number(quantity) > selectedAllocation.remainingQuantity && (
-              <div className="text-xs text-red-600 mt-1">Depasse le stock restant ({selectedAllocation.remainingQuantity} {selectedAllocation.unit})</div>
+              <div className="text-xs text-red-600 mt-1">Dépasse le stock restant ({selectedAllocation.remainingQuantity} {selectedAllocation.unit})</div>
             )}
           </div>
 
@@ -240,14 +233,14 @@ export default function CreateDistributionPage() {
           {members.length > 0 && (
             <div>
               <label className="flex items-center gap-2 text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">
-                <Users size={14} /> Agent assignee (optionnel)
+                <Users size={14} /> Agent assigné (optionnel)
               </label>
               <select
                 value={assignedTo}
                 onChange={e => setAssignedTo(e.target.value)}
                 className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none"
               >
-                <option value="">Moi-meme (agent connecte)</option>
+                <option value="">Moi-même (agent connecté)</option>
                 {members.map(m => (
                   <option key={m.userId} value={m.userId}>
                     {m.userName || m.email || m.userId} — {m.orgRole}
@@ -260,14 +253,14 @@ export default function CreateDistributionPage() {
           {/* Summary */}
           {selectedProducer && selectedAllocation && quantity && (
             <div className="px-4 py-3 rounded-xl bg-stone-50 border border-stone-200 text-sm">
-              <div className="font-bold text-stone-700 mb-1">Recapitulatif</div>
+              <div className="font-bold text-stone-700 mb-1">Récapitulatif</div>
               <p className="text-stone-600">
                 Le producteur <strong>{selectedProducer.businessName || selectedProducer.userName}</strong> recevra{' '}
                 <strong>{quantity} {selectedAllocation.unit}</strong> de <strong>{selectedAllocation.seedType}</strong>.
                 {assignedTo ? (
                   <> Le lot sera remis par <strong>{members.find(m => m.userId === assignedTo)?.userName || assignedTo}</strong>.</>
                 ) : (
-                  <> Le lot sera remis par l&apos;agent connecte.</>
+                  <> Le lot sera remis par l&apos;agent connecté.</>  
                 )}
               </p>
             </div>
@@ -281,7 +274,7 @@ export default function CreateDistributionPage() {
               disabled={saving || !allocationId || !producerId || !quantity || (selectedAllocation ? Number(quantity) > selectedAllocation.remainingQuantity : false)}
               className="inline-flex items-center gap-2 bg-emerald-700 text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50 transition-colors"
             >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Creer la distribution
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Créer la distribution
             </button>
           </div>
         </form>

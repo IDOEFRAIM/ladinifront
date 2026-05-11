@@ -9,7 +9,8 @@ import {
   isCancellable,
   type DistributionStatus,
 } from '@/lib/distributionStateMachine';
-import { List, Plus, Search, XCircle, Loader2, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { MessageBanner, PageSpinner, Pagination, type BannerMessage } from '@/components/org/shared';
+import { List, Plus, Search, XCircle, Filter } from 'lucide-react';
 import Link from 'next/link';
 
 const PAGE_SIZE = 12;
@@ -31,7 +32,7 @@ interface DistItem {
 export default function OrgDistributionsPage() {
   const [distributions, setDistributions] = useState<DistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -79,7 +80,7 @@ export default function OrgDistributionsPage() {
     setMessage(null);
     const result = await cancelOrgDistribution(id);
     if (result.success) {
-      setMessage({ type: 'success', text: 'Distribution annulee.' });
+      setMessage({ type: 'success', text: 'Distribution annulée.' });
       load();
     } else {
       setMessage({ type: 'error', text: result.error || 'Erreur.' });
@@ -97,13 +98,7 @@ export default function OrgDistributionsPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -124,12 +119,7 @@ export default function OrgDistributionsPage() {
         </Link>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
       {/* Stat pills */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -182,7 +172,7 @@ export default function OrgDistributionsPage() {
             <tbody>
               {paginated.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-stone-400">
-                  {search || statusFilter !== 'ALL' ? 'Aucun resultat pour ces filtres.' : 'Aucune distribution enregistree.'}
+                  {search || statusFilter !== 'ALL' ? 'Aucun résultat pour ces filtres.' : 'Aucune distribution enregistrée.'}
                 </td></tr>
               ) : paginated.map(d => (
                 <tr key={d.id} className="border-b border-stone-100 hover:bg-stone-50 transition-colors">
@@ -217,15 +207,7 @@ export default function OrgDistributionsPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-stone-200 bg-stone-50">
-            <span className="text-xs text-stone-500">{filtered.length} resultat{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}</span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"><ChevronLeft size={16} /></button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"><ChevronRight size={16} /></button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} count={filtered.length} onPageChange={setPage} />
       </div>
     </div>
   );

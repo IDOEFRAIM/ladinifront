@@ -2,7 +2,7 @@
 
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, ne, inArray, notInArray, gt, sql } from 'drizzle-orm';
+import { eq, and, ne, notInArray, gt, sql } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
@@ -529,37 +529,7 @@ export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: 
       status: a.status,
     }));
   } catch (e) {
-    const conditions: any[] = [];
-    conditions.push(eq(schema.auctions.status, 'OPEN'));
-    if (opts?.subCategoryId) conditions.push(eq(schema.auctions.subCategoryId, opts.subCategoryId));
-    if (opts?.zoneId) conditions.push(eq(schema.auctions.targetZoneId, opts.zoneId));
-
-    const auctions = await db.query.auctions.findMany({
-      where: conditions.length > 0 ? and(...conditions) : undefined,
-      orderBy: (t, { asc }) => [asc(t.deadline)],
-      with: {
-        bids: true,
-      },
-    });
-
-    // Collect subCategoryIds and fetch names in bulk
-    const subCatIds = Array.from(new Set(auctions.map(a => a.subCategoryId).filter(Boolean) as string[]));
-    const subCats = subCatIds.length > 0
-      ? (await db.query.subCategories.findMany({ where: (t) => (subCatIds.length ? inArray(t.id, subCatIds) : undefined), columns: { id: true, name: true } as any })) as { id: string; name: string }[]
-      : [];
-    const subCatMap = new Map(subCats.map(s => [s.id, s.name]));
-
-    // normalize
-    return auctions.map(a => ({
-      id: a.id,
-      subCategoryName: a.subCategoryId ? subCatMap.get(a.subCategoryId) ?? null : null,
-      quantity: a.quantity,
-      unit: a.unit,
-      maxPricePerUnit: a.maxPricePerUnit,
-      deadline: a.deadline,
-      bidsCount: Array.isArray(a.bids) ? a.bids.length : 0,
-      targetZoneId: a.targetZoneId,
-      status: a.status,
-    }));
+    console.error('getOpenAuctions error:', e);
+    return [];
   }
 }

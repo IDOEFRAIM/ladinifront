@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useNetwork } from '@/hooks/useNetwork';
 import { processSyncQueue } from '@/lib/syncService';
+import toast from 'react-hot-toast';
 
 export default function SyncProvider() {
     const isOnline = useNetwork();
@@ -11,7 +12,7 @@ export default function SyncProvider() {
             if (process.env.NODE_ENV !== 'production') console.log("🌐 Connexion rétablie : Lancement de la synchro...");
             processSyncQueue().then(res => {
                 if (res.syncedCount > 0) {
-                    alert(`${res.syncedCount} commandes synchronisées !`);
+                    toast.success(`${res.syncedCount} commande(s) synchronisée(s)`);
                 }
             });
         }

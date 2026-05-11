@@ -1,14 +1,12 @@
 ﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getFarms, getStocks } from '@/services/inventory.service';
 import FarmList from '@/components/productorDashboard/inventory/FarmList';
 import StockBoard from '@/components/productorDashboard/inventory/StockBoard';
+import { C, F } from '@/components/productor/tokens';
 import { Warehouse, Loader2 } from 'lucide-react';
-
-const C = { forest:'#064E3B', emerald:'#10B981', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
-const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
 
 function LoadingUI() {
   return (
@@ -45,8 +43,8 @@ function MainContent({ farms, selectedFarmId, setSelectedFarmId, loadFarms, stoc
         ) : (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: `2px dashed ${C.border}`, borderRadius: 32, color: C.muted }}>
             <Warehouse size={56} style={{ opacity: 0.15, marginBottom: 16 }} />
-            <p style={{ fontFamily: F.heading, fontSize: '1.1rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 2 }}>Selectionnez une ferme</p>
-            <p style={{ fontFamily: F.body, fontSize: '0.8rem', marginTop: 8 }}>ou creez-en une nouvelle pour commencer</p>
+            <p style={{ fontFamily: F.heading, fontSize: '1.1rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 2 }}>Sélectionnez une ferme</p>
+            <p style={{ fontFamily: F.body, fontSize: '0.8rem', marginTop: 8 }}>ou créez-en une nouvelle pour commencer</p>
           </div>
         )}
       </div>
@@ -61,19 +59,19 @@ export default function InventoryPage() {
   const [stocks, setStocks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => { loadFarms(); }, []);
-  useEffect(() => { if (selectedFarmId) loadStocks(selectedFarmId); else setStocks([]); }, [selectedFarmId]);
-
-  const loadFarms = async () => {
+  const loadFarms = useCallback(async () => {
     const res = await getFarms();
     if (res.success && res.data) { setFarms(res.data); if (res.data.length > 0 && !selectedFarmId) setSelectedFarmId(res.data[0].id); }
     setIsLoading(false);
-  };
+  }, [selectedFarmId]);
 
-  const loadStocks = async (farmId: string) => {
+  const loadStocks = useCallback(async (farmId: string) => {
     const res = await getStocks(farmId);
     if (res.success && res.data) setStocks(res.data);
-  };
+  }, []);
+
+  useEffect(() => { loadFarms(); }, [loadFarms]);
+  useEffect(() => { if (selectedFarmId) loadStocks(selectedFarmId); else setStocks([]); }, [selectedFarmId, loadStocks]);
 
   if (isLoading) return <LoadingUI />;
   return <MainContent farms={farms} selectedFarmId={selectedFarmId} setSelectedFarmId={setSelectedFarmId} loadFarms={loadFarms} stocks={stocks} loadStocks={loadStocks} />;

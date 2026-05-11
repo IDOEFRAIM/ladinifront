@@ -121,7 +121,7 @@ async function dispatchDistributionCode(
   await tx.insert(schema.agentActions).values({
     agentName: 'system',
     actionType: 'SEND_DISTRIBUTION_OTP',
-    payload: { distributionId, code, channel, producerId, producerUserId },
+    payload: { distributionId, channel, producerId, producerUserId, codeRedacted: true },
     status: 'COMPLETED',
   });
 

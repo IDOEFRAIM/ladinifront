@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Leaf, Menu, X, LayoutDashboard, LogOut, ArrowRight, User } from 'lucide-react';
@@ -58,10 +59,14 @@ export default function Navbar() {
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-2 group transition-transform active:scale-95">
             <div className="bg-gradient-to-br from-emerald-900 to-emerald-500 p-2 rounded-xl text-white shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform">
-              <Leaf size={22} />
+               <Image 
+                src="/images/logo.jpeg"
+                alt="logo ladini"
+                width={100}
+                height={100}/>
             </div>
             <span className="font-space font-extrabold text-xl tracking-tighter text-emerald-900">
-              Front<span className="text-emerald-500">Ag</span>
+              Ladi<span className="text-emerald-500">Ni</span>
             </span>
           </Link>
 

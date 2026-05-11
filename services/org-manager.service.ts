@@ -14,7 +14,7 @@
 import { cookies } from 'next/headers';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, or, count, desc, gte, sql } from 'drizzle-orm';
+import { eq, and, or, count, desc, gte, sql, inArray } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { audit, snapshot } from '@/lib/audit';
@@ -73,12 +73,9 @@ async function getOrgContext(): Promise<{ ctx: OrgContext | null; error: string 
   // 2. Active org cookie
   let orgId = cookieStore.get(COOKIE_NAMES.ACTIVE_ORG_ID)?.value;
   // Fallback: session token may carry activeOrgId
-  if (!orgId) {
-    const session = await getSessionFromRequest({ cookies: cookieStore } as any);
-    if (session?.activeOrgId) {
-      orgId = session.activeOrgId;
-        if (process.env.NODE_ENV !== 'production') console.log(`getOrgContext: using activeOrgId from session=${orgId}`);
-    }
+  if (!orgId && session?.activeOrgId) {
+    orgId = session.activeOrgId;
+    if (process.env.NODE_ENV !== 'production') console.log(`getOrgContext: using activeOrgId from session=${orgId}`);
   }
   // Fallback: client may cache the first org in `user-org` cookie
   if (!orgId) {
@@ -317,16 +314,15 @@ export async function getOrgRoles(): Promise<ServiceResult> {
       orderBy: (t, { desc }) => [desc(t.createdAt)],
     });
 
-    // Separate count queries for _count replacement
-    const roleCounts = await Promise.all(
-      roles.map(async (r) => {
-        const [{ value }] = await db.select({ value: count() })
-          .from(schema.userOrganizations)
-          .where(eq(schema.userOrganizations.roleId, r.id));
-        return { id: r.id, count: value };
-      })
-    );
-    const countMap = Object.fromEntries(roleCounts.map(rc => [rc.id, rc.count]));
+    // Single GROUP BY query instead of N+1
+    const roleCounts = await db.select({
+      roleId: schema.userOrganizations.roleId,
+      value: count(),
+    })
+      .from(schema.userOrganizations)
+      .where(sql`${schema.userOrganizations.roleId} IS NOT NULL`)
+      .groupBy(schema.userOrganizations.roleId);
+    const countMap = Object.fromEntries(roleCounts.map(rc => [rc.roleId!, rc.value]));
 
     const formatted = roles.map(r => ({
       id: r.id,
@@ -1445,7 +1441,7 @@ export async function getOrgProducers(): Promise<ServiceResult> {
     const rows = await db.query.producers.findMany({
       where: or(
         eq(schema.producers.organizationId, ctx.orgId),
-        ...memberUserIds.map(uid => eq(schema.producers.userId, uid)),
+        inArray(schema.producers.userId, memberUserIds),
       ),
       columns: { id: true, businessName: true, status: true, userId: true },
       with: {

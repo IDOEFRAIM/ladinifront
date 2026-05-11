@@ -6,8 +6,18 @@ import { eq, sql, count, sum, gte, countDistinct, desc } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
+async function assertAdmin() {
+  const userId = await getUserIdFromSession();
+  if (!userId) throw new Error('Session expirée');
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { role: true } });
+  const role = String(user?.role ?? '').toUpperCase();
+  if (role !== 'ADMIN' && role !== 'SUPERADMIN') throw new Error('Accès réservé aux administrateurs');
+  return userId;
+}
+
 export async function getAdminDashboardStats() {
   try {
+    await assertAdmin();
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -126,6 +136,7 @@ export async function getAdminDashboardStats() {
 
 export async function getAdminProducers() {
   try {
+    await assertAdmin();
     // Fetch producers with user and zone relations
     interface ProducerWithRelations {
       id: string;
@@ -176,13 +187,11 @@ export async function getAdminProducers() {
       .from(schema.products);
 
     const orderCountByProducer = new Map<string, number>();
+    const productToProducerMap = new Map(productToProducer.map(p => [p.id, p.producerId]));
     for (const po of producerOrders) {
-      const prod = productToProducer.find(p => p.id === po.productId);
-      if (prod) {
-        orderCountByProducer.set(
-          prod.producerId,
-          (orderCountByProducer.get(prod.producerId) ?? 0) + Number(po.count)
-        );
+      const pid = productToProducerMap.get(po.productId);
+      if (pid) {
+        orderCountByProducer.set(pid, (orderCountByProducer.get(pid) ?? 0) + Number(po.count));
       }
     }
 
@@ -236,10 +245,17 @@ export async function getAdminProducers() {
  * @param statusId Nouveau statut à appliquer
  * @returns { success: boolean; data?: any; error?: string }
  */
+const ALLOWED_PRODUCER_STATUSES = ['PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED'];
+
 export async function updateProducerStatus(producerId: string, statusId: string) {
   if (!producerId) return { success: false, error: "ID requis" };
+  const upper = String(statusId).toUpperCase();
+  if (!ALLOWED_PRODUCER_STATUSES.includes(upper)) {
+    return { success: false, error: `Statut invalide. Valeurs acceptées : ${ALLOWED_PRODUCER_STATUSES.join(', ')}` };
+  }
 
   try {
+    await assertAdmin();
     const oldProducer = await db.query.producers.findFirst({
       where: eq(schema.producers.id, producerId),
       columns: { status: true },
@@ -270,6 +286,15 @@ export async function assignProducerLocation(producerId: string, locationId: str
   if (!producerId || !locationId) return { success: false, error: "ID requis" };
 
   try {
+    await assertAdmin();
+
+    const zone = await db.query.zones.findFirst({ where: eq(schema.zones.id, locationId), columns: { id: true } });
+    if (!zone) return { success: false, error: "Zone introuvable" };
+
+    const oldProducer = await db.query.producers.findFirst({
+      where: eq(schema.producers.id, producerId),
+      columns: { zoneId: true },
+    });
 
     const [updated] = await db.update(schema.producers)
       .set({ zoneId: locationId })
@@ -285,12 +310,13 @@ export async function assignProducerLocation(producerId: string, locationId: str
       actorId: userId ?? 'system',
       entityType: 'Producer',
       entityId: producerId,
-      // newValue est déjà dans 'updated'
+      oldValue: { zoneId: oldProducer?.zoneId },
       newValue: { zoneId: updated.zoneId }, 
     });
 
     return { success: true, data: updated };
   } catch (error) {
+    console.error("Erreur assignation zone producteur:", error);
     return { success: false, error: "Erreur technique" };
   }
 }
@@ -300,6 +326,7 @@ export async function assignProducerLocation(producerId: string, locationId: str
 
 export async function getAdminProducts() {
   try {
+    await assertAdmin();
     // Fetch products with producer relation
     interface ProductWithProducer {
       id: string;
@@ -386,10 +413,11 @@ export async function getAdminProducts() {
 
 // ╔══════════════════════════════════════════════╗
 // ║  VALIDATIONS (PENDING)                       ║
-// ╚════
-// 
+// ╚══════════════════════════════════════════════╝
+
 export async function getAdminValidations() {
   try {
+    await assertAdmin();
     // 1. Récupération des producteurs en attente avec leurs relations
     const pendingProducers = await db.query.producers.findMany({
       where: eq(schema.producers.status, 'PENDING'),

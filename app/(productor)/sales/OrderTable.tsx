@@ -5,9 +5,7 @@ import Link from 'next/link';
 import CallButton from '@/components/CallButton';
 import { Package, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
-const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
+import { C, F, GlassCard } from '@/components/productor/tokens';
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; border: string }> = {
   pending:    { bg: 'rgba(217,119,6,0.08)', color: '#D97706', border: 'rgba(217,119,6,0.15)' },
@@ -18,12 +16,8 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; border: string 
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'En attente', confirmed: 'Validee', delivering: 'En route', delivered: 'Terminee', cancelled: 'Annulee',
+  pending: 'En attente', confirmed: 'Validée', delivering: 'En route', delivered: 'Terminée', cancelled: 'Annulée',
 };
-
-function GlassCard({ children, style, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, ...style }} {...props}>{children}</div>;
-}
 
 export default function OrdersTabs({ initialOrders }: { initialOrders: any[] }) {
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');

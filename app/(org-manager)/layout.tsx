@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings, Shield, Users, MapPin, ChevronLeft, Menu, Loader2, Building2, Package, List } from 'lucide-react';
@@ -71,7 +72,7 @@ const NAV_ITEMS = [
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive = currentPath === href;
             return (
-              <a
+              <Link
                 key={href}
                 href={href}
                 onClick={onClose}
@@ -85,20 +86,20 @@ const NAV_ITEMS = [
               >
                 <Icon size={18} />
                 {label}
-              </a>
+              </Link>
             );
           })}
         </nav>
 
         {/* Footer */}
         <div className="p-3 border-t" style={{ borderColor: C.border }}>
-          <a
+          <Link
             href="/dashboard"
             className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-stone-500 hover:text-stone-700 hover:bg-stone-50 transition-colors"
           >
             <ChevronLeft size={16} />
             Retour au tableau de bord
-          </a>
+          </Link>
         </div>
       </aside>
     </>

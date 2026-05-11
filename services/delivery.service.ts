@@ -63,15 +63,14 @@ export async function resolveOrCreateDeliveryAgent(userId: string) {
 
 // ── Flux Logistique ──────────────────────────────────────────────────────
 
+const DELIVERABLE_STATUSES = ['CONFIRMED', 'PROCESSING', 'PAID', 'SHIPPED'];
+
 /**
- * Quand une commande passe au statut PAID, crée automatiquement une entrée delivery
- * et la rend visible aux delivery_agents de la zone correspondante.
- *
- * Appelé par le flux de paiement (order status change hook).
+ * Logique interne partagée pour créer une livraison.
+ * Vérifie le statut, l'idempotence, résout les coordonnées, génère l'OTP.
  */
-export async function createDeliveryForPaidOrder(orderId: string) {
+async function createDeliveryInternal(orderId: string, allowedStatuses: string[]) {
   return db.transaction(async (tx) => {
-    // 1. Charger la commande
     const order = await tx.query.orders.findFirst({
       where: eq(schema.orders.id, orderId),
       columns: {
@@ -81,16 +80,18 @@ export async function createDeliveryForPaidOrder(orderId: string) {
     });
 
     if (!order) throw new Error('Commande introuvable');
-    if (order.status !== 'PAID') throw new Error('La commande n\'est pas au statut PAID');
+    if (!allowedStatuses.includes(order.status as string)) {
+      throw new Error(`Statut invalide pour création de livraison: ${order.status}`);
+    }
 
-    // 2. Vérifier qu'il n'y a pas déjà une livraison
+    // Idempotence : vérifier qu'il n'y a pas déjà une livraison
     const existing = await tx.query.deliveries.findFirst({
       where: eq(schema.deliveries.orderId, orderId),
       columns: { id: true },
     });
     if (existing) return { success: true, data: existing, message: 'Livraison déjà créée' };
 
-    // 3. Résoudre les coordonnées d'origine (producteur)
+    // Résoudre les coordonnées d'origine (producteur)
     let originLat: number | null = null;
     let originLng: number | null = null;
 
@@ -115,16 +116,14 @@ export async function createDeliveryForPaidOrder(orderId: string) {
       }
     }
 
-    // 4. Calculer la distance estimée
+    // Calculer la distance estimée
     let estimatedDistance: number | null = null;
     if (originLat && originLng && order.gpsLat && order.gpsLng) {
       estimatedDistance = await calculateDistanceKm(originLat, originLng, order.gpsLat, order.gpsLng);
     }
 
-    // 5. Générer l'OTP de livraison
     const deliveryCode = generateDeliveryOTP();
 
-    // 6. Créer la livraison
     const [delivery] = await tx.insert(schema.deliveries).values({
       orderId: order.id,
       status: 'PENDING',
@@ -137,12 +136,10 @@ export async function createDeliveryForPaidOrder(orderId: string) {
       estimatedDistanceKm: estimatedDistance,
     }).returning();
 
-    // 7. Mettre à jour le statut de livraison de la commande
     await tx.update(schema.orders)
       .set({ deliveryStatus: 'PENDING' })
       .where(eq(schema.orders.id, orderId));
 
-    // 8. Notification : commande confirmée, en attente de livreur
     await sendOrderNotification(orderId, 'DELIVERY_CREATED');
 
     return { success: true, data: delivery };
@@ -150,87 +147,19 @@ export async function createDeliveryForPaidOrder(orderId: string) {
 }
 
 /**
+ * Quand une commande passe au statut PAID, crée automatiquement une entrée delivery.
+ * Appelé par le flux de paiement (order status change hook).
+ */
+export async function createDeliveryForPaidOrder(orderId: string) {
+  return createDeliveryInternal(orderId, ['PAID']);
+}
+
+/**
  * Variante pour les commandes COD (paiement à la livraison).
- * La commande est au statut CONFIRMED (pas encore PAID), mais on crée
- * quand même la livraison pour que les transporteurs la voient.
+ * Accepte tout statut "livrable" (CONFIRMED, PROCESSING, PAID, SHIPPED).
  */
 export async function createDeliveryForConfirmedOrder(orderId: string) {
-  return db.transaction(async (tx) => {
-    const order = await tx.query.orders.findFirst({
-      where: eq(schema.orders.id, orderId),
-      columns: {
-        id: true, status: true, zoneId: true,
-        gpsLat: true, gpsLng: true, deliveryDesc: true, buyerId: true,
-      },
-    });
-
-    if (!order) throw new Error('Commande introuvable');
-    // Accept any deliverable status
-    const deliverableStatuses = ['CONFIRMED', 'PROCESSING', 'PAID', 'SHIPPED'];
-    if (!deliverableStatuses.includes(order.status as string)) {
-      throw new Error(`Statut invalide pour création de livraison: ${order.status}`);
-    }
-
-    // Check no existing delivery
-    const existing = await tx.query.deliveries.findFirst({
-      where: eq(schema.deliveries.orderId, orderId),
-      columns: { id: true },
-    });
-    if (existing) return { success: true, data: existing, message: 'Livraison déjà créée' };
-
-    // Resolve origin (producer GPS)
-    let originLat: number | null = null;
-    let originLng: number | null = null;
-
-    const orderItems = await tx.query.orderItems.findMany({
-      where: eq(schema.orderItems.orderId, orderId),
-      columns: { productId: true },
-      limit: 1,
-    });
-
-    if (orderItems.length > 0) {
-      const product = await tx.query.products.findFirst({
-        where: eq(schema.products.id, orderItems[0].productId),
-        columns: { producerId: true },
-      });
-      if (product) {
-        const producer = await tx.query.producers.findFirst({
-          where: eq(schema.producers.id, product.producerId),
-          with: { user: { columns: { latitude: true, longitude: true } } },
-        });
-        originLat = producer?.user?.latitude ?? null;
-        originLng = producer?.user?.longitude ?? null;
-      }
-    }
-
-    // Estimated distance
-    let estimatedDistance: number | null = null;
-    if (originLat && originLng && order.gpsLat && order.gpsLng) {
-      estimatedDistance = await calculateDistanceKm(originLat, originLng, order.gpsLat, order.gpsLng);
-    }
-
-    const deliveryCode = generateDeliveryOTP();
-
-    const [delivery] = await tx.insert(schema.deliveries).values({
-      orderId: order.id,
-      status: 'PENDING',
-      deliveryCode,
-      originGpsLat: originLat,
-      originGpsLng: originLng,
-      destinationGpsLat: order.gpsLat,
-      destinationGpsLng: order.gpsLng,
-      destinationDesc: order.deliveryDesc,
-      estimatedDistanceKm: estimatedDistance,
-    }).returning();
-
-    await tx.update(schema.orders)
-      .set({ deliveryStatus: 'PENDING' })
-      .where(eq(schema.orders.id, orderId));
-
-    await sendOrderNotification(orderId, 'DELIVERY_CREATED');
-
-    return { success: true, data: delivery };
-  });
+  return createDeliveryInternal(orderId, DELIVERABLE_STATUSES);
 }
 
 /**
@@ -354,26 +283,28 @@ export async function markPickedUp(deliveryId: string, userId: string) {
   });
   if (!agent) return { success: false, error: 'Profil transporteur introuvable' };
 
-  const [updated] = await db.update(schema.deliveries)
-    .set({ status: 'IN_TRANSIT', pickedUpAt: new Date() })
-    .where(
-      and(
-        eq(schema.deliveries.id, deliveryId),
-        eq(schema.deliveries.deliveryAgentId, agent.id),
-        eq(schema.deliveries.status, 'ASSIGNED')
+  return db.transaction(async (tx) => {
+    const [updated] = await tx.update(schema.deliveries)
+      .set({ status: 'IN_TRANSIT', pickedUpAt: new Date() })
+      .where(
+        and(
+          eq(schema.deliveries.id, deliveryId),
+          eq(schema.deliveries.deliveryAgentId, agent.id),
+          eq(schema.deliveries.status, 'ASSIGNED')
+        )
       )
-    )
-    .returning();
+      .returning();
 
-  if (!updated) return { success: false, error: 'Impossible de mettre à jour ce statut' };
+    if (!updated) return { success: false, error: 'Impossible de mettre à jour ce statut' };
 
-  await db.update(schema.orders)
-    .set({ deliveryStatus: 'IN_TRANSIT' })
-    .where(eq(schema.orders.id, updated.orderId));
+    await tx.update(schema.orders)
+      .set({ deliveryStatus: 'IN_TRANSIT' })
+      .where(eq(schema.orders.id, updated.orderId));
 
-  await sendOrderNotification(updated.orderId, 'DELIVERY_PICKED_UP');
+    await sendOrderNotification(updated.orderId, 'DELIVERY_PICKED_UP');
 
-  return { success: true, data: updated };
+    return { success: true, data: updated };
+  });
 }
 
 // ── Preuve de Livraison (OTP) ────────────────────────────────────────────
@@ -449,6 +380,8 @@ export async function confirmDeliveryWithOTP(input: {
 /**
  * Le transporteur signale un échec de livraison.
  */
+const FAIL_ALLOWED_STATUSES = ['ASSIGNED', 'IN_TRANSIT'];
+
 export async function markDeliveryFailed(deliveryId: string, userId: string, reason?: string) {
   const agent = await db.query.deliveryAgents.findFirst({
     where: eq(schema.deliveryAgents.userId, userId),
@@ -456,36 +389,43 @@ export async function markDeliveryFailed(deliveryId: string, userId: string, rea
   });
   if (!agent) return { success: false, error: 'Profil transporteur introuvable' };
 
-  const [updated] = await db.update(schema.deliveries)
-    .set({ status: 'FAILED', failedAt: new Date() })
-    .where(
-      and(
+  return db.transaction(async (tx) => {
+    const delivery = await tx.query.deliveries.findFirst({
+      where: and(
         eq(schema.deliveries.id, deliveryId),
-        eq(schema.deliveries.deliveryAgentId, agent.id)
-      )
-    )
-    .returning();
+        eq(schema.deliveries.deliveryAgentId, agent.id),
+      ),
+      columns: { id: true, status: true, orderId: true },
+    });
 
-  if (!updated) return { success: false, error: 'Livraison introuvable' };
+    if (!delivery) return { success: false, error: 'Livraison introuvable' };
+    if (!FAIL_ALLOWED_STATUSES.includes(delivery.status as string)) {
+      return { success: false, error: `Impossible de marquer en échec une livraison au statut ${delivery.status}` };
+    }
 
-  await db.update(schema.orders)
-    .set({ deliveryStatus: 'FAILED' })
-    .where(eq(schema.orders.id, updated.orderId));
+    const [updated] = await tx.update(schema.deliveries)
+      .set({ status: 'FAILED', failedAt: new Date() })
+      .where(eq(schema.deliveries.id, deliveryId))
+      .returning();
 
-  // Remettre l'agent disponible
-  await db.update(schema.deliveryAgents)
-    .set({ status: 'AVAILABLE' })
-    .where(eq(schema.deliveryAgents.id, agent.id));
+    await tx.update(schema.orders)
+      .set({ deliveryStatus: 'FAILED' })
+      .where(eq(schema.orders.id, delivery.orderId));
 
-  await audit({
-    action: 'DELIVERY_FAILED',
-    entityType: 'Delivery',
-    entityId: deliveryId,
-    actorId: userId,
-    newValue: { reason, failedAt: new Date().toISOString() },
+    await tx.update(schema.deliveryAgents)
+      .set({ status: 'AVAILABLE' })
+      .where(eq(schema.deliveryAgents.id, agent.id));
+
+    await audit({
+      action: 'DELIVERY_FAILED',
+      entityType: 'Delivery',
+      entityId: deliveryId,
+      actorId: userId,
+      newValue: { reason, failedAt: new Date().toISOString() },
+    });
+
+    return { success: true, data: updated };
   });
-
-  return { success: true, data: updated };
 }
 
 /**

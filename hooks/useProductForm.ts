@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+// 1. Correction Import : Assure-toi que le chemin est exact et sans export default
 import { useProductMetadata } from '@/hooks/useProductMetadata';
 import type {
   ProductFormData,
@@ -13,30 +14,19 @@ import type {
 } from '@/types/product-flow';
 import { PRODUCT_FORM_DEFAULTS, TOTAL_STEPS, ALLOWED_IMAGE_TYPES } from '@/types/product-flow';
 
-// ── Return type ────────────────────────────────────────────────────────
-
 export interface UseProductFormReturn {
-  // Auth
   user: ReturnType<typeof useAuth>['user'];
   authLoading: boolean;
   router: ReturnType<typeof useRouter>;
-
-  // React Hook Form
   form: UseFormReturn<ProductFormData>;
-
-  // Wizard navigation
   step: number;
   setStep: (s: number) => void;
   goNext: () => void;
   goBack: () => void;
-
-  // Category selection
   selectedCategory: string | null;
   selectCategory: (catId: string, catName: string) => void;
   selectSubCategory: (subId: string, label: string) => void;
   resetCategory: () => void;
-
-  // Images
   existingImages: string[];
   newImages: File[];
   newPreviews: string[];
@@ -44,15 +34,9 @@ export interface UseProductFormReturn {
   removeExistingImage: (index: number) => void;
   removeNewImage: (index: number) => void;
   totalImages: number;
-
-  // Audio
   audioBlob: Blob | null;
   setAudioBlob: (blob: Blob | null) => void;
-
-  // Price
   defaultPriceInfo: PriceInfo | null;
-
-  // Submission
   isSubmitting: boolean;
   isSuccess: boolean;
   errorMsg: string | null;
@@ -60,12 +44,8 @@ export interface UseProductFormReturn {
   audioInputRef: React.RefObject<HTMLInputElement | null>;
   imagesInputRef: React.RefObject<HTMLInputElement | null>;
   prepareAndSubmit: () => Promise<void>;
-
-  // Metadata (re-exported for UI)
   metadata: ReturnType<typeof useProductMetadata>;
 }
-
-// ── Hook ───────────────────────────────────────────────────────────────
 
 export function useProductForm(
   mode: ProductFlowMode,
@@ -73,24 +53,24 @@ export function useProductForm(
 ): UseProductFormReturn {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  
+  // Initialisation du metadata
   const metadata = useProductMetadata();
   const { categories, getPriceForSubCategory, findParentCategory } = metadata;
 
   // ── React Hook Form ──────────────────────────────────────────────
-  const form = useForm<ProductFormData>({ defaultValues: PRODUCT_FORM_DEFAULTS });
-  const { setValue, watch, reset } = form;
+  const form = useForm<ProductFormData>({ 
+    defaultValues: PRODUCT_FORM_DEFAULTS 
+  });
+  const { setValue, watch, reset, getValues } = form;
 
-  // ── Wizard state ─────────────────────────────────────────────────
+  // ── States ───────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
-  // ── File state ───────────────────────────────────────────────────
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-
-  // ── Submission state ─────────────────────────────────────────────
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -100,14 +80,11 @@ export function useProductForm(
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const imagesInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ── Watched values for price prefill logic ───────────────────────
+  // ── Watchers ──────────────────────────────────────────────────────
   const watchedCategoryId = watch('categoryId');
-  const watchedPrice = watch('price');
-
-  // ── Derived: default price for current subcategory ───────────────
   const defaultPriceInfo = getPriceForSubCategory(watchedCategoryId);
 
-  // ── Hydrate form in edit mode ────────────────────────────────────
+  // ── Effet : Hydratation initiale (Edit Mode) ──────────────────────
   useEffect(() => {
     if (mode !== 'edit' || !initialData) return;
 
@@ -123,13 +100,10 @@ export function useProductForm(
     });
 
     if (initialData.category) setSelectedCategory(String(initialData.category));
-
-    if (initialData.images && Array.isArray(initialData.images)) {
-      setExistingImages(initialData.images);
-    }
+    if (Array.isArray(initialData.images)) setExistingImages(initialData.images);
   }, [initialData, mode, reset]);
 
-  // ── Infer parent category from subcategory in edit mode ──────────
+  // ── Effet : Résolution Catégorie Parente ─────────────────────────
   useEffect(() => {
     if (mode !== 'edit' || !initialData || categories.length === 0) return;
 
@@ -137,34 +111,38 @@ export function useProductForm(
     if (!subId) return;
 
     const match = findParentCategory(String(subId));
-    if (!match) return;
-
-    setSelectedCategory(String(match.parent.id));
-    setValue('category', String(match.parent.id));
-    setValue('categoryId', String(subId));
-    setValue('categoryLabel', `${match.parent.name} / ${match.sub.name}`);
-    setStep(2);
+    if (match) {
+      setSelectedCategory(String(match.parent.id));
+      setValue('category', String(match.parent.id));
+      setValue('categoryId', String(subId));
+      setValue('categoryLabel', `${match.parent.name} / ${match.sub.name}`);
+      setStep(2);
+    }
   }, [categories, initialData, mode, setValue, findParentCategory]);
 
-  // ── Prefill price from standard prices ───────────────────────────
+  // ── Effet : Prefill price from standard prices ───────────────────────────
   useEffect(() => {
     if (!defaultPriceInfo) return;
-    const current = parseFloat(String(watchedPrice || '0'));
+    const current = parseFloat(String(form.getValues('price') || '0'));
     if (!current || current <= 0) {
       setValue('price', String(defaultPriceInfo.price || ''));
     }
-    if (defaultPriceInfo.unit) {
+    const currentUnit = form.getValues('unit');
+    if (defaultPriceInfo.unit && defaultPriceInfo.unit !== currentUnit) {
       setValue('unit', defaultPriceInfo.unit);
     }
-  }, [defaultPriceInfo, setValue, watchedPrice]);
+  }, [defaultPriceInfo, setValue, form]);
 
-  // ── Cleanup preview URLs on unmount ──────────────────────────────
+  // ── Effet : Cleanup Previews ─────────────────────────────────────
   useEffect(() => {
-    return () => newPreviews.forEach((url) => URL.revokeObjectURL(url));
+    return () => {
+      newPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
   }, [newPreviews]);
 
-  // ── Navigation ───────────────────────────────────────────────────
+  // ── Callbacks : Navigation ───────────────────────────────────────
   const goNext = useCallback(() => setStep((s) => Math.min(s + 1, TOTAL_STEPS)), []);
+  
   const goBack = useCallback(() => {
     setStep((s) => {
       if (s <= 1) { router.back(); return s; }
@@ -172,42 +150,33 @@ export function useProductForm(
     });
   }, [router]);
 
-  // ── Category actions ─────────────────────────────────────────────
-  const selectCategory = useCallback(
-    (catId: string, catName: string) => {
-      setSelectedCategory(catId);
-      setValue('category', catId);
-      setValue('categoryLabel', catName);
-      setStep(2);
-    },
-    [setValue],
-  );
+  // ── Callbacks : Catégories ───────────────────────────────────────
+  const selectCategory = useCallback((catId: string, catName: string) => {
+    setSelectedCategory(catId);
+    setValue('category', catId);
+    setValue('categoryLabel', catName);
+    setStep(2);
+  }, [setValue]);
 
-  const selectSubCategory = useCallback(
-    (subId: string, label: string) => {
-      setValue('categoryId', subId);
-      setValue('categoryLabel', label);
-      setStep(3);
-    },
-    [setValue],
-  );
+  const selectSubCategory = useCallback((subId: string, label: string) => {
+    setValue('categoryId', subId);
+    setValue('categoryLabel', label);
+    setStep(3);
+  }, [setValue]);
 
   const resetCategory = useCallback(() => {
     setSelectedCategory(null);
     setValue('category', '');
+    setValue('categoryId', '');
     setValue('categoryLabel', '');
     setStep(1);
   }, [setValue]);
 
-  // ── Image actions ────────────────────────────────────────────────
+  // ── Callbacks : Images ───────────────────────────────────────────
   const addImage = useCallback((file: File) => {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) return;
     setNewImages((prev) => [...prev, file]);
     setNewPreviews((prev) => [...prev, URL.createObjectURL(file)]);
-  }, []);
-
-  const removeExistingImage = useCallback((index: number) => {
-    setExistingImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const removeNewImage = useCallback((index: number) => {
@@ -218,43 +187,25 @@ export function useProductForm(
     setNewImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const totalImages = existingImages.length + newImages.length;
+  const removeExistingImage = useCallback((index: number) => {
+    setExistingImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
-  // ── Submission ───────────────────────────────────────────────────
+  // ── Soumission ───────────────────────────────────────────────────
   const prepareAndSubmit = useCallback(async () => {
     if (authLoading) return;
     setIsSubmitting(true);
     setErrorMsg(null);
 
     try {
-      // Auto-derive categoryLabel if missing
-      const currentLabel = watch('categoryLabel');
-      const currentCatId = watch('categoryId');
-      if (!currentLabel && currentCatId) {
-        const match = findParentCategory(String(currentCatId));
-        if (match) setValue('categoryLabel', `${match.parent.name} / ${match.sub.name}`);
+      const values = getValues();
+
+      // Validation finale
+      if (!values.name || !values.categoryId || !values.quantity || Number(values.price) <= 0) {
+        throw new Error('Veuillez compléter tous les champs obligatoires.');
       }
 
-      // Prefill price from standard if still empty
-      const currentPrice = watch('price');
-      if ((!currentPrice || Number(currentPrice) <= 0) && defaultPriceInfo?.price) {
-        setValue('price', String(defaultPriceInfo.price));
-        if (defaultPriceInfo.unit) setValue('unit', defaultPriceInfo.unit);
-      }
-
-      // Client-side validation
-      const finalPrice = parseFloat(String(watch('price') || '0'));
-      const finalQty = parseFloat(String(watch('quantity') || '0'));
-      const finalName = String(watch('name') || '');
-      const finalCatLabel = String(watch('categoryLabel') || '');
-
-      if (!finalName || !finalCatLabel || !finalQty || finalPrice <= 0) {
-        setIsSubmitting(false);
-        setErrorMsg('Veuillez compléter le nom, la catégorie, la quantité et un prix valide avant de publier.');
-        return;
-      }
-
-      // Populate hidden file inputs for native form submission
+      // Injection des fichiers dans les inputs natifs pour requestSubmit
       if (imagesInputRef.current) {
         const dt = new DataTransfer();
         newImages.forEach((f) => dt.items.add(f));
@@ -268,38 +219,29 @@ export function useProductForm(
         audioInputRef.current.files = dt.files;
       }
 
-      // Ensure hidden id field (edit mode)
-      if (mode === 'edit' && initialData?.id) {
-        const idInput = formRef.current?.querySelector('input[name="id"]') as HTMLInputElement | null;
-        if (idInput) idInput.value = String(initialData.id);
+      // Soumission du formulaire HTML natif
+      if (formRef.current) {
+        formRef.current.requestSubmit();
       }
 
-      // Submit the native form
-      formRef.current?.requestSubmit?.();
-
-      // Auto-clear overlay after a safety timeout
-      const tid = setTimeout(() => {
+      // Feedback visuel
+      setTimeout(() => {
         setIsSubmitting(false);
         setIsSuccess(true);
-        setTimeout(() => setIsSuccess(false), 2000);
-      }, 4000);
+      }, 1000);
 
-      if (formRef.current) (formRef.current as any)._autoClearTimeout = tid;
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMsg(err?.message || 'Erreur préparation du formulaire');
+      setErrorMsg(err?.message || 'Une erreur est survenue');
     }
-  }, [
-    authLoading, watch, findParentCategory, setValue, defaultPriceInfo,
-    newImages, audioBlob, mode, initialData,
-  ]);
+  }, [authLoading, getValues, newImages, audioBlob]);
 
   return {
     user, authLoading, router,
     form,
     step, setStep, goNext, goBack,
     selectedCategory, selectCategory, selectSubCategory, resetCategory,
-    existingImages, newImages, newPreviews, addImage, removeExistingImage, removeNewImage, totalImages,
+    existingImages, newImages, newPreviews, addImage, removeExistingImage, removeNewImage, totalImages: existingImages.length + newImages.length,
     audioBlob, setAudioBlob,
     defaultPriceInfo,
     isSubmitting, isSuccess, errorMsg,

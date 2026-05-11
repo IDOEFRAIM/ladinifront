@@ -3,12 +3,10 @@ import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
+import { RestrictedScreen } from '@/components/productor/tokens';
 import OrdersTabs from './OrderTable';
 
 export const dynamic = 'force-dynamic';
-
-const C = { forest:'#064E3B', emerald:'#10B981', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
-const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
 
 function createOrderObject(item: any) {
   const { order, product, quantity, priceAtSale } = item;
@@ -16,10 +14,10 @@ function createOrderObject(item: any) {
     id: item.orderId,
     customerName: order.buyer?.name || order.customerName || 'Client',
     customerPhone: order.buyer?.phone || order.customerPhone || '',
-    location: order.city || order.deliveryDesc || 'Lieu non precise',
+    location: order.city || order.deliveryDesc || 'Lieu non précisé',
     date: new Date(order.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     total: 0,
-    status: (String(order.status || 'PENDING') || 'PENDING').toLowerCase(),
+    status: String(order.status || 'PENDING').toLowerCase(),
     items: []
   };
 }
@@ -35,18 +33,9 @@ function transformOrderItems(orderItems: any[]) {
   return Array.from(ordersMap.values());
 }
 
-const UnauthorizedScreen = () => (
-  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand }}>
-    <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, padding: '40px 32px', textAlign: 'center' as const }}>
-      <h2 style={{ fontFamily: F.heading, fontSize: '1.25rem', fontWeight: 800, color: C.forest }}>Acces restreint</h2>
-      <p style={{ fontFamily: F.body, fontSize: '0.85rem', color: C.muted, marginTop: 8 }}>Veuillez vous connecter en tant que producteur.</p>
-    </div>
-  </div>
-);
-
 export default async function OrdersPage() {
   const { user, error } = await requireProducer();
-  if (error || !user) return <UnauthorizedScreen />;
+  if (error || !user) return <RestrictedScreen />;
   const producerId = user.producerId as string;
 
   // Join products -> filter by product.producerId, include order + buyer + product fields

@@ -7,9 +7,11 @@ import {
   inviteOrgMember,
   updateOrgMember,
   removeOrgMember,
+  getOrgProducers,
 } from '@/services/org-manager.service';
-import { getAdminProducers } from '@/services/admin.service';
-import { Users, Plus, Pencil, Trash2, X, Loader2, Check, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { MessageBanner, PageSpinner, OrgModal, ModalFooter, Pagination, type BannerMessage } from '@/components/org/shared';
+import { Users, Plus, Pencil, Trash2, X, Loader2, Check, Search } from 'lucide-react';
 
 const ORG_ROLES = [
   { value: 'ADMIN', label: 'Administrateur' },
@@ -40,11 +42,11 @@ interface RoleOption {
 const PAGE_SIZE = 10;
 
 export default function OrgMembersPage() {
+  const { userRole, activeOrg } = useAuth();
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [canInvite, setCanInvite] = useState<boolean | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   // Search & pagination
   const [search, setSearch] = useState('');
@@ -66,70 +68,29 @@ export default function OrgMembersPage() {
   const [editRoleDefId, setEditRoleDefId] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
+  // Derive canInvite from auth context (no extra fetch needed)
+  const canInvite = useMemo(() => {
+    const sysRole = (userRole ?? '').toUpperCase();
+    if (sysRole === 'SUPERADMIN' || sysRole === 'ADMIN') return true;
+    const orgRole = (activeOrg?.role ?? '').toUpperCase();
+    return orgRole === 'ADMIN';
+  }, [userRole, activeOrg]);
+
   const load = useCallback(async () => {
     setLoading(true);
-    const [membersRes, rolesRes] = await Promise.all([getOrgMembers(), getOrgRoles()]);
+    const [membersRes, rolesRes, producersRes] = await Promise.all([
+      getOrgMembers(),
+      getOrgRoles(),
+      getOrgProducers(),
+    ]);
     if (membersRes.success && membersRes.data) setMembers(membersRes.data as MemberItem[]);
     if (rolesRes.success && rolesRes.data) {
       setRoles((rolesRes.data as Array<{ id: string; name: string }>).map(r => ({ id: r.id, name: r.name })));
     }
-    try {
-      const p = await getAdminProducers();
-      if (p && p.success && 'data' in p && p.data) {
-        setProducerOptions((p.data as any[]).map(x => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
-      } else {
-        // Fallback to public test endpoint when server action unavailable
-        try {
-          const r = await fetch('/api/test/producers');
-          if (r.ok) {
-            const json = await r.json();
-            if (json && Array.isArray(json.data)) {
-              setProducerOptions(json.data.map((x: any) => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
-            }
-          }
-        } catch (err) {
-          // ignore fallback error
-        }
-      }
-    } catch (e) {
-      // If server action throws, attempt the public fallback
-      try {
-        const r = await fetch('/api/test/producers');
-        if (r.ok) {
-          const json = await r.json();
-          if (json && Array.isArray(json.data)) {
-            setProducerOptions(json.data.map((x: any) => ({ id: x.id, businessName: x.businessName, email: x.email, phone: x.phone })));
-          }
-        }
-      } catch (err) {
-        // ignore
-      }
-    }
-
-    // Determine whether current user may invite members (is org ADMIN or system ADMIN)
-    try {
-      const resp = await fetch('/api/me');
-      if (resp.ok) {
-        const payload = await resp.json();
-        const user = payload?.user;
-        const cookieName = 'active-org-id';
-        const match = document.cookie.split('; ').find(c => c.startsWith(cookieName + '='));
-        const activeOrgId = match ? decodeURIComponent(match.split('=')[1]) : null;
-        let allowed = false;
-        if (user) {
-          const sysRole = (user.role || '').toUpperCase();
-          if (sysRole === 'SUPERADMIN' || sysRole === 'ADMIN') allowed = true;
-          if (Array.isArray(user.organizations) && activeOrgId) {
-            const org = user.organizations.find((o: any) => String(o.organizationId) === String(activeOrgId));
-            if (org && String(org.role) === 'ADMIN') allowed = true;
-          }
-        }
-        setCanInvite(allowed);
-      } else {
-        setCanInvite(false);
-      }
-    } catch (e) {
-      setCanInvite(false);
+    if (producersRes.success && producersRes.data) {
+      setProducerOptions(
+        (producersRes.data as any[]).map(x => ({ id: x.id, businessName: x.businessName ?? x.userName ?? '', email: x.email ?? '', phone: x.phone }))
+      );
     }
     setLoading(false);
   }, []);
@@ -236,13 +197,7 @@ export default function OrgMembersPage() {
     return ORG_ROLES.find(r => r.value === role)?.label || role;
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -268,18 +223,7 @@ export default function OrgMembersPage() {
         </button>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div
-          className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${
-            message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
       {/* Search */}
       <div className="relative mb-4">
@@ -363,44 +307,12 @@ export default function OrgMembersPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-stone-200 bg-stone-50">
-            <span className="text-xs text-stone-500">
-              {filtered.length} résultat{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} count={filtered.length} onPageChange={setPage} />
       </div>
 
       {/* ─── Invite Modal ───────────────────────────────────────────────── */}
       {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Inviter un membre</h2>
-              <button onClick={() => setShowInvite(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
+        <OrgModal title="Inviter un membre" onClose={() => setShowInvite(false)}>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Type de membre</label>
                 <select
@@ -469,40 +381,20 @@ export default function OrgMembersPage() {
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button
-                onClick={() => setShowInvite(false)}
-                className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleInvite}
-                disabled={inviteSaving || !inviteId.trim()}
-                className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {inviteSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                Inviter
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter
+            onCancel={() => setShowInvite(false)}
+            onConfirm={handleInvite}
+            confirmLabel="Inviter"
+            saving={inviteSaving}
+            disabled={!inviteId.trim()}
+            icon={<Plus size={14} />}
+          />
+        </OrgModal>
       )}
 
       {/* ─── Edit Modal ─────────────────────────────────────────────────── */}
       {showEdit && editMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Modifier {editMember.name}</h2>
-              <button onClick={() => setShowEdit(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
+        <OrgModal title={`Modifier ${editMember.name}`} onClose={() => setShowEdit(false)}>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">
                   Rôle organisationnel
@@ -533,26 +425,14 @@ export default function OrgMembersPage() {
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button
-                onClick={() => setShowEdit(false)}
-                className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleEdit}
-                disabled={editSaving}
-                className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50"
-              >
-                {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                Enregistrer
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter
+            onCancel={() => setShowEdit(false)}
+            onConfirm={handleEdit}
+            confirmLabel="Enregistrer"
+            saving={editSaving}
+            icon={<Check size={14} />}
+          />
+        </OrgModal>
       )}
     </div>
   );

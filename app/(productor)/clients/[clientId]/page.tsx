@@ -3,6 +3,7 @@
 import React, { useState, use } from 'react';
 import { FaShoppingCart, FaDollarSign, FaHistory, FaUserCircle, FaArrowLeft } from 'react-icons/fa';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 // Helper pour le formatage monétaire
 const formatCurrency = (amount: number) => {
@@ -195,6 +196,7 @@ export default function ClientDetailPage({ params }: PageProps) {
     const [selectedProduct, setSelectedProduct] = useState<string>('');
     const [qty, setQty] = useState<number>(0);
 
+    // TODO: fetch real catalog from producer's products instead of hardcoded data
     const catalog = [
         { id: 'm1', name: 'Maïs Jaune', stock: 12500, price: 190, unit: 'kg' },
         { id: 't1', name: 'Tomate Roma', stock: 850, price: 350, unit: 'kg' },
@@ -205,7 +207,7 @@ export default function ClientDetailPage({ params }: PageProps) {
 
     const handleConfirmOrder = () => {
         if (isDev) console.log(`Commande confirmée pour ${clientId}: ${qty}kg de ${selectedProduct}`);
-        alert("Vente enregistrée avec succès !");
+        toast.success("Vente enregistrée avec succès !");
         setOrderStep('idle');
         setQty(0);
         setSelectedProduct('');

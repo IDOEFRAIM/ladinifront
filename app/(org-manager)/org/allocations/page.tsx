@@ -8,7 +8,8 @@ import {
   deleteOrgAllocation,
   getAvailableZones,
 } from '@/services/org-manager.service';
-import { Package, Plus, Pencil, Trash2, X, Loader2, Check, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageBanner, PageSpinner, OrgModal, ModalFooter, Pagination, type BannerMessage } from '@/components/org/shared';
+import { Package, Plus, Pencil, Trash2, Loader2, Check, Search } from 'lucide-react';
 
 const UNITS = ['KG', 'G', 'PACK', 'TONNE', 'SACK'] as const;
 const PAGE_SIZE = 10;
@@ -30,7 +31,7 @@ export default function OrgAllocationsPage() {
   const [allocations, setAllocations] = useState<AllocationItem[]>([]);
   const [zones, setZones] = useState<ZoneOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -94,7 +95,7 @@ export default function OrgAllocationsPage() {
       zoneId: formZoneId,
     });
     if (result.success) {
-      setMessage({ type: 'success', text: 'Allocation creee.' });
+      setMessage({ type: 'success', text: 'Allocation créée.' });
       setShowCreate(false);
       load();
     } else {
@@ -124,7 +125,7 @@ export default function OrgAllocationsPage() {
       zoneId: editZoneId || undefined,
     });
     if (result.success) {
-      setMessage({ type: 'success', text: 'Allocation mise a jour.' });
+      setMessage({ type: 'success', text: 'Allocation mise à jour.' });
       setShowEdit(false);
       load();
     } else {
@@ -139,7 +140,7 @@ export default function OrgAllocationsPage() {
     setMessage(null);
     const result = await deleteOrgAllocation(id);
     if (result.success) {
-      setMessage({ type: 'success', text: 'Allocation supprimee.' });
+      setMessage({ type: 'success', text: 'Allocation supprimée.' });
       load();
     } else {
       setMessage({ type: 'error', text: result.error || 'Erreur.' });
@@ -151,13 +152,7 @@ export default function OrgAllocationsPage() {
     return Math.round(((a.totalQuantity - a.remainingQuantity) / a.totalQuantity) * 100);
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -178,12 +173,7 @@ export default function OrgAllocationsPage() {
         </button>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
       {/* Search */}
       <div className="relative mb-4">
@@ -215,7 +205,7 @@ export default function OrgAllocationsPage() {
             <tbody>
               {paginated.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-stone-400">
-                  {search ? 'Aucun resultat.' : 'Aucune allocation. Creez-en une.'}
+                  {search ? 'Aucun résultat.' : 'Aucune allocation. Créez-en une.'}
                 </td></tr>
               ) : paginated.map(a => {
                 const pct = usagePercent(a);
@@ -250,37 +240,23 @@ export default function OrgAllocationsPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-stone-200 bg-stone-50">
-            <span className="text-xs text-stone-500">{filtered.length} resultat{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}</span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"><ChevronLeft size={16} /></button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg hover:bg-stone-200 disabled:opacity-30 text-stone-500"><ChevronRight size={16} /></button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} count={filtered.length} onPageChange={setPage} />
       </div>
 
       {/* ─── Create Modal ───────────────────────────────────────────── */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Nouvelle allocation</h2>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400"><X size={20} /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
+        <OrgModal title="Nouvelle allocation" onClose={() => setShowCreate(false)}>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Type de semence *</label>
-                <input type="text" value={formSeedType} onChange={e => setFormSeedType(e.target.value)} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Ex: Mais, Sorgho..." />
+                <input type="text" value={formSeedType} onChange={e => setFormSeedType(e.target.value)} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Ex: Maïs, Sorgho..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Quantite *</label>
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Quantité *</label>
                   <input type="number" value={formQuantity as any} onChange={e => setFormQuantity(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none" min={1} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Unite</label>
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Unité</label>
                   <select value={formUnit} onChange={e => setFormUnit(e.target.value)} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none">
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -293,37 +269,24 @@ export default function OrgAllocationsPage() {
                   {zones.map(z => <option key={z.id} value={z.id}>{z.name} ({z.code})</option>)}
                 </select>
               </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button onClick={() => setShowCreate(false)} className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100">Annuler</button>
-              <button onClick={handleCreate} disabled={formSaving || !formSeedType.trim() || !formQuantity || !formZoneId} className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50">
-                {formSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Creer
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter onCancel={() => setShowCreate(false)} onConfirm={handleCreate} confirmLabel="Créer" saving={formSaving} disabled={!formSeedType.trim() || !formQuantity || !formZoneId} icon={<Check size={14} />} />
+        </OrgModal>
       )}
 
       {/* ─── Edit Modal ─────────────────────────────────────────────── */}
       {showEdit && editAlloc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-              <h2 className="text-lg font-bold text-stone-900">Modifier l&apos;allocation</h2>
-              <button onClick={() => setShowEdit(false)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400"><X size={20} /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
+        <OrgModal title="Modifier l'allocation" onClose={() => setShowEdit(false)}>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Type de semence</label>
                 <input type="text" value={editSeedType} onChange={e => setEditSeedType(e.target.value)} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Quantite totale</label>
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Quantité totale</label>
                   <input type="number" value={editQuantity as any} onChange={e => setEditQuantity(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none" min={1} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Unite</label>
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1.5">Unité</label>
                   <select value={editUnit} onChange={e => setEditUnit(e.target.value)} className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 focus:ring-2 focus:ring-emerald-500 outline-none">
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -336,15 +299,8 @@ export default function OrgAllocationsPage() {
                   {zones.map(z => <option key={z.id} value={z.id}>{z.name} ({z.code})</option>)}
                 </select>
               </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200">
-              <button onClick={() => setShowEdit(false)} className="px-5 py-2.5 rounded-full text-sm font-bold text-stone-600 hover:bg-stone-100">Annuler</button>
-              <button onClick={handleEdit} disabled={editSaving} className="inline-flex items-center gap-2 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-emerald-800 disabled:opacity-50">
-                {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Enregistrer
-              </button>
-            </div>
-          </div>
-        </div>
+          <ModalFooter onCancel={() => setShowEdit(false)} onConfirm={handleEdit} confirmLabel="Enregistrer" saving={editSaving} icon={<Check size={14} />} />
+        </OrgModal>
       )}
     </div>
   );

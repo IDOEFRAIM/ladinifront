@@ -6,22 +6,16 @@ import { ActionApprovalCard, ConversationTimeline, AgentActivityFeed, AgentTag }
 import { useProducerMonitoringView, useMonitoringSSE } from '@/hooks/useAgentMonitor';
 import type { AgentAction, Conversation, ProducerMonitoringView } from '@/types/monitoring';
 import { Bot, MessageSquare, BarChart3, Zap } from 'lucide-react';
-
-const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
-const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
+import { C, F, GlassCard } from '@/components/productor/tokens';
 
 type TabId = 'overview' | 'conversations' | 'actions' | 'live';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'overview', label: 'Apercu', icon: BarChart3 },
+  { id: 'overview', label: 'Aperçu', icon: BarChart3 },
   { id: 'conversations', label: 'Conversations', icon: MessageSquare },
   { id: 'actions', label: 'Actions', icon: Bot },
-  { id: 'live', label: 'Temps Reel', icon: Zap },
+  { id: 'live', label: 'Temps Réel', icon: Zap },
 ];
-
-function GlassCard({ children, style, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, ...style }} {...props}>{children}</div>;
-}
 
 const HeaderSection = () => (
   <header>
@@ -36,7 +30,7 @@ const QuickStatsSection = ({ metrics }: { metrics: any }) => (
   <div className="grid grid-cols-3" style={{ gap: 12 }}>
     {[
       { label: 'Interactions', val: metrics?.totalInteractions || 0, color: C.emerald },
-      { label: 'Reponse moy.', val: metrics?.avgResponseTime ? `${(metrics.avgResponseTime / 1000).toFixed(1)}s` : '\u2014', color: '#3B82F6' },
+      { label: 'Réponse moy.', val: metrics?.avgResponseTime ? `${(metrics.avgResponseTime / 1000).toFixed(1)}s` : '\u2014', color: '#3B82F6' },
       { label: 'Agent favori', val: metrics?.topAgentUsed ? <AgentTag name={metrics.topAgentUsed} /> : '\u2014', color: '#8B5CF6' },
     ].map((stat, i) => (
       <GlassCard key={i} style={{ padding: 16, textAlign: 'center' as const }}>
@@ -54,7 +48,7 @@ const TabRenderer = ({ activeTab, data, isLoading }: { activeTab: TabId; data: P
   const components: Record<TabId, React.ReactNode> = {
     overview: (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ fontFamily: F.heading, fontSize: '0.95rem', fontWeight: 800, color: C.text }}>Conversations recentes</h2>
+        <h2 style={{ fontFamily: F.heading, fontSize: '0.95rem', fontWeight: 800, color: C.text }}>Conversations récentes</h2>
         <ConversationTimeline conversations={conversations} isLoading={isLoading} />
       </div>
     ),
@@ -77,7 +71,7 @@ const TabRenderer = ({ activeTab, data, isLoading }: { activeTab: TabId; data: P
   return (
     <motion.div key={activeTab} initial={{ opacity: 0, x: 5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -5 }} transition={{ duration: 0.2 }}>
       {isLoading && activeTab !== 'live' ? (
-        <div style={{ textAlign: 'center' as const, padding: '32px 0', color: C.muted, fontFamily: F.body }}>Chargement des donnees...</div>
+        <div style={{ textAlign: 'center' as const, padding: '32px 0', color: C.muted, fontFamily: F.body }}>Chargement des données...</div>
       ) : components[activeTab]}
     </motion.div>
   );

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getOrgSettings, updateOrgSettings } from '@/services/org-manager.service';
+import { MessageBanner, PageSpinner, type BannerMessage } from '@/components/org/shared';
 import { Building2, Save, Loader2 } from 'lucide-react';
 
 const ORG_TYPES = [
@@ -25,7 +26,7 @@ export default function OrgSettingsPage() {
   const [org, setOrg] = useState<OrgData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<BannerMessage>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -33,11 +34,7 @@ export default function OrgSettingsPage() {
   const [taxId, setTaxId] = useState('');
   const [description, setDescription] = useState('');
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  async function loadSettings() {
+  const loadSettings = useCallback(async () => {
     setLoading(true);
     const result = await getOrgSettings();
     if (result.success && result.data) {
@@ -51,7 +48,9 @@ export default function OrgSettingsPage() {
       setMessage({ type: 'error', text: result.error || 'Erreur de chargement' });
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,13 +68,7 @@ export default function OrgSettingsPage() {
     setSaving(false);
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="animate-spin text-emerald-600" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -92,18 +85,7 @@ export default function OrgSettingsPage() {
         </p>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div
-          className={`mb-6 px-4 py-3 rounded-xl text-sm font-medium ${
-            message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <MessageBanner message={message} />
 
         {/* Pending banner */}
         {org && (org as any).status === 'PENDING' && (

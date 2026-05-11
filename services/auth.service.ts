@@ -148,11 +148,11 @@ export async function registerUser(data: {
         const { email, password, name, role, phone, whatsappEnabled, dailyAdviceTime, latitude, longitude, cnibNumber, zoneId } = validation.data as any;
         const locationId = data.locationId || zoneId;
 
-        // Admin secret check
-        if (role === 'ADMIN') {
+        // Admin / Superadmin secret check
+        if (role === 'ADMIN' || role === 'SUPERADMIN') {
             const masterSecret = process.env.ADMIN_REGISTRATION_SECRET;
             if (!masterSecret || data.adminSecret !== masterSecret) {
-                return { success: false, error: "Code d'autorisation Admin incorrect.Veuillez contacter un administrateur." };
+                return { success: false, error: "Code d'autorisation Admin incorrect. Veuillez contacter un administrateur." };
             }
         }
 

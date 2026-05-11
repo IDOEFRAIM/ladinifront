@@ -1,27 +1,20 @@
 ﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { getMyProducts, deleteProduct } from '@/services/producer.service';
+import { C, F, GlassCard } from '@/components/productor/tokens';
 import { Plus, Pencil, Trash2, Share2, Package, Search, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
-const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
-
-function GlassCard({ children, style, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, ...style }} {...props}>{children}</div>;
-}
-
 function ProductCard({ product, onDelete, onShare }: { product: any; onDelete: (id: string) => void; onShare: (p: any) => void }) {
-  console.log(product)
   return (
     <GlassCard style={{ padding: 24, position: 'relative', overflow: 'hidden', transition: 'all 0.3s' }}>
       <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
         <span style={{ padding: '4px 12px', borderRadius: 10, fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 1, background: product.quantityForSale > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: product.quantityForSale > 0 ? C.emerald : '#EF4444' }}>
-          {product.quantityForSale > 0 ? 'En Vente' : 'Epuise'}
+          {product.quantityForSale > 0 ? 'En Vente' : 'Épuisé'}
         </span>
       </div>
 
@@ -74,23 +67,23 @@ export default function ProducerCatalogue() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
 
-  useEffect(() => { loadProducts(); }, [user?.id]);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     const res = await getMyProducts();
     if (res.success && res.data) setProducts(res.data);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => { loadProducts(); }, [loadProducts]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Voulez-vous vraiment retirer ce produit du catalogue ?")) return;
     const res = await deleteProduct(id);
-    if (res.success) { toast.success("Produit retire"); loadProducts(); }
+    if (res.success) { toast.success("Produit retiré"); loadProducts(); }
     else toast.error("Erreur lors de la suppression");
   };
 
   const handleShare = (product: any) => {
-    const text = `Decouvrez mon produit *${product.categoryLabel}* a ${product.price} FCFA sur Vital Engine !`;
+    const text = `Découvrez mon produit *${product.categoryLabel}* à ${product.price} FCFA sur Vital Engine !`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 

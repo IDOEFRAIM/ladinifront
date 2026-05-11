@@ -13,6 +13,7 @@ import {
   FaCheckCircle 
 } from 'react-icons/fa';
 import { useAuth } from '@/hooks/useAuth';
+import toast from 'react-hot-toast';
 
 // Import de tes composants UI
 import { StatusBadge } from '@/components/orders/statusCard';
@@ -88,7 +89,7 @@ function useOrder(orderId: string) {
       await axios.patch(`/api/orders/${orderId}`, { status: nextStatus });
       setOrder((prev: any) => ({ ...prev, status: nextStatus }));
     } catch (err) {
-      alert("Erreur lors de la mise à jour du statut.");
+      toast.error("Erreur lors de la mise à jour du statut.");
     } finally {
       setIsUpdating(false);
     }

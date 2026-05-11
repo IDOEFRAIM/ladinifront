@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+// --- Types (inchangés mais exportés pour la cohérence) ---
 export interface PoolDelivery {
   deliveryId: string;
   orderId: string;
@@ -43,14 +44,6 @@ type PoolState = {
   error: string | null;
 };
 
-/**
- * useDeliveryPool — "Marketplace de Livraison"
- *
- * 1. Récupère toutes les commandes au statut PENDING (pool commun)
- * 2. acceptDelivery(deliveryId) — premier arrivé, premier servi
- * 3. Mise à jour en temps réel via polling (15s pour pool, 10s pour actives)
- * 4. Actions: pickup, confirmOTP, markFailed
- */
 export function useDeliveryPool() {
   const [state, setState] = useState<PoolState>({
     available: [],
@@ -59,20 +52,32 @@ export function useDeliveryPool() {
     loading: true,
     error: null,
   });
+
   const [claiming, setClaiming] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  
+  // Utilisation de refs pour éviter les fuites de mémoire et les conflits d'appels asynchrones
   const mountedRef = useRef(true);
+  const poolAbortController = useRef<AbortController | null>(null);
 
-  // ── Fetch available pool ──────────────────────────────────────────────
+  // ── Fetch available pool (avec AbortController pour éviter les race conditions) ──
   const refreshPool = useCallback(async () => {
+    // Annuler la requête précédente si elle est encore en cours
+    if (poolAbortController.current) poolAbortController.current.abort();
+    poolAbortController.current = new AbortController();
+
     try {
-      const res = await fetch('/api/delivery/available');
-      if (!res.ok) throw new Error('Erreur réseau');
+      const res = await fetch('/api/delivery/available', { 
+        signal: poolAbortController.current.signal 
+      });
+      if (!res.ok) throw new Error('Erreur lors de la récupération du pool');
       const data = await res.json();
+      
       if (mountedRef.current) {
         setState(prev => ({ ...prev, available: data, error: null }));
       }
     } catch (e: any) {
+      if (e.name === 'AbortError') return;
       if (mountedRef.current) {
         setState(prev => ({ ...prev, error: e.message }));
       }
@@ -83,24 +88,32 @@ export function useDeliveryPool() {
   const refreshActive = useCallback(async () => {
     try {
       const res = await fetch('/api/delivery/status');
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('Erreur status');
+      
       const all: ActiveDelivery[] = await res.json();
+      
       if (mountedRef.current) {
+        // Filtrage précis des statuts
         const active = all.filter(d => ['ASSIGNED', 'IN_TRANSIT'].includes(d.status));
         const past = all.filter(d => !['ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 20);
-        setState(prev => ({ ...prev, active, past }));
+        
+        setState(prev => ({ ...prev, active, past, error: null }));
       }
-    } catch { /* silent */ }
+    } catch { 
+      /* Erreur silencieuse pour le polling background */ 
+    }
   }, []);
 
   // ── Initial load + polling ────────────────────────────────────────────
   useEffect(() => {
     mountedRef.current = true;
+
     const init = async () => {
-      setState(prev => ({ ...prev, loading: true }));
+      if (mountedRef.current) setState(prev => ({ ...prev, loading: true }));
       await Promise.all([refreshPool(), refreshActive()]);
       if (mountedRef.current) setState(prev => ({ ...prev, loading: false }));
     };
+
     init();
 
     const poolInterval = setInterval(refreshPool, 15_000);
@@ -108,121 +121,86 @@ export function useDeliveryPool() {
 
     return () => {
       mountedRef.current = false;
+      if (poolAbortController.current) poolAbortController.current.abort();
       clearInterval(poolInterval);
       clearInterval(activeInterval);
     };
   }, [refreshPool, refreshActive]);
 
-  // ── Accept (claim) a delivery — premier arrivé premier servi ──────────
-  const acceptDelivery = async (deliveryId: string): Promise<{ success: boolean; error?: string }> => {
-    setClaiming(deliveryId);
+  // ── Helpers pour les appels API (réduction de la duplication) ──────────
+  const performAction = async (
+    url: string, 
+    body: object, 
+    loadingKey: string,
+    setLoading: (val: string | null) => void
+  ) => {
+    setLoading(loadingKey);
     try {
-      const res = await fetch('/api/delivery/claim', {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deliveryId }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        // Remove from pool immediately (optimistic)
-        setState(prev => ({
-          ...prev,
-          available: prev.available.filter(d => d.deliveryId !== deliveryId),
-        }));
-        // Refresh actives to show the new delivery
-        await refreshActive();
-        return { success: true };
-      }
-      return { success: false, error: data.error || 'Déjà prise par un autre livreur' };
-    } catch {
-      return { success: false, error: 'Erreur réseau' };
+      return { ok: res.ok, data };
+    } catch (e) {
+      return { ok: false, data: { error: 'Erreur réseau' } };
     } finally {
-      setClaiming(null);
+      if (mountedRef.current) setLoading(null);
     }
   };
 
-  // ── Confirm pickup ────────────────────────────────────────────────────
-  const confirmPickup = async (deliveryId: string): Promise<{ success: boolean; error?: string }> => {
-    setActionLoading(`${deliveryId}-PICKUP`);
-    try {
-      const res = await fetch('/api/delivery/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'PICKUP', deliveryId }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await refreshActive();
-        return { success: true };
-      }
-      return { success: false, error: data.error || 'Erreur' };
-    } catch {
-      return { success: false, error: 'Erreur réseau' };
-    } finally {
-      setActionLoading(null);
+  // ── Actions ───────────────────────────────────────────────────────────
+
+  const acceptDelivery = async (deliveryId: string) => {
+    const { ok, data } = await performAction('/api/delivery/claim', { deliveryId }, deliveryId, setClaiming);
+    
+    if (ok && data.success) {
+      // Mise à jour optimiste du pool
+      setState(prev => ({
+        ...prev,
+        available: prev.available.filter(d => d.deliveryId !== deliveryId),
+      }));
+      await refreshActive();
+      return { success: true };
     }
+    return { success: false, error: data.error || 'Déjà prise ou indisponible' };
   };
 
-  // ── Confirm delivery with OTP ─────────────────────────────────────────
-  const confirmDelivery = async (deliveryId: string, otpCode: string): Promise<{ success: boolean; error?: string }> => {
-    setActionLoading(`${deliveryId}-CONFIRM`);
-    try {
-      const res = await fetch('/api/delivery/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deliveryId, otpCode }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await Promise.all([refreshActive(), refreshPool()]);
-        return { success: true };
-      }
-      return { success: false, error: data.error || 'Code OTP invalide' };
-    } catch {
-      return { success: false, error: 'Erreur réseau' };
-    } finally {
-      setActionLoading(null);
+  const confirmPickup = async (deliveryId: string) => {
+    const { ok, data } = await performAction('/api/delivery/status', { action: 'PICKUP', deliveryId }, `${deliveryId}-PICKUP`, setActionLoading);
+    if (ok && data.success) {
+      await refreshActive();
+      return { success: true };
     }
+    return { success: false, error: data.error };
   };
 
-  // ── Mark as failed ────────────────────────────────────────────────────
-  const markFailed = async (deliveryId: string, reason?: string): Promise<{ success: boolean; error?: string }> => {
-    setActionLoading(`${deliveryId}-FAILED`);
-    try {
-      const res = await fetch('/api/delivery/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'FAILED', deliveryId, reason }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await refreshActive();
-        return { success: true };
-      }
-      return { success: false, error: data.error || 'Erreur' };
-    } catch {
-      return { success: false, error: 'Erreur réseau' };
-    } finally {
-      setActionLoading(null);
+  const confirmDelivery = async (deliveryId: string, otpCode: string) => {
+    const { ok, data } = await performAction('/api/delivery/confirm', { deliveryId, otpCode }, `${deliveryId}-CONFIRM`, setActionLoading);
+    if (ok && data.success) {
+      await Promise.all([refreshActive(), refreshPool()]);
+      return { success: true };
     }
+    return { success: false, error: data.error };
   };
 
-  // ── Online / Offline toggle ───────────────────────────────────────────
+  const markFailed = async (deliveryId: string, reason?: string) => {
+    const { ok, data } = await performAction('/api/delivery/status', { action: 'FAILED', deliveryId, reason }, `${deliveryId}-FAILED`, setActionLoading);
+    if (ok && data.success) {
+      await refreshActive();
+      return { success: true };
+    }
+    return { success: false, error: data.error };
+  };
+
   const toggleOnline = async (goOnline: boolean): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/delivery/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: goOnline ? 'GO_ONLINE' : 'GO_OFFLINE' }),
-      });
-      if (res.ok) {
-        if (goOnline) refreshPool();
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
+    const { ok } = await performAction('/api/delivery/status', { action: goOnline ? 'GO_ONLINE' : 'GO_OFFLINE' }, 'TOGGLE', setActionLoading);
+    if (ok) {
+      if (goOnline) refreshPool();
+      return true;
     }
+    return false;
   };
 
   return {
