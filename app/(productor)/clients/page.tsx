@@ -1,7 +1,8 @@
 ﻿import React from 'react';
 import ClientsClient from '@/components/clients/ClientsClient';
-
 import { fetchClients as fetchClientsAction, createClient as createClientAction } from '@/app/actions/clients.server';
+
+export const dynamic = 'force-dynamic';
 
 export default async function ClientsPage() {
   let clients: any[] = [];

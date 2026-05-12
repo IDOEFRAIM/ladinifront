@@ -4,6 +4,8 @@ import { getProductById } from '@/services/catalogue.service';
 import { Product } from '@/types/product';
 import ProductClientView from './ProductView';
 
+export const dynamic = 'force-dynamic';
+
 function IconAlertTriangle({ size = 40, color = '#E65100' }: { size?: number; color?: string }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>

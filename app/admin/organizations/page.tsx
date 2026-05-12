@@ -1,6 +1,8 @@
 import OrgListClient from '@/app/admin/organizations/OrgListClient';
 import { fetchOrganizations } from '@/app/actions/admin.server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminOrganizationsListPage() {
   const orgs = await fetchOrganizations();
 

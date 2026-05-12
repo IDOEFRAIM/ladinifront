@@ -4,6 +4,8 @@ import { getAdminUser, updateUserRole } from '@/app/actions/admin.server';
 import { cookies } from 'next/headers';
 import { getSessionFromRequest } from '@/lib/session';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminSettingsPage() {
   let userId: string | undefined = undefined;
   try {

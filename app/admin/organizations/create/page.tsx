@@ -2,6 +2,8 @@ import React from 'react';
 import CreateOrganizationClient from '../CreateOrganizationClient';
 import { createOrganization } from '@/app/actions/admin.server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function CreateOrganizationPage() {
   async function serverCreateOrganization(data: any) {
     'use server'

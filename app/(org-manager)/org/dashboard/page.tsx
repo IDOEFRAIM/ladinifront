@@ -2,6 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { getOrganizationDetails } from '@/services/org-manager.service';
 
+export const dynamic = 'force-dynamic';
+
 export default async function OrgDashboardPage() {
   const res = await getOrganizationDetails();
   if (!res.success) {

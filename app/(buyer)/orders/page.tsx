@@ -5,6 +5,8 @@ import * as schema from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { getAccessContext } from '@/lib/api-guard';
 
+export const dynamic = 'force-dynamic';
+
 const C = { 
   forest:'#064E3B', 
   emerald:'#10B981', 

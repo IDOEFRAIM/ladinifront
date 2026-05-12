@@ -1,6 +1,8 @@
 import { db, schema } from '@/src/db';
 import { desc } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AgentHistoryPage() {
   const distributions = await db.select().from(schema.seedDistributions).orderBy(desc(schema.seedDistributions.createdAt)).limit(50);
 

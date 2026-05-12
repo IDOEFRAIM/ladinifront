@@ -2,6 +2,8 @@ import React from 'react';
 import AdminDashboardClient from './AdminDashboardClient';
 import { fetchAdminMetrics } from '@/app/actions/admin.server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminDashboardPage() {
   // 1. On récupère la réponse du serveur
   const response = await fetchAdminMetrics();

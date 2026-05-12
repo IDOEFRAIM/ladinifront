@@ -2,6 +2,8 @@ import React from 'react';
 import ProductFlow from '@/components/utils/productorProductFlow';
 import { fetchProductByIdServer } from '@/app/actions/publicProduct.safe.server';
 
+export const dynamic = 'force-dynamic';
+
 export default async function EditPage(props: any) {
   const resolvedParams = await props.params;
   const productId = String(resolvedParams?.productId ?? '').trim();

@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import AuctionClient from '@/components/auction/AuctionClient'; 
 import { getAuctionById, getEligibleProducers } from '@/services/auction.service'; 
 
+export const dynamic = 'force-dynamic';
+
 interface AuctionPageProps {
   params: Promise<{ id: string }>;
 }

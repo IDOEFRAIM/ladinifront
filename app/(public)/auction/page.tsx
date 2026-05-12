@@ -2,6 +2,8 @@ import React from 'react';
 import { getOpenAuctions } from '@/services/auction.service';
 import AuctionCard from '@/components/auction/AuctionCard'; // On importe le composant client
 import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
 export default async function AuctionListingPage() {
   // 1. Récupération des données sur le serveur (SÉCURISÉ)
   const auctions = await getOpenAuctions();

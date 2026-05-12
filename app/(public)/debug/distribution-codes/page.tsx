@@ -1,6 +1,8 @@
 import React from 'react';
 import { db, schema } from '@/src/db';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Page() {
   if (process.env.NODE_ENV !== 'development') {
     return <div style={{ padding: 20 }}>Debug page disponible uniquement en développement.</div>;

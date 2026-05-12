@@ -4,6 +4,8 @@ import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
 import { C, F } from '@/components/productor/tokens';
 import { Leaf, Plus, Loader2 } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 function LoadingView() {
   return (
     <div style={{ minHeight: '100vh', background: C.sand, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
