@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex flex-col items-center gap-4">
           <Loader2 size={40} className="animate-spin" style={{ color: C.emerald }} />
           <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600, color: C.forest, opacity: 0.8 }}>
-            Vérification des accès...
+            Vérification des accès ADMIN...
           </p>
         </div>
       </div>
