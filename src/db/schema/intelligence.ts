@@ -168,10 +168,78 @@ export const aiRatingReasonings = intelligenceSchema.table('ai_rating_reasonings
 	index('ai_rating_agent_idx').on(t.agentName),
 ]);
 
-// Relations (defined here to avoid circular imports)
-// export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
-// 	actor: one(() => users, { fields: [auditLogs.actorId], references: [users.id] }),
-// }));
+// ── Cerveau IA : Recommandations stockées ───────────────────────────────
+export const aiRecommendations = intelligenceSchema.table('ai_recommendations', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	cropCycleId: uuid('crop_cycle_id'),
+	farmId: uuid('farm_id'),
+	userId: uuid('user_id'),
+	agentName: text('agent_name').notNull(), // ex: 'disease_alert', 'fertilizer_advisor', 'irrigation_planner'
+	recommendationType: text('recommendation_type').notNull(), // ALERTE, CONSEIL, PLANIFICATION, DIAGNOSTIC
+	title: text('title').notNull(),
+	content: text('content').notNull(),
+	confidenceScore: doublePrecision('confidence_score'),
+	dataSourcesUsed: jsonb('data_sources_used'), // { "weather": true, "soil": true, "bbch": 60 }
+	priority: text('priority').default('MEDIUM').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
+	status: text('status').default('PENDING').notNull(), // PENDING, VIEWED, APPLIED, DISMISSED
+	appliedAt: timestamp('applied_at'),
+	expiresAt: timestamp('expires_at'),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+	index('ai_rec_farm_idx').on(t.farmId),
+	index('ai_rec_crop_cycle_idx').on(t.cropCycleId),
+	index('ai_rec_user_idx').on(t.userId),
+	index('ai_rec_type_idx').on(t.recommendationType),
+	index('ai_rec_status_idx').on(t.status),
+	index('ai_rec_created_idx').on(t.createdAt),
+]);
+
+// ── Cerveau IA : Cache météo externe (NASA POWER / Open-Meteo) ─────────
+export const weatherDataLogs = intelligenceSchema.table('weather_data_logs', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	zoneId: uuid('zone_id'),
+	farmId: uuid('farm_id'),
+	latitude: doublePrecision('latitude').notNull(),
+	longitude: doublePrecision('longitude').notNull(),
+	recordDate: timestamp('record_date').notNull(),
+	tempMin: doublePrecision('temp_min'),
+	tempMax: doublePrecision('temp_max'),
+	tempMean: doublePrecision('temp_mean'),
+	precipitationMm: doublePrecision('precipitation_mm'),
+	humidityPercent: doublePrecision('humidity_percent'),
+	windSpeedKmh: doublePrecision('wind_speed_kmh'),
+	solarRadiation: doublePrecision('solar_radiation'), // MJ/m²
+	evapotranspiration: doublePrecision('evapotranspiration'), // mm (ETo Penman-Monteith)
+	gddContribution: doublePrecision('gdd_contribution'), // max(0, tempMean - baseTemp)
+	source: text('source').default('OPEN_METEO').notNull(), // OPEN_METEO, NASA_POWER, STATION_LOCAL
+	rawPayload: jsonb('raw_payload'),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+	index('wdl_zone_idx').on(t.zoneId),
+	index('wdl_farm_idx').on(t.farmId),
+	index('wdl_date_idx').on(t.recordDate),
+	uniqueIndex('wdl_farm_date_source_unique').on(t.farmId, t.recordDate, t.source),
+]);
+
+// ── Cerveau IA : Mémoire contextuelle de l'agent (continuité dialogue) ──
+export const agentContextMemory = intelligenceSchema.table('agent_context_memory', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	userId: uuid('user_id').notNull(),
+	farmId: uuid('farm_id'),
+	cropCycleId: uuid('crop_cycle_id'),
+	contextKey: text('context_key').notNull(), // ex: 'last_observed_bbch', 'pending_fertilization', 'disease_risk_mildiou'
+	contextValue: jsonb('context_value').notNull(), // flexible JSON payload
+	source: text('source').default('AGENT').notNull(), // AGENT, USER_INPUT, SENSOR, WEATHER
+	confidence: doublePrecision('confidence'),
+	expiresAt: timestamp('expires_at'),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+	index('acm_user_idx').on(t.userId),
+	index('acm_farm_idx').on(t.farmId),
+	index('acm_key_idx').on(t.contextKey),
+	uniqueIndex('acm_user_farm_key_unique').on(t.userId, t.farmId, t.contextKey),
+]);
 
 export default {
 	auditLogs,
@@ -183,6 +251,9 @@ export default {
 	anomalies,
 	trustScores,
 	aiRatingReasonings,
+	aiRecommendations,
+	weatherDataLogs,
+	agentContextMemory,
 };
 
 // Types
@@ -191,3 +262,6 @@ export type AuditLog = InferModel<typeof auditLogs>;
 export type Conversation = InferModel<typeof conversations>;
 export type ExternalContext = InferModel<typeof externalContexts>;
 export type TrustScore = InferModel<typeof trustScores>;
+export type AiRecommendation = InferModel<typeof aiRecommendations>;
+export type WeatherDataLog = InferModel<typeof weatherDataLogs>;
+export type AgentContextMemory = InferModel<typeof agentContextMemory>;

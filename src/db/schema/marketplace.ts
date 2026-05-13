@@ -27,6 +27,7 @@ import {
   escrowStatusEnum,
 } from './_config';
 import { type InferModel } from 'drizzle-orm';
+import { zones } from './governance'; // Importe la table zone (schéma governance)
 
 export const warehouses = marketplaceSchema.table('warehouses', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -146,6 +147,7 @@ export const deliveries = marketplaceSchema.table('deliveries', {
   index('deliveries_status_idx').on(t.status),
 ]);
 
+
 export const farms = marketplaceSchema.table('farms', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -153,10 +155,21 @@ export const farms = marketplaceSchema.table('farms', {
   size: doublePrecision('size'),
   soilType: text('soil_type'),
   waterSource: text('water_source'),
-  zoneId: uuid('zone_id'),
-  producerId: uuid('producer_id').notNull(),
+  
+  // CORRECTION 1 : Ajout de .references() pour l'intégrité
+  // On pointe vers governance.zones.id
+  zoneId: uuid('zone_id').references(() => zones.id), 
+  
+  // On pointe vers marketplace.producers.id
+  producerId: uuid('producer_id')
+    .notNull()
+    .references(() => producers.id), 
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 }, (t) => [
   index('farms_producer_idx').on(t.producerId),
   index('farms_zone_idx').on(t.zoneId),
@@ -164,17 +177,152 @@ export const farms = marketplaceSchema.table('farms', {
 
 export const cropCycles = marketplaceSchema.table('crop_cycles', {
   id: uuid('id').primaryKey().defaultRandom(),
-  farmId: uuid('farm_id').notNull(),
+  farmId: uuid('farm_id').notNull().references(() => farms.id),
   cropType: text('crop_type').notNull(),
   areaSize: doublePrecision('area_size').notNull(),
   plantedAt: timestamp('planted_at').notNull(),
   expectedHarvestDate: timestamp('expected_harvest_date').notNull(),
-  expectedYield: doublePrecision('expected_yield').notNull(),
+  targetYield: doublePrecision('target_yield'),
+  expectedYield: doublePrecision('expected_yield'),
   status: text('status').notNull(),
+  variety: text('variety'),
+  farmingMethod: text('farming_method').default('conventional'),
+  soilType: text('soil_type'),
+  lastInterventionDate: timestamp('last_intervention_date'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('crop_cycles_farm_idx').on(t.farmId),
+  index('crop_cycles_status_idx').on(t.status),
+]);
+
+// ── AgTech: Carnet de champ ──────────────────────────────────────────────
+export const fieldInterventions = marketplaceSchema.table('field_interventions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cropCycleId: uuid('crop_cycle_id').notNull().references(() => cropCycles.id),
+  type: text('type').notNull(), // SEMIS, IRRIGATION, FERTILISATION, TRAITEMENT, RECOLTE, TRAVAIL_SOL
+  description: text('description'),
+  inputUsed: text('input_used'),
+  quantity: doublePrecision('quantity'),
+  unit: text('unit'),
+  costPerUnit: doublePrecision('cost_per_unit').default(0),
+  machineryUsed: text('machinery_used'),
+  fuelConsumption: doublePrecision('fuel_consumption'),
+  hoursWorked: doublePrecision('hours_worked'),
+  observedBbchStage: integer('observed_bbch_stage'),
+  performedAt: timestamp('performed_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('fi_crop_cycle_idx').on(t.cropCycleId),
+  index('fi_performed_at_idx').on(t.performedAt),
+  index('fi_type_idx').on(t.type),
+]);
+
+// ── AgTech: Dernières valeurs capteurs par ferme ────────────────────────
+export const sensorDataSummary = marketplaceSchema.table('sensor_data_summary', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  farmId: uuid('farm_id').notNull().references(() => farms.id),
+  soilMoisture: doublePrecision('soil_moisture'),
+  lastRainfall: doublePrecision('last_rainfall'),
+  accumulatedGdd: integer('accumulated_gdd'),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex('sds_farm_unique').on(t.farmId),
+]);
+
+// ── AgTech: Référentiel cultures ────────────────────────────────────────
+export const agronomicStandards = marketplaceSchema.table('agronomic_standards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cropType: text('crop_type').notNull(),
+  varietyType: text('variety_type'),
+  nitrogenNeeds: doublePrecision('nitrogen_needs'),
+  phosphorusNeeds: doublePrecision('phosphorus_needs'),
+  potassiumNeeds: doublePrecision('potassium_needs'),
+  baseTemperature: doublePrecision('base_temperature'),
+  gddToHarvest: integer('gdd_to_harvest'),
+  minHumidityThreshold: doublePrecision('min_humidity_threshold'),
+  maxWindSpeedForTreatment: doublePrecision('max_wind_speed_treatment').default(19.0),
+  version: text('version'),
+}, (t) => [
+  uniqueIndex('as_crop_variety_unique').on(t.cropType, t.varietyType),
+  index('as_crop_type_idx').on(t.cropType),
+]);
+
+// ── AgTech: Catalogue maladies/ravageurs ────────────────────────────────
+export const pestDiseaseCatalog = marketplaceSchema.table('pest_disease_catalog', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // MALADIE_FONGIQUE, INSECTE, VIRUS, BACTERIE
+  targetCrops: text('target_crops').array().notNull(),
+  symptomsDescription: text('symptoms_description'),
+  criticalStageBbch: integer('critical_stage_bbch'),
+  weatherTriggers: jsonb('weather_triggers'), // { min_temp, max_temp, min_humidity, duration_hours }
+  treatmentThreshold: text('treatment_threshold'),
+  recommendedMolecules: text('recommended_molecules').array(),
+  bioSolutions: text('bio_solutions').array(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('pdc_type_idx').on(t.type),
+  index('pdc_name_idx').on(t.name),
+]);
+
+// ── AgTech: Profils de sol (analyses labo) ──────────────────────────────
+export const soilProfiles = marketplaceSchema.table('soil_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  farmId: uuid('farm_id').notNull().references(() => farms.id),
+  clayPercentage: doublePrecision('clay_percentage'),
+  sandPercentage: doublePrecision('sand_percentage'),
+  siltPercentage: doublePrecision('silt_percentage'),
+  organicMatter: doublePrecision('organic_matter'),
+  phValue: doublePrecision('ph_value'),
+  waterRetentionCapacity: doublePrecision('water_retention_capacity'),
+  samplingDate: timestamp('sampling_date').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('sp_farm_idx').on(t.farmId),
+  index('sp_sampling_date_idx').on(t.samplingDate),
+]);
+
+// ── AgTech: Historique télémétrie IoT ───────────────────────────────────
+export const sensorTelemetryHistory = marketplaceSchema.table('sensor_telemetry_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  farmId: uuid('farm_id').notNull().references(() => farms.id),
+  soilMoisture: doublePrecision('soil_moisture'),
+  temperature: doublePrecision('temperature'),
+  humidity: doublePrecision('humidity'),
+  solarRadiation: doublePrecision('solar_radiation'),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+}, (t) => [
+  index('telemetry_farm_time_idx').on(t.farmId, t.timestamp),
+]);
+
+// ── AgTech: Observations terrain BBCH ───────────────────────────────────
+export const cropGrowthLogs = marketplaceSchema.table('crop_growth_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cropCycleId: uuid('crop_cycle_id').notNull().references(() => cropCycles.id),
+  stageCode: integer('stage_code').notNull(),
+  observedAt: timestamp('observed_at').defaultNow(),
+  imageSnapshotUrl: text('image_snapshot_url'),
+  accumulatedGddAtStage: integer('accumulated_gdd_at_stage'),
+}, (t) => [
+  index('cgl_crop_cycle_idx').on(t.cropCycleId),
+  index('cgl_observed_at_idx').on(t.observedAt),
+]);
+
+// ── AgTech: Référentiel stades BBCH par culture ────────────────────────
+export const cropGrowthStages = marketplaceSchema.table('crop_growth_stages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cropType: text('crop_type').notNull(),
+  stageCode: integer('stage_code').notNull(),
+  stageName: text('stage_name').notNull(),
+  gddThreshold: integer('gdd_threshold').notNull(),
+  nitrogenNeedKgHa: doublePrecision('nitrogen_need_kgha').default(0),
+  waterNeedMmDay: doublePrecision('water_need_mmday').default(0),
+  agronomicAdvice: text('agronomic_advice'),
+  version: text('version').default('v1'),
+}, (t) => [
+  uniqueIndex('cgs_crop_stage_unique').on(t.cropType, t.stageCode),
+  index('cgs_crop_type_idx').on(t.cropType),
 ]);
 
 export const stocks = marketplaceSchema.table('stocks', {
@@ -316,19 +464,25 @@ export const auctions = marketplaceSchema.table('auctions', {
   id: uuid('id').primaryKey().defaultRandom(),
   buyerId: uuid('buyer_id').notNull(),
   subCategoryId: uuid('sub_category_id').notNull(),
+  description: text('description'), // Ce que l'acheteur recherche (qualité, calibre, etc.)
   quantity: doublePrecision('quantity').notNull(),
   unit: unitEnum('unit').default('TONNE').notNull(),
   maxPricePerUnit: doublePrecision('max_price_per_unit').notNull(),
   deadline: timestamp('deadline').notNull(),
   autoExtend: boolean('auto_extend').default(true).notNull(),
   escrowStatus: escrowStatusEnum('escrow_status').default('NONE').notNull(),
-  status: auctionStatusEnum('status').default('OPEN').notNull(),
+  status: auctionStatusEnum('status').default('OPEN').notNull(), // OPEN, CLOSED, AWARDED, CANCELLED, EXPIRED
+  winnerBidId: uuid('winner_bid_id'), // FK ajoutée après bids (circular) — relation Drizzle seulement
+  awardedAt: timestamp('awarded_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancellationReason: text('cancellation_reason'),
   targetZoneId: uuid('target_zone_id'),
   version: integer('version').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('auctions_status_idx').on(t.status),
+  index('auctions_buyer_idx').on(t.buyerId),
   index('auctions_escrow_status_idx').on(t.escrowStatus),
   index('auctions_zone_idx').on(t.targetZoneId),
   index('auctions_deadline_idx').on(t.deadline),
@@ -341,12 +495,17 @@ export const bids = marketplaceSchema.table('bids', {
   offeredPrice: doublePrecision('offered_price').notNull(),
   linkedStockId: uuid('linked_stock_id'),
   isWinner: boolean('is_winner').default(false).notNull(),
+  status: text('status').default('PENDING').notNull(), // PENDING, WINNER, LOST
+  message: text('message'), // Note optionnelle du producteur
+  notifiedAt: timestamp('notified_at'), // Quand le participant a été notifié du résultat
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   uniqueIndex('bids_auction_producer_unique').on(t.auctionId, t.producerId),
   index('bids_auction_idx').on(t.auctionId),
   index('bids_producer_idx').on(t.producerId),
   index('bids_linked_stock_idx').on(t.linkedStockId),
+  index('bids_status_idx').on(t.status),
 ]);
 
 export default {
@@ -359,6 +518,14 @@ export default {
   deliveries,
   farms,
   cropCycles,
+  fieldInterventions,
+  sensorDataSummary,
+  agronomicStandards,
+  pestDiseaseCatalog,
+  soilProfiles,
+  sensorTelemetryHistory,
+  cropGrowthLogs,
+  cropGrowthStages,
   stocks,
   stockMovements,
   batches,
@@ -382,4 +549,11 @@ export type Auction = InferModel<typeof auctions>;
 export type Bid = InferModel<typeof bids>;
 export type OrderItem = InferModel<typeof orderItems>;
 export type Warehouse = InferModel<typeof warehouses>;
-// marketplace schema proxy
+export type CropCycle = InferModel<typeof cropCycles>;
+export type FieldIntervention = InferModel<typeof fieldInterventions>;
+export type SoilProfile = InferModel<typeof soilProfiles>;
+export type CropGrowthLog = InferModel<typeof cropGrowthLogs>;
+export type CropGrowthStage = InferModel<typeof cropGrowthStages>;
+export type AgronomicStandard = InferModel<typeof agronomicStandards>;
+export type PestDisease = InferModel<typeof pestDiseaseCatalog>;
+export type SensorTelemetry = InferModel<typeof sensorTelemetryHistory>;

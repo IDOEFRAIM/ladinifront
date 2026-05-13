@@ -18,50 +18,26 @@ function buildDbUrlFromEnv() {
 
 const dbUrl = buildDbUrlFromEnv();
 
-let ssl: any = undefined;
-// Support CA via inline env, or via a file path, and allow opt-in self-signed acceptance.
-// Accept both DATABASE_SSL_* and DB_SSL_* prefixes to match runtime db client.
-if (
-  process.env.DATABASE_SSL_CA ||
-  process.env.DATABASE_SSL_CA_PATH ||
-  process.env.DB_SSL_CA ||
-  process.env.DB_SSL_CA_PATH ||
-  process.env.DB_ALLOW_SELF_SIGNED
-) {
-  const allowSelfSigned =
-    process.env.DB_ALLOW_SELF_SIGNED === '1' ||
-    String(process.env.DB_ALLOW_SELF_SIGNED).toLowerCase() === 'true';
+// Default: accept self-signed certs (DigitalOcean managed DB)
+let ssl: any = { rejectUnauthorized: false };
 
+// Override with explicit CA if provided
+try {
   let caValue: string | undefined = undefined;
-  if (process.env.DATABASE_SSL_CA || process.env.DB_SSL_CA) caValue = process.env.DATABASE_SSL_CA || process.env.DB_SSL_CA;
-  else if (process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH) {
-    try {
-      // lazy require fs to avoid issues in some environments
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fs = require('fs');
-      const p = process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH;
-      caValue = fs.readFileSync(p, 'utf8');
-    } catch (e) {
-      console.warn('Failed to read SSL CA path', process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH, e);
-    }
+  if (process.env.DATABASE_SSL_CA || process.env.DB_SSL_CA) {
+    caValue = process.env.DATABASE_SSL_CA || process.env.DB_SSL_CA;
+  } else if (process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH) {
+    const fs = require('fs');
+    const p = process.env.DATABASE_SSL_CA_PATH || process.env.DB_SSL_CA_PATH;
+    caValue = fs.readFileSync(p, 'utf8');
   }
-
-  ssl = { rejectUnauthorized: !allowSelfSigned } as any;
   if (caValue) ssl.ca = caValue;
+} catch (e) {
+  console.warn('drizzle.config: SSL CA setup failed, using rejectUnauthorized=false', e);
+}
 
-  // If explicitly allowing self-signed certs, also set Node TLS env to accept them
-  if (allowSelfSigned) {
-    try {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-    } catch (e) {
-      /* ignore */
-    }
-  }
-
-  // If NODE_EXTRA_CA_CERTS is provided, it will be used by Node's TLS stack automatically.
-  if (process.env.NODE_EXTRA_CA_CERTS) {
-    try { process.env.NODE_EXTRA_CA_CERTS = process.env.NODE_EXTRA_CA_CERTS; } catch (e) { /* ignore */ }
-  }
+if (process.env.DISABLE_SSLMODE === 'true') {
+  ssl = undefined;
 }
 
 export default defineConfig({

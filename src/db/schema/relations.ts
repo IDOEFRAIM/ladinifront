@@ -41,6 +41,11 @@ import {
   deliveries,
   farms,
   cropCycles,
+  fieldInterventions,
+  sensorDataSummary,
+  soilProfiles,
+  sensorTelemetryHistory,
+  cropGrowthLogs,
   stocks,
   stockMovements,
   batches,
@@ -69,6 +74,9 @@ import {
   trustScores,
   aiRatingReasonings,
   territoryEvents,
+  aiRecommendations,
+  weatherDataLogs,
+  agentContextMemory,
 } from './intelligence';
 
 // ╔══════════════════════════════════════════════╗
@@ -223,17 +231,25 @@ export const farmsRelations = relations(farms, ({ one, many }) => ({
     fields: [farms.zoneId],
     references: [zones.id],
   }),
-  // Named "inventory" to match the `with: { inventory: true }` used in dashboard routes
+
   inventory: many(stocks),
   cropCycles: many(cropCycles),
   expenses: many(expenses),
+  soilProfiles: many(soilProfiles),
+  sensorTelemetry: many(sensorTelemetryHistory),
+  cycles: many(cropCycles),
+  telemetryHistory: many(sensorTelemetryHistory),
+  sensorSummaries: many(sensorDataSummary),
 }));
 
-export const cropCyclesRelations = relations(cropCycles, ({ one }) => ({
+export const cropCyclesRelations = relations(cropCycles, ({ one, many }) => ({
   farm: one(farms, {
     fields: [cropCycles.farmId],
     references: [farms.id],
   }),
+  interventions: many(fieldInterventions),
+  growthLogs: many(cropGrowthLogs),
+  recommendations: many(aiRecommendations),
 }));
 
 export const stocksRelations = relations(stocks, ({ one, many }) => ({
@@ -327,6 +343,10 @@ export const auctionsRelations = relations(auctions, ({ one, many }) => ({
   targetZone: one(zones, {
     fields: [auctions.targetZoneId],
     references: [zones.id],
+  }),
+  winnerBid: one(bids, {
+    fields: [auctions.winnerBidId],
+    references: [bids.id],
   }),
   bids: many(bids),
   orders: many(orders),
@@ -497,5 +517,69 @@ export const territoryEventsRelations = relations(territoryEvents, ({ one }) => 
   zone: one(zones, {
     fields: [territoryEvents.zoneId],
     references: [zones.id],
+  }),
+}));
+
+// ══════════════════════════════════════════════
+//   AGTECH RELATIONS
+// ══════════════════════════════════════════════
+
+export const fieldInterventionsRelations = relations(fieldInterventions, ({ one }) => ({
+  cropCycle: one(cropCycles, {
+    fields: [fieldInterventions.cropCycleId],
+    references: [cropCycles.id],
+  }),
+}));
+
+export const cropGrowthLogsRelations = relations(cropGrowthLogs, ({ one }) => ({
+  cropCycle: one(cropCycles, {
+    fields: [cropGrowthLogs.cropCycleId],
+    references: [cropCycles.id],
+  }),
+}));
+
+export const soilProfilesRelations = relations(soilProfiles, ({ one }) => ({
+  farm: one(farms, {
+    fields: [soilProfiles.farmId],
+    references: [farms.id],
+  }),
+}));
+
+export const sensorTelemetryHistoryRelations = relations(sensorTelemetryHistory, ({ one }) => ({
+  farm: one(farms, {
+    fields: [sensorTelemetryHistory.farmId],
+    references: [farms.id],
+  }),
+}));
+
+export const sensorDataSummaryRelations = relations(sensorDataSummary, ({ one }) => ({
+  farm: one(farms, {
+    fields: [sensorDataSummary.farmId],
+    references: [farms.id],
+  }),
+}));
+
+// ══════════════════════════════════════════════
+//   AI BRAIN RELATIONS
+// ══════════════════════════════════════════════
+
+export const aiRecommendationsRelations = relations(aiRecommendations, ({ one }) => ({
+  user: one(users, {
+    fields: [aiRecommendations.userId],
+    references: [users.id],
+  }),
+}));
+
+export const weatherDataLogsRelations = relations(weatherDataLogs, ({ one }) => ({
+  zone: one(zones, {
+    fields: [weatherDataLogs.zoneId],
+    references: [zones.id],
+  }),
+}));
+
+export const agentContextMemoryRelations = relations(agentContextMemory, ({ one }) => ({
+  user: one(users, {
+    fields: [agentContextMemory.userId],
+    references: [users.id],
   }),
 }));

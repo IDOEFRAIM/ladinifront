@@ -2,7 +2,7 @@
 
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, ne, notInArray, gt, sql } from 'drizzle-orm';
+import { eq, and, ne, notInArray, gt, sql, desc, asc } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 
@@ -246,6 +246,11 @@ export async function submitBid(input: {
         return { success: false, error: 'Enchère fermée ou introuvable' };
       }
 
+      // Self-bid guard: le buyer (créateur) ne peut pas enchérir sur sa propre enchère
+      if (auction.buyerId === userId) {
+        return { success: false, error: 'Vous ne pouvez pas enchérir sur votre propre enchère' };
+      }
+
       const now = new Date();
       if (now > auction.deadline) {
         return { success: false, error: 'Délai dépassé' };
@@ -287,12 +292,14 @@ export async function submitBid(input: {
           producerId: producer.id,
           offeredPrice: input.offeredPrice,
           linkedStockId,
+          message: input.message ?? null,
         })
         .onConflictDoUpdate({
           target: [schema.bids.auctionId, schema.bids.producerId],
           set: {
             offeredPrice: input.offeredPrice,
             linkedStockId,
+            message: input.message ?? null,
           },
         })
         .returning();
@@ -339,17 +346,27 @@ export async function awardAuction(input: {
 
   try {
     return await db.transaction(async (tx) => {
-      // 1. Lire l'enchère avec verrou partagé
+      // 1. Lire l'enchère
       const auction = await tx.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
       if (!auction) throw new Error('Enchère introuvable');
       if (auction.status !== 'OPEN') throw new Error('Enchère déjà attribuée ou fermée');
 
-      // 2. Tentative d'attribution avec optimistic lock
-      //    On incrémente la version ET on clôture l'enchère.
-      //    SEULEMENT si la version n'a pas changé entre-temps.
+      // Seul le créateur (buyer) ou un admin peut attribuer
+      const user = await tx.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, role: true } });
+      const isOwner = auction.buyerId === userId;
+      const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+      if (!isOwner && !isAdmin) throw new Error('Seul le créateur ou un admin peut attribuer cette enchère');
+
+      // Vérifier que le bid appartient bien à cette enchère
+      const winnerBid = await tx.query.bids.findFirst({ where: and(eq(schema.bids.id, input.winnerBidId), eq(schema.bids.auctionId, input.auctionId)) });
+      if (!winnerBid) throw new Error('Bid introuvable pour cette enchère');
+
+      // 2. Optimistic lock: set AWARDED + winnerBidId + awardedAt
       const updated = await tx.update(schema.auctions)
         .set({
-          status: 'CLOSED',
+          status: 'AWARDED',
+          winnerBidId: input.winnerBidId,
+          awardedAt: new Date(),
           version: auction.version + 1,
         })
         .where(
@@ -362,15 +379,20 @@ export async function awardAuction(input: {
         .returning({ id: schema.auctions.id });
 
       if (updated.length === 0) {
-        throw new Error(
-          'Conflit de concurrence : l\'enchère a été modifiée par un autre processus. Réessayez.'
-        );
+        throw new Error('Conflit de concurrence : l\'enchère a été modifiée. Réessayez.');
       }
 
-      // 3. Marquer le bid gagnant
+      // 3. Marquer le bid gagnant + tous les perdants
       await tx.update(schema.bids)
-        .set({ isWinner: true })
+        .set({ isWinner: true, status: 'WINNER', notifiedAt: new Date() })
         .where(eq(schema.bids.id, input.winnerBidId));
+
+      await tx.update(schema.bids)
+        .set({ status: 'LOST', notifiedAt: new Date() })
+        .where(and(
+          eq(schema.bids.auctionId, input.auctionId),
+          ne(schema.bids.id, input.winnerBidId)
+        ));
 
       // 3b. Générer automatiquement une commande liée à l'enchère (idempotent)
       const existingOrder = await tx.query.orders.findFirst({
@@ -443,23 +465,263 @@ export async function awardAuction(input: {
         }
       }
 
-      // 4. Audit (via helper standard)
+      // 4. Notifier les perdants (logiquement via notification service)
+      try {
+        const { sendUserNotification } = await import('@/services/notification.service');
+        const loserBids = await tx.query.bids.findMany({
+          where: and(eq(schema.bids.auctionId, input.auctionId), ne(schema.bids.id, input.winnerBidId)),
+          with: { producer: { with: { user: { columns: { id: true, name: true, phone: true } } } } },
+        });
+        for (const lb of loserBids) {
+          if (lb.producer?.user) {
+            await sendUserNotification(lb.producer.user.id, {
+              event: 'AUCTION_LOST',
+              recipientName: lb.producer.user.name,
+              recipientPhone: lb.producer.user.phone,
+              extra: { auctionId: input.auctionId },
+            });
+          }
+        }
+        // Notify winner
+        if (winnerBid.producerId) {
+          const wp = await tx.query.producers.findFirst({ where: eq(schema.producers.id, winnerBid.producerId), with: { user: { columns: { id: true, name: true, phone: true } } } });
+          if (wp?.user) {
+            await sendUserNotification(wp.user.id, {
+              event: 'AUCTION_WON',
+              recipientName: wp.user.name,
+              recipientPhone: wp.user.phone,
+              extra: { auctionId: input.auctionId },
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn('awardAuction: notification failed (non-blocking)', notifErr);
+      }
+
+      // 5. Audit
       await audit({
         action: 'AWARD_AUCTION',
         entityType: 'Auction',
         entityId: input.auctionId,
         actorId: userId,
-        newValue: { winnerBidId: input.winnerBidId, version: auction.version + 1 },
+        newValue: { winnerBidId: input.winnerBidId, status: 'AWARDED', version: auction.version + 1 },
       });
 
       return {
         success: true,
-        data: { auctionId: input.auctionId, winnerBidId: input.winnerBidId },
+        data: { auctionId: input.auctionId, winnerBidId: input.winnerBidId, status: 'AWARDED' },
       };
     });
   } catch (e: any) {
     console.error('awardAuction error:', e);
     return { success: false, error: e.message || 'Erreur de concurrence' };
+  }
+}
+
+// ── Liste des bids pour une enchère (visible par le créateur) ──────────
+export async function getBidsForAuction(auctionId: string) {
+  const userId = await getUserIdFromSession();
+  if (!userId) return { success: false, error: 'Session expirée' };
+
+  try {
+    const auction = await db.query.auctions.findFirst({
+      where: eq(schema.auctions.id, auctionId),
+      columns: { id: true, buyerId: true, status: true, maxPricePerUnit: true },
+    });
+    if (!auction) return { success: false, error: 'Enchère introuvable' };
+
+    // Check access: only auction creator, admin, or bid participants
+    const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, role: true } });
+    const isOwner = auction.buyerId === userId;
+    const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+
+    const bidsResult = await db.query.bids.findMany({
+      where: eq(schema.bids.auctionId, auctionId),
+      orderBy: [asc(schema.bids.offeredPrice)],
+      with: {
+        producer: {
+          columns: { id: true, companyName: true, zoneId: true },
+          with: { user: { columns: { id: true, name: true } } },
+        },
+      },
+    });
+
+    // Determine best bid (lowest price = best for buyer)
+    const bestBidId = bidsResult.length > 0 ? bidsResult[0].id : null;
+
+    const bids = bidsResult.map((b, idx) => ({
+      id: b.id,
+      producerId: b.producerId,
+      producerName: isOwner || isAdmin ? (b.producer?.user?.name ?? b.producer?.companyName ?? 'Producteur') : `Producteur #${idx + 1}`,
+      offeredPrice: b.offeredPrice,
+      message: b.message,
+      status: b.status,
+      isWinner: b.isWinner,
+      isBestBid: b.id === bestBidId,
+      linkedStockId: b.linkedStockId,
+      createdAt: b.createdAt,
+    }));
+
+    return {
+      success: true,
+      data: {
+        auctionId,
+        auctionStatus: auction.status,
+        totalBids: bids.length,
+        bestBidPrice: bidsResult[0]?.offeredPrice ?? null,
+        bids,
+      },
+    };
+  } catch (e: any) {
+    console.error('getBidsForAuction error:', e);
+    return { success: false, error: 'Erreur interne' };
+  }
+}
+
+// ── Annulation d'une enchère ──────────────────────────────────────────
+export async function cancelAuction(input: {
+  auctionId: string;
+  reason?: string;
+}) {
+  const userId = await getUserIdFromSession();
+  if (!userId) return { success: false, error: 'Session expirée' };
+
+  try {
+    return await db.transaction(async (tx) => {
+      const auction = await tx.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
+      if (!auction) throw new Error('Enchère introuvable');
+      if (auction.status !== 'OPEN') throw new Error('Seule une enchère OPEN peut être annulée');
+
+      // Seul le créateur ou un admin
+      const user = await tx.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, role: true } });
+      const isOwner = auction.buyerId === userId;
+      const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+      if (!isOwner && !isAdmin) throw new Error('Non autorisé');
+
+      const updated = await tx.update(schema.auctions)
+        .set({
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancellationReason: input.reason ?? null,
+          version: auction.version + 1,
+        })
+        .where(and(
+          eq(schema.auctions.id, input.auctionId),
+          eq(schema.auctions.version, auction.version),
+          eq(schema.auctions.status, 'OPEN')
+        ))
+        .returning({ id: schema.auctions.id });
+
+      if (updated.length === 0) throw new Error('Conflit de concurrence');
+
+      // Mark all bids as LOST
+      await tx.update(schema.bids)
+        .set({ status: 'LOST', notifiedAt: new Date() })
+        .where(eq(schema.bids.auctionId, input.auctionId));
+
+      await audit({
+        action: 'CANCEL_AUCTION',
+        entityType: 'Auction',
+        entityId: input.auctionId,
+        actorId: userId,
+        newValue: { reason: input.reason, status: 'CANCELLED' },
+      });
+
+      return { success: true, data: { auctionId: input.auctionId, status: 'CANCELLED' } };
+    });
+  } catch (e: any) {
+    console.error('cancelAuction error:', e);
+    return { success: false, error: e.message || 'Erreur interne' };
+  }
+}
+
+// ── Mes enchères (pour le buyer) ──────────────────────────────────────
+export async function getMyAuctions() {
+  const userId = await getUserIdFromSession();
+  if (!userId) return { success: false, error: 'Session expirée' };
+
+  try {
+    const results = await db.query.auctions.findMany({
+      where: eq(schema.auctions.buyerId, userId),
+      orderBy: [desc(schema.auctions.createdAt)],
+      with: {
+        subCategory: { columns: { id: true, name: true } },
+        bids: { columns: { id: true } },
+        winnerBid: {
+          columns: { id: true, offeredPrice: true, producerId: true },
+          with: { producer: { columns: { id: true, companyName: true } } },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      data: results.map(a => ({
+        id: a.id,
+        subCategoryName: a.subCategory?.name ?? 'Produit inconnu',
+        description: a.description,
+        quantity: a.quantity,
+        unit: a.unit,
+        maxPricePerUnit: a.maxPricePerUnit,
+        deadline: a.deadline,
+        status: a.status,
+        bidsCount: a.bids?.length ?? 0,
+        winnerBid: a.winnerBid ? {
+          id: a.winnerBid.id,
+          offeredPrice: a.winnerBid.offeredPrice,
+          producerName: a.winnerBid.producer?.companyName ?? 'Producteur',
+        } : null,
+        awardedAt: a.awardedAt,
+        createdAt: a.createdAt,
+      })),
+    };
+  } catch (e: any) {
+    console.error('getMyAuctions error:', e);
+    return { success: false, error: 'Erreur interne' };
+  }
+}
+
+// ── Mes bids (pour le producteur) ─────────────────────────────────────
+export async function getMyBids() {
+  const userId = await getUserIdFromSession();
+  if (!userId) return { success: false, error: 'Session expirée' };
+
+  try {
+    const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId), columns: { id: true } });
+    if (!producer) return { success: false, error: 'Profil producteur introuvable' };
+
+    const results = await db.query.bids.findMany({
+      where: eq(schema.bids.producerId, producer.id),
+      orderBy: [desc(schema.bids.createdAt)],
+      with: {
+        auction: {
+          columns: { id: true, status: true, quantity: true, unit: true, maxPricePerUnit: true, deadline: true, subCategoryId: true },
+          with: { subCategory: { columns: { id: true, name: true } } },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      data: results.map(b => ({
+        id: b.id,
+        auctionId: b.auctionId,
+        offeredPrice: b.offeredPrice,
+        status: b.status,
+        isWinner: b.isWinner,
+        message: b.message,
+        notifiedAt: b.notifiedAt,
+        auctionStatus: b.auction?.status,
+        subCategoryName: b.auction?.subCategory?.name ?? 'Produit',
+        auctionQuantity: b.auction?.quantity,
+        auctionUnit: b.auction?.unit,
+        auctionDeadline: b.auction?.deadline,
+        createdAt: b.createdAt,
+      })),
+    };
+  } catch (e: any) {
+    console.error('getMyBids error:', e);
+    return { success: false, error: 'Erreur interne' };
   }
 }
 
