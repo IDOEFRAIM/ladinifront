@@ -231,6 +231,7 @@ export async function submitBid(input: {
   auctionId: string;
   offeredPrice: number;
   linkedStockId?: string | null;
+  message:string | null
 }) {
   const userId = await getUserIdFromSession();
   if (!userId) return { success: false, error: 'Session expirée' };
@@ -292,14 +293,14 @@ export async function submitBid(input: {
           producerId: producer.id,
           offeredPrice: input.offeredPrice,
           linkedStockId,
-          message: input.message ?? null,
+          message: input?.message ?? null,
         })
         .onConflictDoUpdate({
           target: [schema.bids.auctionId, schema.bids.producerId],
           set: {
             offeredPrice: input.offeredPrice,
             linkedStockId,
-            message: input.message ?? null,
+            message: input?.message ?? null,
           },
         })
         .returning();
@@ -474,24 +475,14 @@ export async function awardAuction(input: {
         });
         for (const lb of loserBids) {
           if (lb.producer?.user) {
-            await sendUserNotification(lb.producer.user.id, {
-              event: 'AUCTION_LOST',
-              recipientName: lb.producer.user.name,
-              recipientPhone: lb.producer.user.phone,
-              extra: { auctionId: input.auctionId },
-            });
+            await sendUserNotification(lb.producer.user.id, 'AUCTION_LOST', { auctionId: input.auctionId });
           }
         }
         // Notify winner
         if (winnerBid.producerId) {
           const wp = await tx.query.producers.findFirst({ where: eq(schema.producers.id, winnerBid.producerId), with: { user: { columns: { id: true, name: true, phone: true } } } });
           if (wp?.user) {
-            await sendUserNotification(wp.user.id, {
-              event: 'AUCTION_WON',
-              recipientName: wp.user.name,
-              recipientPhone: wp.user.phone,
-              extra: { auctionId: input.auctionId },
-            });
+            await sendUserNotification(wp.user.id, 'AUCTION_WON', { auctionId: input.auctionId });
           }
         }
       } catch (notifErr) {
@@ -540,7 +531,7 @@ export async function getBidsForAuction(auctionId: string) {
       orderBy: [asc(schema.bids.offeredPrice)],
       with: {
         producer: {
-          columns: { id: true, companyName: true, zoneId: true },
+          columns: { id: true, businessName: true, zoneId: true },
           with: { user: { columns: { id: true, name: true } } },
         },
       },
@@ -552,7 +543,7 @@ export async function getBidsForAuction(auctionId: string) {
     const bids = bidsResult.map((b, idx) => ({
       id: b.id,
       producerId: b.producerId,
-      producerName: isOwner || isAdmin ? (b.producer?.user?.name ?? b.producer?.companyName ?? 'Producteur') : `Producteur #${idx + 1}`,
+      producerName: isOwner || isAdmin ? (b.producer?.user?.name ?? b.producer?.businessName ?? 'Producteur') : `Producteur #${idx + 1}`,
       offeredPrice: b.offeredPrice,
       message: b.message,
       status: b.status,
@@ -649,7 +640,7 @@ export async function getMyAuctions() {
         bids: { columns: { id: true } },
         winnerBid: {
           columns: { id: true, offeredPrice: true, producerId: true },
-          with: { producer: { columns: { id: true, companyName: true } } },
+          with: { producer: { columns: { id: true, businessName: true } } },
         },
       },
     });
@@ -669,7 +660,7 @@ export async function getMyAuctions() {
         winnerBid: a.winnerBid ? {
           id: a.winnerBid.id,
           offeredPrice: a.winnerBid.offeredPrice,
-          producerName: a.winnerBid.producer?.companyName ?? 'Producteur',
+          producerName: a.winnerBid.producer?.businessName ?? 'Producteur',
         } : null,
         awardedAt: a.awardedAt,
         createdAt: a.createdAt,
