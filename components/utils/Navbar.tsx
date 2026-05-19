@@ -1,11 +1,11 @@
 ﻿'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import Image from 'next/image'
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { Leaf, Menu, X, LayoutDashboard, LogOut, ArrowRight, User } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const NAV_LINKS = [
@@ -21,29 +21,48 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Fermer le menu mobile de manière sécure lors des changements de page
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
+  // Écouteur de défilement optimisé (évite les appels d'état redondants en boucle)
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
+    const handleScroll = () => {
+      const shouldScroll = window.scrollY > 20;
+      setScrolled((prev) => (prev !== shouldScroll ? shouldScroll : prev));
+    };
+
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    router.push('/login');
+    try {
+      await logout();
+      router.push('/login');
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion :', error);
+    }
   };
 
-  const getUserDashboardPath = () => {
+  // Optimisation : Calcul du chemin mémoïsé pour empêcher la réévaluation à chaque scroll
+  const dashboardPath = useMemo(() => {
     const role = userRole?.toUpperCase();
-    if (role === 'SUPERADMIN' || role === 'ADMIN') return '/admin';
-    if (role === 'PRODUCER') return '/dashboard';
-    if (role === 'BUYER') return '/buyer-dashboard';
-    if (role === 'AGENT') return '/agent/deliveries';
-    return '/market';
-  };
+    switch (role) {
+      case 'SUPERADMIN':
+      case 'ADMIN':
+        return '/admin';
+      case 'PRODUCER':
+        return '/dashboard';
+      case 'BUYER':
+        return '/buyer-dashboard';
+      case 'AGENT':
+        return '/agent/deliveries';
+      default:
+        return '/market';
+    }
+  }, [userRole]);
 
   return (
     <nav
@@ -58,49 +77,56 @@ export default function Navbar() {
           
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-2 group transition-transform active:scale-95">
-            <div className="bg-gradient-to-br from-emerald-900 to-emerald-500 p-2 rounded-xl text-white shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform">
-               <Image 
+            <div className="relative bg-gradient-to-br from-emerald-900 to-emerald-500 p-1.5 rounded-xl text-white shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform overflow-hidden w-11 h-11 flex items-center justify-center">
+              <Image 
                 src="/images/logo.jpeg"
-                alt="logo ladini"
-                width={100}
-                height={100}/>
+                alt="Logo LadiNi"
+                width={40}
+                height={40}
+                className="object-contain rounded-lg"
+                priority
+              />
             </div>
             <span className="font-space font-extrabold text-xl tracking-tighter text-emerald-900">
               Ladi<span className="text-emerald-500">Ni</span>
             </span>
           </Link>
 
-          {/* DESKTOP NAV - Hidden on Mobile */}
+          {/* MENUS DESKTOP */}
           <div className="hidden md:flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
-                  pathname === link.href
-                    ? 'bg-white text-emerald-900 shadow-sm'
-                    : 'text-slate-500 hover:text-emerald-700'
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={link.name}
+                  href={link.href}
+                  className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${
+                    isActive
+                      ? 'bg-white text-emerald-900 shadow-sm'
+                      : 'text-slate-500 hover:text-emerald-700'
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
           </div>
 
-          {/* ACTIONS */}
+          {/* BLOC D'ACTIONS */}
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
                 <Link 
-                  href={getUserDashboardPath()} 
+                  href={dashboardPath} 
                   className="hidden sm:flex items-center gap-2 bg-emerald-900 text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-emerald-800 transition-all shadow-md shadow-emerald-900/10"
                 >
                   <LayoutDashboard size={14} /> <span>Mon Espace</span>
                 </Link>
                 <button 
                   onClick={handleLogout}
-                  className="hidden md:flex p-2.5 text-slate-400 hover:text-red-500 transition-colors"
+                  className="hidden md:flex p-2.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                   title="Déconnexion"
+                  aria-label="Se déconnecter"
                 >
                   <LogOut size={20} />
                 </button>
@@ -110,16 +136,18 @@ export default function Navbar() {
                 <Link href="/login" className="px-4 py-2 text-sm font-bold text-emerald-900 hover:text-emerald-600 transition-colors">
                   Connexion
                 </Link>
-                <Link href="/signup" className="flex items-center gap-2 bg-emerald-900 text-white px-5 py-2.5 rounded-full text-xs font-bold hover:shadow-lg transition-all">
+                <Link href="/signup" className="flex items-center gap-2 bg-emerald-900 text-white px-5 py-2.5 rounded-full text-xs font-bold hover:bg-emerald-800 hover:shadow-lg transition-all">
                   Rejoindre <ArrowRight size={14} />
                 </Link>
               </div>
             )}
 
-            {/* BTN MOBILE MENU */}
+            {/* BOUTON DU MENU MOBILE */}
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-              className="md:hidden p-2 rounded-xl text-emerald-900 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+              className="md:hidden p-2 rounded-xl text-emerald-900 bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer"
+              aria-expanded={isMobileMenuOpen}
+              aria-label={isMobileMenuOpen ? "Fermer le menu de navigation" : "Ouvrir le menu de navigation"}
             >
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -127,45 +155,49 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* MOBILE MENU PANEL with Framer Motion for smooth entry */}
+      {/* PANNEAU MOBILE (ANIMATION DROPPING VIA FRAMER MOTION) */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-white border-t border-slate-50 overflow-hidden shadow-2xl"
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="md:hidden bg-white border-t border-slate-100 overflow-hidden shadow-2xl"
           >
             <div className="px-4 pt-4 pb-8 space-y-2">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 mb-2">Navigation</p>
               
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className={`flex items-center px-4 py-3.5 rounded-2xl font-bold transition-all ${
-                    pathname === link.href
-                      ? 'bg-emerald-50 text-emerald-900'
-                      : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  {link.name}
-                </Link>
-              ))}
+              {NAV_LINKS.map((link) => {
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`flex items-center px-4 py-3.5 rounded-2xl font-bold transition-all ${
+                      isActive
+                        ? 'bg-emerald-50 text-emerald-900'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    {link.name}
+                  </Link>
+                );
+              })}
 
               <div className="my-4 border-t border-slate-100" />
 
               {isAuthenticated ? (
                 <div className="grid gap-2">
                   <Link 
-                    href={getUserDashboardPath()} 
-                    className="flex items-center justify-center gap-3 w-full bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg"
+                    href={dashboardPath} 
+                    className="flex items-center justify-center gap-3 w-full bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg hover:bg-emerald-800 transition-colors"
                   >
                     <LayoutDashboard size={20} /> Mon Tableau de Bord
                   </Link>
                   <button 
                     onClick={handleLogout}
-                    className="flex items-center justify-center gap-3 w-full bg-red-50 text-red-600 p-4 rounded-2xl font-bold transition-colors"
+                    className="flex items-center justify-center gap-3 w-full bg-red-50 text-red-600 p-4 rounded-2xl font-bold transition-colors cursor-pointer hover:bg-red-100"
                   >
                     <LogOut size={20} /> Se déconnecter
                   </button>
@@ -174,13 +206,13 @@ export default function Navbar() {
                 <div className="grid gap-2">
                   <Link 
                     href="/signup" 
-                    className="w-full text-center bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg"
+                    className="w-full text-center bg-emerald-900 text-white p-4 rounded-2xl font-bold shadow-lg hover:bg-emerald-800 transition-colors"
                   >
                     Créer un compte
                   </Link>
                   <Link 
                     href="/login" 
-                    className="w-full text-center bg-white border border-slate-200 text-emerald-900 p-4 rounded-2xl font-bold"
+                    className="w-full text-center bg-white border border-slate-200 text-emerald-900 p-4 rounded-2xl font-bold hover:bg-slate-50 transition-colors"
                   >
                     Se connecter
                   </Link>

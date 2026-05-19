@@ -46,11 +46,15 @@ export function useProductMetadata() {
   }, [zoneId]);
 
   // ── Chargement de la carte des prix standards ──────────────────────
+  // FIX CRITIQUE: Suppression de "categories" des dépendances pour éviter la boucle infinie
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      if (!zoneId) { setStandardPriceMap({}); return; }
+      if (!zoneId) { 
+        setStandardPriceMap({}); 
+        return; 
+      }
       try {
         const resp = await getStandardPrices(zoneId);
         if (!alive || !resp?.success || !Array.isArray(resp.data)) return;
@@ -70,7 +74,7 @@ export function useProductMetadata() {
     })();
 
     return () => { alive = false; };
-  }, [zoneId, categories]);
+  }, [zoneId]); 
 
   // ── Lookup du prix standard pour une sous-catégorie ────────────────
   const getPriceForSubCategory = useCallback(

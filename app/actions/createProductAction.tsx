@@ -1,5 +1,6 @@
 "use server";
-import { redirect } from 'next/navigation';
+
+import { revalidatePath } from 'next/cache';
 import { createProductFromForm, updateProductFromForm } from './products.server';
 import { requireProducer } from '@/lib/api-guard';
 
@@ -17,27 +18,44 @@ async function getProducerId(): Promise<string> {
 // ── Server actions ─────────────────────────────────────────────────────
 
 export async function createProductAction(formData: FormData) {
-  const producerId = await getProducerId();
   try {
+    const producerId = await getProducerId();
     await createProductFromForm(formData, producerId);
+    
+    // Force la mise à jour des données partout où les produits sont affichés
+    revalidatePath('/products');
+    
+    // On retourne un statut de succès au lieu de redirect()
+    return { success: true };
   } catch (err: any) {
-    console.error('createProductAction failed', err?.message ?? err, { validation: err?.validation, raw: err?.raw });
-    throw err;
+    console.error('createProductAction failed:', err?.message ?? err, { 
+      validation: err?.validation, 
+      raw: err?.raw 
+    });
+    return { 
+      success: false, 
+      error: err?.message ?? "Erreur lors de la création du produit" 
+    };
   }
-
-  // La redirection doit être en dehors du bloc try/catch 
-  // car redirect() lance techniquement une erreur interne à Next.js
-  redirect('/products');
 }
 
 export async function updateProductAction(formData: FormData) {
-  const producerId = await getProducerId();
   try {
+    const producerId = await getProducerId();
     await updateProductFromForm(formData, producerId);
+    
+    // Invalide le cache de la liste des produits
+    revalidatePath('/products');
+    
+    return { success: true };
   } catch (err: any) {
-    console.error('updateProductAction failed', err?.message ?? err, { validation: err?.validation, raw: err?.raw });
-    throw err;
+    console.error('updateProductAction failed:', err?.message ?? err, { 
+      validation: err?.validation, 
+      raw: err?.raw 
+    });
+    return { 
+      success: false, 
+      error: err?.message ?? "Erreur lors de la modification du produit" 
+    };
   }
-
-  redirect('/products');
 }

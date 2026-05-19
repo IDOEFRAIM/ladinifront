@@ -39,7 +39,7 @@ try {
 // On bride volontairement à 'max: 2' pour laisser de la place à ton Agent IA
 const client = globalThis.postgresClient ?? postgres(connectionString, {
   // --- CONFIGURATION ANTI-SATURATION ---
-  max: process.env.NODE_ENV === 'production' ? 10 : 2, 
+  max: process.env.NODE_ENV === 'production' ? 4 : 2, 
   
   // Obligatoire pour DigitalOcean (port 25061) et PgBouncer
   prepare: false, 

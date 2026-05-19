@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,159 +9,156 @@ import {
   PlusCircle, Users, LogOut, X, ChevronLeft, ChevronRight, Circle
 } from 'lucide-react';
 
+// Centralisation propre des couleurs réutilisables dans les styles dynamiques si nécessaire
 const C = {
-  forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
-  glass: 'rgba(255, 255, 255, 0.72)', border: 'rgba(6, 78, 59, 0.07)', muted: '#64748B',
+  sand: '#F9FBF8',
+  border: 'rgba(6, 78, 59, 0.07)',
 };
 
-const PRODUCER_LINKS = [
-  { name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
-  { name: 'Mes Agents IA', href: '/agents', icon: Bot },
-  { name: 'Mon Stock', href: '/inventory', icon: Warehouse },
-  { name: 'Catalogue', href: '/products', icon: Package },
-  { name: 'Ventes', href: '/sales', icon: ShoppingCart },
-  { name: 'Nouveau Produit', href: '/products/add', icon: PlusCircle },
-  { name: 'Mes Clients', href: '/clients', icon: Users },
-  { name: 'Parametres', href: '/settings', icon: Settings },
-];
+interface ProductorSidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
 
-export default function ProductorSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function ProductorSidebar({ isOpen, onClose }: ProductorSidebarProps) {
   const pathname = usePathname();
   const currentPath = pathname ?? '';
   const { logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Optimisation : Mémoisation des liens pour éviter de recréer le tableau à chaque rendu
+  const sidebarLinks = useMemo(() => [
+    { name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
+    { name: 'Mes Agents IA', href: '/agents', icon: Bot },
+    { name: 'Mon Stock', href: '/inventory', icon: Warehouse },
+    { name: 'Catalogue', href: '/products', icon: Package },
+    { name: 'Ventes', href: '/sales', icon: ShoppingCart },
+    { name: 'Nouveau Produit', href: '/products/add', icon: PlusCircle },
+    { name: 'Mes Clients', href: '/clients', icon: Users },
+    { name: 'Paramètres', href: '/settings', icon: Settings },
+  ], []);
+
   return (
     <>
-      {/* Overlay mobile */}
+      {/* Overlay mobile optimisé */}
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 md:hidden"
-          style={{ background: 'rgba(6,78,59,0.08)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+          className="fixed inset-0 z-40 bg-[rgba(6,78,59,0.08)] backdrop-blur-[4px] md:hidden transition-opacity duration-300"
         />
       )}
 
+      {/* Barre latérale (Sidebar) */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 transition-all duration-500 ease-in-out
+          fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-500 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0 md:static md:h-screen
           ${isCollapsed ? 'w-24' : 'w-72'}
         `}
         style={{
-          background: C.sand,
+          backgroundColor: C.sand,
           borderRight: `1px solid ${C.border}`,
         }}
       >
-        {/* Toggle Button Desktop */}
+        {/* Bouton de bascule (Toggle) Desktop */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hidden md:flex"
-          style={{
-            position: 'absolute', right: -12, top: 40,
-            width: 24, height: 24,
-            background: '#fff', border: `1px solid ${C.border}`,
-            borderRadius: '50%', alignItems: 'center', justifyContent: 'center',
-            color: C.muted, cursor: 'pointer', zIndex: 50,
-            boxShadow: '0 2px 8px rgba(6,78,59,0.06)',
-            transition: 'all 0.2s',
-          }}
+          aria-label={isCollapsed ? "Agrandir la barre latérale" : "Réduire la barre latérale"}
+          className="hidden md:flex absolute -right-3 top-10 w-6 h-6 bg-white items-center justify-center rounded-full text-slate-500 cursor-pointer z-50 shadow-[0_2px_8px_rgba(6,78,59,0.06)] hover:text-emerald-800 transition-colors"
+          style={{ border: `1px solid ${C.border}` }}
         >
           {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
 
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: isCollapsed ? 16 : 24 }}>
-
-          {/* HEADER */}
-          <div style={{
-            display: 'flex', alignItems: 'center',
-            justifyContent: isCollapsed ? 'center' : 'flex-start',
-            paddingLeft: isCollapsed ? 0 : 8, marginBottom: 40, flexShrink: 0,
-          }}>
-            <Link href="/dashboard" onClick={onClose} style={{ textDecoration: 'none' }}>
+        {/* Conteneur principal */}
+        <div className={`flex flex-col h-full ${isCollapsed ? 'p-4' : 'p-6'}`}>
+          
+          {/* EN-TÊTE (Logo) */}
+          <div className={`flex items-center mb-10 shrink-0 ${isCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
+            <Link href="/dashboard" onClick={onClose} className="no-underline">
               {isCollapsed ? (
-                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.5rem', fontWeight: 800, color: C.forest }}>
-                  F<span style={{ color: C.emerald }}>.</span>
+                <span className="font-['Space_Grotesk'] text-2xl font-extrabold text-emerald-950">
+                  F<span className="text-emerald-500">.</span>
                 </span>
               ) : (
                 <div>
-                  <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.75rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em', display: 'block', lineHeight: 1 }}>
-                    FrontAg<span style={{ color: C.emerald }}>.</span>
+                  <span className="font-['Space_Grotesk'] text-3xl font-extrabold text-emerald-950 tracking-tight block leading-none">
+                    FrontAg<span className="text-emerald-500">.</span>
                   </span>
-                  <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, display: 'block' }}>
+                  <span className="font-['Inter'] text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 block">
                     Espace Producteur
                   </span>
                 </div>
               )}
             </Link>
-            <button onClick={onClose} className="md:hidden" style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
+            
+            {/* Bouton fermer sur Mobile */}
+            <button 
+              onClick={onClose} 
+              aria-label="Fermer le menu"
+              className="md:hidden bg-transparent border-none cursor-pointer text-slate-500 p-1 hover:text-emerald-800 transition-colors"
+            >
               <X size={18} />
             </button>
           </div>
 
-          {/* NAVIGATION */}
-          <nav style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, paddingRight: 8 }}>
-            {PRODUCER_LINKS.map((link) => {
+          {/* NAVIGATION (Contenu défilable si trop de liens) */}
+          <nav className="flex-1 overflow-y-auto flex flex-col gap-1 pr-2 custom-scrollbar">
+            {sidebarLinks.map((link) => {
+              // Vérification stricte ou par préfixe pour le statut actif
               const isActive = currentPath === link.href || (link.href !== '/dashboard' && currentPath.startsWith(link.href));
+              
               return (
                 <Link
                   key={link.name}
                   href={link.href}
                   onClick={onClose}
-                  title={isCollapsed ? link.name : ''}
-                  style={{
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: isCollapsed ? 'center' : 'space-between',
-                    padding: isCollapsed ? '14px 0' : '12px 18px',
-                    borderRadius: 16, textDecoration: 'none',
-                    transition: 'all 0.3s',
-                    background: isActive ? C.glass : 'transparent',
-                    border: isActive ? `1px solid ${C.border}` : '1px solid transparent',
-                    boxShadow: isActive ? '0 2px 12px rgba(6,78,59,0.04)' : 'none',
-                  }}
+                  title={isCollapsed ? link.name : undefined}
+                  className={`
+                    flex items-center rounded-2xl no-underline transition-all duration-300 group
+                    ${isCollapsed ? 'justify-center py-3.5' : 'justify-between py-3 px-4.5'}
+                    ${isActive 
+                      ? 'bg-white/72 border-[rgba(6,78,59,0.07)] shadow-[0_2px_12px_rgba(6,78,59,0.04)]' 
+                      : 'bg-transparent border-transparent hover:bg-emerald-50/40'
+                    }
+                  `}
+                  style={{ borderWidth: '1px' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: isCollapsed ? 0 : 14 }}>
-                    <link.icon size={isCollapsed ? 20 : 18} style={{ color: isActive ? C.forest : C.muted, transition: 'color 0.2s' }} />
+                  <div className={`flex items-center ${isCollapsed ? 'gap-0' : 'gap-3.5'}`}>
+                    <link.icon 
+                      size={isCollapsed ? 20 : 18} 
+                      className={`transition-colors duration-200 ${isActive ? 'text-emerald-950' : 'text-slate-500 group-hover:text-emerald-700'}`} 
+                    />
                     {!isCollapsed && (
-                      <span style={{
-                        fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: isActive ? 700 : 600,
-                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                        color: isActive ? C.forest : C.muted, transition: 'color 0.2s',
-                      }}>
+                      <span className={`font-['Inter'] text-xs uppercase tracking-wider transition-colors duration-200 ${isActive ? 'font-bold text-emerald-950' : 'font-semibold text-slate-500 group-hover:text-emerald-900'}`}>
                         {link.name}
                       </span>
                     )}
                   </div>
                   {!isCollapsed && isActive && (
-                    <Circle size={6} fill={C.emerald} color={C.emerald} />
+                    <Circle size={6} className="fill-emerald-500 text-emerald-500" />
                   )}
                 </Link>
               );
             })}
           </nav>
 
-          {/* FOOTER / LOGOUT */}
-          <div style={{ paddingTop: 20, marginTop: 'auto', borderTop: `1px solid ${C.border}` }}>
+          {/* PIED DE PAGE / DÉCONNEXION */}
+          <div className="pt-5 mt-auto" style={{ borderTop: `1px solid ${C.border}` }}>
             <button
               onClick={() => { onClose(); logout(); }}
-              title={isCollapsed ? 'Deconnexion' : ''}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
-                gap: isCollapsed ? 0 : 14,
-                padding: isCollapsed ? 14 : '12px 18px',
-                borderRadius: 16, border: 'none', cursor: 'pointer',
-                background: 'rgba(220,38,38,0.06)', color: '#DC2626',
-                transition: 'all 0.2s',
-                fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.05em',
-              }}
+              title={isCollapsed ? 'Déconnexion' : undefined}
+              className={`
+                w-full flex items-center bg-red-600/5 text-red-600 rounded-2xl border-none cursor-pointer transition-colors duration-200 hover:bg-red-600/10 font-['Inter'] text-xs font-bold uppercase tracking-wider
+                ${isCollapsed ? 'justify-center p-3.5' : 'justify-flex-start gap-3.5 py-3 px-4.5'}
+              `}
             >
               <LogOut size={isCollapsed ? 18 : 16} />
-              {!isCollapsed && <span>Deconnexion</span>}
+              {!isCollapsed && <span>Déconnexion</span>}
             </button>
           </div>
+
         </div>
       </aside>
     </>

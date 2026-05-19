@@ -77,12 +77,15 @@ function parseOptionalNumberField(formData: FormData, key: string): number | und
 }
 
 function parseProductFormData(formData: FormData) {
+  const subCategoryId = String(formData.get('subCategoryId') || formData.get('categoryId') || '').trim();
+  const quantityForSaleRaw = formData.get('quantityForSale') ?? formData.get('quantity');
   return {
     name: parseStringField(formData, 'name'),
     categoryLabel: parseStringField(formData, 'categoryLabel'),
+    subCategoryId: subCategoryId || undefined,
     description: parseOptionalStringField(formData, 'description'),
     price: parseNumberField(formData, 'price'),
-    quantityForSale: parseNumberField(formData, 'quantity'),
+    quantityForSale: parseFloat(String(quantityForSaleRaw ?? 0)) || 0,
     unit: parseStringField(formData, 'unit', 'KG'),
   };
 }
@@ -108,13 +111,13 @@ async function validateProductUpdateFormData(formData: FormData) {
   if (name) values.name = name;
   const categoryLabel = parseOptionalStringField(formData, 'categoryLabel');
   if (categoryLabel) values.categoryLabel = categoryLabel;
-  const catId = parseOptionalStringField(formData, 'categoryId');
-  if (catId) values.subCategoryId = catId;
+  const subCategoryId = parseOptionalStringField(formData, 'subCategoryId') || parseOptionalStringField(formData, 'categoryId');
+  if (subCategoryId) values.subCategoryId = subCategoryId;
   const description = parseOptionalStringField(formData, 'description');
   if (description) values.description = description;
   const price = parseOptionalNumberField(formData, 'price');
   if (price !== undefined) values.price = price;
-  const quantity = parseOptionalNumberField(formData, 'quantity');
+  const quantity = parseOptionalNumberField(formData, 'quantityForSale') ?? parseOptionalNumberField(formData, 'quantity');
   if (quantity !== undefined) values.quantityForSale = quantity;
   const unit = parseOptionalStringField(formData, 'unit');
   if (unit) values.unit = unit;
@@ -202,9 +205,6 @@ export async function createProductFromForm(formData: FormData, producerId: stri
   const imageNames = await processProductImages(formData);
   const audioName = await processProductAudio(formData);
 
-  // Determine subCategoryId from submitted form. The client uses `categoryId` for the selected subcategory id.
-  const subCategoryId = String(formData.get('categoryId') || formData.get('subCategoryId') || validation.data.categoryId || '');
-
   const insertValues: any = {
     ...validation.data,
     images: imageNames,
@@ -212,7 +212,6 @@ export async function createProductFromForm(formData: FormData, producerId: stri
     producerId,
     unit: validation.data.unit as any,
   };
-  if (subCategoryId) insertValues.subCategoryId = subCategoryId;
 
   const [product] = await db.insert(schema.products).values(insertValues).returning();
 
