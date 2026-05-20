@@ -16,7 +16,7 @@ interface StepDetailsProps {
 export default function StepDetails({ form, defaultPriceInfo, competitorCount, onNext }: StepDetailsProps) {
   const { register, watch } = form;
   const watchedPrice = watch('price');
-  const watchedQuantity = watch('quantity');
+  const watchedQuantity = watch('quantityForSale');
   const watchedUnit = watch('unit');
   const watchedName = watch('name');
 
@@ -60,7 +60,7 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
             type="number"
             placeholder="0"
             className="flex-1 text-3xl font-black bg-transparent border-b-4 border-slate-100 focus:border-green-500 outline-none pb-2"
-            {...register('quantity', { required: true })}
+            {...register('quantityForSale', { required: true })}
           />
           <select
             className="bg-slate-100 font-black rounded-2xl px-4 text-xs outline-none"

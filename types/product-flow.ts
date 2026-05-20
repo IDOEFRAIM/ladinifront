@@ -35,6 +35,8 @@ export interface Category {
 // ── Formulaire ─────────────────────────────────────────────────────────
 
 export interface ProductFormData {
+  /** ID du produit (optionnel pour la création, requis pour l'édition) */
+  id?: string;
   /** ID de la catégorie parente sélectionnée à l'étape 1 */
   categoryId: string;
   /** ID de la sous-catégorie sélectionnée à l'étape 2 (clé étrangère en BDD) */
@@ -54,6 +56,7 @@ export interface ProductFormData {
 }
 
 export const PRODUCT_FORM_DEFAULTS: ProductFormData = {
+  id: undefined,
   categoryId: '',
   subCategoryId: '',
   categoryLabel: '',
@@ -61,7 +64,7 @@ export const PRODUCT_FORM_DEFAULTS: ProductFormData = {
   description: '',
   price: '',
   unit: 'KG',
-  quantityForSale: '', // Aligné à 100% sur le champ quantityForSale
+  quantityForSale: '',
 };
 
 export type ProductFlowMode = 'create' | 'edit';
