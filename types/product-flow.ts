@@ -35,24 +35,33 @@ export interface Category {
 // ── Formulaire ─────────────────────────────────────────────────────────
 
 export interface ProductFormData {
-  category: string;
+  /** ID de la catégorie parente sélectionnée à l'étape 1 */
+  categoryId: string;
+  /** ID de la sous-catégorie sélectionnée à l'étape 2 (clé étrangère en BDD) */
+  subCategoryId: string;
+  /** Label combiné d'affichage (ex: "Céréales / Maïs Blanc") */
   categoryLabel: string;
-  categoryId?: string;
+  /** Nom commercial du produit saisi par le producteur */
   name: string;
+  /** Description textuelle optionnelle */
   description: string;
+  /** Prix unitaire stocké sous forme de chaîne pour React Hook Form */
   price: string;
+  /** Unité de mesure sélectionnée (KG, SAC, TONNE, etc.) */
   unit: string;
-  quantity: string;
+  /** Quantité disponible à la vente (mappé sur quantityForSale en BDD) */
+  quantityForSale: string;
 }
 
 export const PRODUCT_FORM_DEFAULTS: ProductFormData = {
-  category: '',
+  categoryId: '',
+  subCategoryId: '',
   categoryLabel: '',
   name: '',
   description: '',
   price: '',
   unit: 'KG',
-  quantity: '',
+  quantityForSale: '', // Aligné à 100% sur le champ quantityForSale
 };
 
 export type ProductFlowMode = 'create' | 'edit';
@@ -71,7 +80,7 @@ export interface PriceInfo {
 
 export type StandardPriceMap = Record<string, PriceInfo>;
 
-// ── Steps ──────────────────────────────────────────────────────────────
+// ── Étapes du Tunnel (Steps) ───────────────────────────────────────────
 
 export const STEPS = [
   { id: 1, label: 'Catégorie' },
@@ -84,7 +93,7 @@ export const STEPS = [
 
 export const TOTAL_STEPS = STEPS.length;
 
-// ── Constantes ─────────────────────────────────────────────────────────
+// ── Constantes Métiers ─────────────────────────────────────────────────
 
 export const MAX_IMAGES = 3;
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];

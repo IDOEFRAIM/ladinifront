@@ -87,7 +87,7 @@ export const LoginSchema = z.object({
 export const CreateProductSchema = z.object({
   name: z.string().min(1, "Nom du produit requis").max(200),
   categoryLabel: z.string().min(1, "Catégorie requise").max(100),
-  categoryId: z.string().optional(),
+  subCategoryId: z.string().min(1, "Sous-catégorie requise"),
   description: z.string().max(2000).optional().nullable(),
   price: StrictPositiveFloat,
   unit: z.string().min(1, "Unité requise").max(20),

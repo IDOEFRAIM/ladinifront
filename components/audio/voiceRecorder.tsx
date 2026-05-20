@@ -40,6 +40,12 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
         };
     }, []);
 
+    useEffect(() => {
+        return () => {
+            if (audioURL) URL.revokeObjectURL(audioURL);
+        };
+    }, [audioURL]);
+
     const startRecording = async () => {
         try {
             setError(null);
