@@ -28,7 +28,7 @@ if (caPath && fs.existsSync(path.resolve(caPath))) {
 // 3. Initialisation forcée avec une limite très basse
 // En prod, 'max: 5' suffit largement pour 17 slots (on garde de la marge pour les outils d'admin)
 // En dev, 'max: 1' pour éviter de saturer la DB avec les rechargements du code
-const maxConnections = process.env.NODE_ENV === 'production' ? 5 : 1;
+const maxConnections = process.env.NODE_ENV === 'production' ? 2 : 1;
 
 const client = globalForDb.postgresClient ?? postgres(connectionString, {
   max: maxConnections, 
