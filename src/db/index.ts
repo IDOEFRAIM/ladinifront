@@ -4,14 +4,15 @@ import * as schema from './schema';
 import fs from 'fs';
 import path from 'path';
 
-// 1. Singleton strict pour Next.js
-// Utilisation d'un symbole ou d'une variable globale propre pour éviter tout conflit
-const globalForDb = globalThis as unknown as { postgresClient: postgres.Sql<{}> };
+// Utilisation d'une variable globale typée de manière sûre pour Next.js
+const globalForDb = globalThis as unknown as { 
+  postgresClient: postgres.Sql<{}> | undefined 
+};
 
 const connectionString = process.env.DATABASE_URL!;
 if (!connectionString) throw new Error('DATABASE_URL is not set');
 
-// 2. Configuration SSL
+// Configuration SSL robuste
 const sslOptions: any = {};
 const caPath = process.env.DB_SSL_CA_PATH || process.env.DATABASE_SSL_CA_PATH;
 const caInline = process.env.DB_SSL_CA || process.env.DATABASE_SSL_CA;
@@ -25,20 +26,21 @@ if (caPath && fs.existsSync(path.resolve(caPath))) {
   sslOptions.ssl = { rejectUnauthorized: false };
 }
 
-// 3. Initialisation forcée avec une limite très basse
-// En prod, 'max: 5' suffit largement pour 17 slots (on garde de la marge pour les outils d'admin)
-// En dev, 'max: 1' pour éviter de saturer la DB avec les rechargements du code
-const maxConnections = process.env.NODE_ENV === 'production' ? 2 : 1;
-
+// CRÉATION DU CLIENT
+// max: 1 est le choix le plus stable pour Vercel sans pooler. 
+// Cela évite la saturation et force la file d'attente propre.
 const client = globalForDb.postgresClient ?? postgres(connectionString, {
-  max: maxConnections, 
-  prepare: false,      // Obligatoire pour PgBouncer
-  idle_timeout: 10,    // Remonté à 10s : 3s est trop court, cela force une ré-ouverture constante
+  max: 1, 
+  prepare: false, 
+  idle_timeout: 10,
   connect_timeout: 10,
   ...sslOptions,
 });
 
-if (process.env.NODE_ENV !== 'production') globalForDb.postgresClient = client;
+// En développement, on attache le client au scope global pour le Hot Reload
+if (process.env.NODE_ENV !== 'production') {
+  globalForDb.postgresClient = client;
+}
 
 export const db = drizzle(client, { schema });
 export { schema };
