@@ -1,43 +1,27 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { 
-  Truck, Clock, MapPin, Package, User, Loader2, RefreshCw, 
-  Navigation, Power, PowerOff, ArrowRight, Banknote, ChevronRight, Zap,
-  AlertCircle
+  Truck, Loader2, RefreshCw, Navigation, Power, PowerOff, 
+  Banknote, ChevronRight, Zap,Package
 } from 'lucide-react';
 import { useDeliveryPool } from '@/hooks/useDeliveryPool';
 
-// Constantes de Design
-const C = { 
-  forest: '#064E3B', 
-  emerald: '#10B981', 
-  amber: '#D97706', 
-  red: '#DC2626', 
-  sand: '#F9FBF8', 
-  glass: 'rgba(255,255,255,0.72)', 
-  border: 'rgba(6,78,59,0.07)', 
-  muted: '#64748B', 
-  text: '#1F2937' 
-};
+// Interface explicite pour les types de données de mission
+interface DeliveryMission {
+  deliveryId: string;
+  orderId: string;
+  estimatedDistanceKm: number | null;
+  city: string | null;
+  customerName: string | null;
+  totalAmount: number | string;
+}
 
-const F = { 
-  heading: "'Space Grotesk', sans-serif", 
-  body: "'Inter', sans-serif" 
-};
-
-// Composant Carte réutilisable
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+// Composant Carte optimisé
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div style={{ 
-      background: '#fff', 
-      borderRadius: 24, 
-      border: `1px solid ${C.border}`, 
-      padding: 20, 
-      boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-      ...style 
-    }}>
+    <div className={`bg-white rounded-[24px] border border-[rgba(6,78,59,0.07)] p-5 shadow-[0_4px_12px_rgba(0,0,0,0.02)] ${className}`}>
       {children}
     </div>
   );
@@ -49,95 +33,102 @@ export default function AgentDeliveriesPage() {
     acceptDelivery, refreshPool, toggleOnline,
   } = useDeliveryPool();
 
-  const [isOnline, setIsOnline] = useState(false);
-  const [toggling, setToggling] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(false);
+  const [toggling, setToggling] = useState<boolean>(false);
 
-  // Synchronisation initiale et Polling
+  // ── Mémoïsation du calcul des gains ───────────────────────────────
+  const calculGain = useCallback((km: number | null): number => {
+    const base = 500;
+    if (!km) return base;
+    return Math.round(base + km * 200);
+  }, []);
+
+  // ── Effet 1 : Initialisation du statut de l'agent ─────────────────
   useEffect(() => {
-    let mounted = true;
+    let alive = true;
     
-    const init = async () => {
+    const initStatus = async () => {
       const ok = await toggleOnline(true);
-      if (mounted && ok) {
+      if (alive && ok) {
         setIsOnline(true);
         refreshPool();
       }
     };
 
-    init();
-    
-    // Rafraîchissement automatique toutes les 15 secondes
+    initStatus();
+    return () => { alive = false; };
+  }, [toggleOnline, refreshPool]);
+
+  // ── Effet 2 : Polling découplé (Ne s'exécute que si en ligne) ──────
+  useEffect(() => {
+    if (!isOnline) return;
+
     const interval = setInterval(() => {
-      if (isOnline) refreshPool();
-    }, 15000);
+      // ⚡ Ne rafraîchit pas si l'agent est déjà en train d'accepter une course
+      if (!claiming) {
+        refreshPool();
+      }
+    }, 15000); // 15 secondes
 
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [toggleOnline, refreshPool, isOnline]);
+    return () => clearInterval(interval);
+  }, [isOnline, refreshPool, claiming]);
 
+  // ── Handler : Switch Statut (En ligne / Pause) ────────────────────
   const handleToggle = async () => {
+    if (toggling) return;
     setToggling(true);
+    
     const nextState = !isOnline;
     const ok = await toggleOnline(nextState);
-    if (ok) setIsOnline(nextState);
+    
+    if (ok) {
+      setIsOnline(nextState);
+      if (nextState) refreshPool();
+    }
     setToggling(false);
   };
 
-  const estRevenue = (km: number | null) => {
-    const base = 500;
-    if (!km) return base;
-    return Math.round(base + km * 200);
-  };
-
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 16px 40px' }}>
+    <div className="max-w-[700px] mx-auto px-4 pb-10 font-sans">
       
       {/* Header avec Toggle Moderne */}
-      <div style={{ 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-        marginBottom: 32, paddingTop: 20 
-      }}>
+      <div className="flex justify-between items-center mb-8 pt-5">
         <div>
-          <h1 style={{ fontFamily: F.heading, fontSize: '1.75rem', fontWeight: 800, color: C.forest, margin: 0 }}>
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#064E3B] m-0 font-['Space_Grotesk']">
             Missions
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-            <div style={{ 
-              width: 8, height: 8, borderRadius: '50%', 
-              background: isOnline ? C.emerald : C.red,
-              boxShadow: isOnline ? `0 0 10px ${C.emerald}` : 'none' 
-            }} />
-            <span style={{ fontFamily: F.body, fontSize: 13, color: C.muted, fontWeight: 600 }}>
+          <div className="flex items-center gap-1.5 mt-1">
+            <div 
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                isOnline ? 'bg-[#10B981] shadow-[0_0_10px_#10B981]' : 'bg-[#DC2626]'
+              }`} 
+            />
+            <span className="text-xs text-[#64748B] font-semibold">
               {isOnline ? 'Disponible pour livrer' : 'Mode pause'}
             </span>
           </div>
         </div>
 
+        {/* Bouton Switch iOS Style */}
         <button 
           onClick={handleToggle} 
           disabled={toggling}
-          style={{
-            position: 'relative', width: 100, height: 44, borderRadius: 100,
-            background: isOnline ? C.forest : '#E5E7EB', border: 'none', cursor: 'pointer',
-            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', alignItems: 'center',
-            padding: '0 4px'
-          }}
+          aria-label={isOnline ? "Passer hors ligne" : "Passer en ligne"}
+          className={`relative w-[100px] h-11 rounded-full border-none cursor-pointer p-1 transition-all duration-300 flex items-center ${
+            isOnline ? 'bg-[#064E3B]' : 'bg-[#E5E7EB]'
+          } ${toggling ? 'opacity-80 cursor-not-allowed' : ''}`}
         >
-          <div style={{
-            width: 36, height: 36, borderRadius: '50%', background: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transform: isOnline ? 'translateX(56px)' : 'translateX(0px)',
-            transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-          }}>
+          <div 
+            className={`w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-300 ${
+              isOnline ? 'translate-x-[56px]' : 'translate-x-0'
+            }`}
+          >
             {toggling ? (
-              <Loader2 size={18} className="animate-spin" color={C.muted} />
+              <Loader2 size={18} className="animate-spin text-[#64748B]" />
             ) : isOnline ? (
-              <Power size={18} color={C.emerald} strokeWidth={3} />
+              <Power size={18} className="text-[#10B981]" strokeWidth={3} />
             ) : (
-              <PowerOff size={18} color={C.muted} strokeWidth={3} />
+              <PowerOff size={18} className="text-[#64748B]" strokeWidth={3} />
             )}
           </div>
         </button>
@@ -145,44 +136,32 @@ export default function AgentDeliveriesPage() {
 
       {/* Banner de livraison active */}
       {active.length > 0 && (
-        <Link href="/agent/deliveries/active" style={{ textDecoration: 'none', display: 'block', marginBottom: 24 }}>
-          <div style={{
-            background: `linear-gradient(135deg, ${C.forest} 0%, ${C.emerald} 100%)`,
-            borderRadius: 24, padding: '20px', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            boxShadow: '0 12px 24px rgba(6,78,59,0.15)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ 
-                width: 48, height: 48, borderRadius: 16, background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center' 
-              }}>
+        <Link href="/agent/deliveries/active" className="no-underline block mb-6 group">
+          <div className="bg-gradient-to-r from-[#064E3B] to-[#10B981] rounded-[24px] p-5 color-white flex items-center justify-between shadow-[0_12px_24px_rgba(6,78,59,0.15)] transition-transform duration-200 active:scale-[0.99]">
+            <div className="flex items-center gap-4 text-white">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
                 <Truck size={24} />
               </div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>En cours</div>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>{active.length} mission{active.length > 1 ? 's' : ''} à terminer</div>
+                <div className="text-base font-extrabold">En cours</div>
+                <div className="text-xs text-white/90">{active.length} mission{active.length > 1 ? 's' : ''} à terminer</div>
               </div>
             </div>
-            <ChevronRight size={24} />
+            <ChevronRight size={24} className="text-white transition-transform group-hover:translate-x-1" />
           </div>
         </Link>
       )}
 
       {/* Titre de section */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontFamily: F.heading, fontSize: '0.85rem', fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+      <div className="mb-4 flex justify-between items-center">
+        <h2 className="text-xs font-extrabold text-[#64748B] uppercase tracking-widest font-['Space_Grotesk']">
           Pool de missions ({available.length})
         </h2>
         {isOnline && (
           <button 
             onClick={refreshPool} 
-            disabled={loading}
-            style={{ 
-              background: 'none', border: 'none', color: C.emerald, 
-              fontSize: 13, fontWeight: 700, cursor: 'pointer', 
-              display: 'flex', alignItems: 'center', gap: 6 
-            }}
+            disabled={loading || !!claiming}
+            className="bg-none border-none text-[#10B981] text-xs font-bold cursor-pointer flex items-center gap-1.5 transition-opacity hover:opacity-80 disabled:opacity-30"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> 
             Actualiser
@@ -190,125 +169,120 @@ export default function AgentDeliveriesPage() {
         )}
       </div>
 
-      {/* États de l'interface */}
+      {/* ÉCRAN : Hors ligne */}
       {!isOnline && (
-        <Card style={{ textAlign: 'center', padding: '60px 20px', background: C.sand }}>
-          <PowerOff size={48} color={C.muted} style={{ opacity: 0.3, marginBottom: 16 }} />
-          <h3 style={{ fontFamily: F.heading, color: C.forest, margin: '0 0 8px', fontSize: '1.2rem' }}>Hors ligne</h3>
-          <p style={{ fontFamily: F.body, color: C.muted, fontSize: 14, maxWidth: 280, margin: '0 auto' }}>
+        <Card className="text-center py-14 px-5 bg-[#F9FBF8]">
+          <PowerOff size={48} className="text-[#64748B] opacity-30 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-[#064E3B] mb-2 font-['Space_Grotesk']">Hors ligne</h3>
+          <p className="text-sm text-[#64748B] max-w-[280px] mx-auto m-0">
             Vous ne recevrez pas de missions tant que vous n'êtes pas en ligne.
           </p>
         </Card>
       )}
 
+      {/* ÉCRAN : Loading initial */}
       {isOnline && loading && available.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <Loader2 size={32} color={C.emerald} className="animate-spin" style={{ margin: '0 auto 16px' }} />
-          <p style={{ color: C.muted, fontSize: 14 }}>Recherche de missions disponibles...</p>
+        <div className="text-center py-14">
+          <Loader2 size={32} className="text-[#10B981] animate-spin mx-auto mb-4" />
+          <p className="text-sm text-[#64748B]">Recherche de missions disponibles...</p>
         </div>
       )}
 
+      {/* ÉCRAN : Pool Vide */}
       {isOnline && !loading && available.length === 0 && (
-        <Card style={{ textAlign: 'center', padding: '60px 20px', borderStyle: 'dashed' }}>
-          <Zap size={40} color={C.amber} style={{ opacity: 0.5, marginBottom: 16 }} />
-          <p style={{ fontWeight: 700, color: C.forest, margin: 0 }}>Rien pour l'instant</p>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Dès qu'un client commande, la mission apparaîtra ici.</p>
+        <Card className="text-center py-14 px-5 border-dashed">
+          <Zap size={40} className="text-[#D97706] opacity-50 mx-auto mb-4" />
+          <p className="font-bold text-[#064E3B] m-0">Rien pour l'instant</p>
+          <p className="text-xs text-[#64748B] mt-1 mb-0">Dès qu'un client commande, la mission apparaîtra ici.</p>
         </Card>
       )}
 
-      {/* Liste des Missions */}
+      {/* LISTE DES MISSIONS DISPONIBLES */}
       {isOnline && available.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {available.map((d) => {
-            const rev = estRevenue(d.estimatedDistanceKm);
+        <div className="flex flex-col gap-4">
+          {available.map((d: DeliveryMission) => {
+            const rev = calculGain(d.estimatedDistanceKm);
             const isClaiming = claiming === d.deliveryId;
             
             return (
-              <Card key={d.deliveryId} style={{ padding: 0, overflow: 'hidden' }}>
+              <Card 
+                key={d.deliveryId} 
+                className={`p-0 overflow-hidden transition-all duration-200 ${
+                  isClaiming ? 'opacity-60 pointer-events-none' : 'hover:shadow-[0_6px_16px_rgba(0,0,0,0.04)]'
+                }`}
+              >
                 {/* En-tête Mission */}
-                <div style={{
-                  background: 'rgba(6, 78, 59, 0.03)',
-                  padding: '12px 20px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderBottom: `1px solid ${C.border}`
-                }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.muted, letterSpacing: 1 }}>
+                <div className="bg-[#064E3B]/[0.03] px-5 py-3 flex justify-between items-center border-b border-[rgba(6,78,59,0.07)]">
+                  <span className="text-[11px] font-extrabold text-[#64748B] tracking-wider font-mono">
                     #{d.orderId?.substring(0, 8).toUpperCase()}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.emerald, fontWeight: 800 }}>
+                  <div className="flex items-center gap-1.5 text-[#10B981] font-extrabold text-sm">
                     <Banknote size={16} />
                     <span>{rev.toLocaleString()} CFA</span>
                   </div>
                 </div>
 
-                <div style={{ padding: 20 }}>
-                  {/* Itinéraire */}
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
-                      <div style={{ width: 12, height: 12, borderRadius: '50%', background: C.emerald, border: '3px solid #fff', boxShadow: `0 0 0 1px ${C.emerald}` }} />
-                      <div style={{ width: 2, flex: 1, background: `repeating-linear-gradient(to bottom, ${C.emerald} 0, ${C.emerald} 4px, transparent 4px, transparent 8px)`, margin: '4px 0' }} />
-                      <div style={{ width: 12, height: 12, borderRadius: '50%', background: C.amber, border: '3px solid #fff', boxShadow: `0 0 0 1px ${C.amber}` }} />
+                {/* Corps de la carte */}
+                <div className="p-5">
+                  {/* Itinéraire graphique vertical */}
+                  <div className="flex gap-4 mb-5">
+                    <div className="flex flex-col items-center pt-1">
+                      <div className="w-3 h-3 rounded-full bg-[#10B981] border-2 border-white ring-1 ring-[#10B981]" />
+                      <div className="w-0.5 flex-1 bg-auto my-1 border-l border-dashed border-[#10B981]" />
+                      <div className="w-3 h-3 rounded-full bg-[#D97706] border-2 border-white ring-1 ring-[#D97706]" />
                     </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    
+                    <div className="flex-1 flex flex-col gap-5">
                       <div>
-                        <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 2 }}>Enlèvement</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Ferme Producteur (Point A)</div>
+                        <div className="text-[10px] font-extrabold text-[#64748B] uppercase tracking-wider mb-0.5">Enlèvement</div>
+                        <div className="text-sm font-semibold text-[#1F2937]">Ferme Producteur (Point A)</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 2 }}>Livraison</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.city || 'Adresse client'}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{d.customerName || 'Client AgriMarket'}</div>
+                        <div className="text-[10px] font-extrabold text-[#64748B] uppercase tracking-wider mb-0.5">Livraison</div>
+                        <div className="text-sm font-semibold text-[#1F2937]">{d.city || 'Adresse client'}</div>
+                        <div className="text-xs text-[#64748B] mt-0.5">{d.customerName || 'Client AgriMarket'}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Badges Info */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                    <div style={{ background: C.sand, padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.forest }}>
-                      <Navigation size={14} color={C.emerald} />
+                  {/* Badges Spécifications */}
+                  <div className="flex gap-2 mb-5">
+                    <div className="bg-[#F9FBF8] px-3 py-1.5 rounded-2xl flex items-center gap-1.5 text-xs font-bold text-[#064E3B]">
+                      <Navigation size={14} className="text-[#10B981]" />
                       {d.estimatedDistanceKm || '0'} km
                     </div>
-                    <div style={{ background: C.sand, padding: '6px 12px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.forest }}>
-                      <Package size={14} color={C.amber} />
+                    <div className="bg-[#F9FBF8] px-3 py-1.5 rounded-2xl flex items-center gap-1.5 text-xs font-bold text-[#064E3B]">
+                      <Package size={14} className="text-[#D97706]" />
                       {Number(d.totalAmount).toLocaleString()} CFA
                     </div>
                   </div>
 
-                  {/* Bouton d'action */}
+                  {/* Bouton d'action principale */}
                   <button
-                    onClick={() => acceptDelivery(d.deliveryId)}
-                    disabled={isClaiming}
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      borderRadius: 16,
-                      border: 'none',
-                      background: C.forest,
-                      color: '#fff',
-                      fontSize: 15,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 10,
-                      boxShadow: '0 4px 12px rgba(6,78,59,0.2)',
-                      transition: 'all 0.2s ease',
-                      opacity: isClaiming ? 0.7 : 1
+                    onClick={async () => {
+                      if (claiming) return; // Sécurité anti-double-clic
+                      await acceptDelivery(d.deliveryId);
+                      refreshPool(); // Force le nettoyage du tableau local immédiatement après traitement
                     }}
+                    disabled={!!claiming}
+                    className="w-full py-4 rounded-2xl border-none bg-[#064E3B] text-white text-sm font-bold cursor-pointer flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(6,78,59,0.2)] transition-all active:scale-[0.98] disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed hover:bg-[#064E3B]/90"
                   >
                     {isClaiming ? (
-                      <Loader2 size={20} className="animate-spin" />
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        <span>Assignation en cours...</span>
+                      </>
+                    ) : claiming ? (
+                      <span>Veuillez patienter...</span>
                     ) : (
                       <>
                         <Truck size={20} />
-                        Accepter la mission
+                        <span>Accepter la mission</span>
                       </>
                     )}
                   </button>
                 </div>
+
               </Card>
             );
           })}

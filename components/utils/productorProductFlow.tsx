@@ -1,8 +1,7 @@
-"use client";
+'use client';
 
 import React, { useMemo } from 'react';
 import { FaArrowLeft, FaSpinner } from 'react-icons/fa';
-import { createProductAction, updateProductAction } from '@/app/actions/createProductAction';
 import { useProductForm } from '@/hooks/useProductForm';
 import type { ProductFlowProps } from '@/types/product-flow';
 
@@ -14,6 +13,25 @@ import StepPhotos from '@/components/product/StepPhotos';
 import StepDetails from '@/components/product/StepDetails';
 import StepAudio from '@/components/product/StepAudio';
 import StepReview from '@/components/product/StepReview';
+
+// ── SOUS-COMPOSANT OPTIMISÉ POUR LES INPUTS CACHÉS ───────────────────
+// Évite de faire re-rendre tout l'arbre de composants à chaque touche pressée
+function WatchedInputs({ form, initialId }: { form: any; initialId: string }) {
+  const watched = form.watch(); // S'abonne aux changements localement
+  return (
+    <>
+      <input type="hidden" name="id" value={initialId} />
+      <input type="hidden" name="name" value={watched.name || ''} />
+      <input type="hidden" name="category" value={watched.category || ''} />
+      <input type="hidden" name="categoryLabel" value={watched.categoryLabel || ''} />
+      <input type="hidden" name="categoryId" value={watched.categoryId || ''} />
+      <input type="hidden" name="description" value={watched.description || ''} />
+      <input type="hidden" name="price" value={watched.price || ''} />
+      <input type="hidden" name="quantity" value={watched.quantity || ''} />
+      <input type="hidden" name="unit" value={watched.unit || 'KG'} />
+    </>
+  );
+}
 
 export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
   const ctx = useProductForm(mode, initialData);
@@ -29,32 +47,25 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
     metadata,
   } = ctx;
 
-  const { watch } = form;
-  const watchedName = watch('name');
-  const watchedCategory = watch('category');
-  const watchedCategoryLabel = watch('categoryLabel');
-  const watchedCategoryId = watch('categoryId');
-  const watchedDescription = watch('description');
-  const watchedPrice = watch('price');
-  const watchedQuantity = watch('quantity');
-  const watchedUnit = watch('unit');
-
   const { categories, standardPriceMap, zoneId, getSubCategories } = metadata;
 
-  // Derive competitor count for selected subcategory
+  // 1. Extraction optimisée (on ne surveille au niveau parent QUE le strict nécessaire)
+  const watchedCategoryId = form.watch('categoryId');
+
+  // 2. Calcul du nombre de concurrents mémoïsé
   const competitorCount = useMemo(() => {
     if (!watchedCategoryId) return 0;
     const subs = categories.flatMap((c) => c.subCategories);
     return subs.find((s) => String(s.id) === String(watchedCategoryId))?._count?.products ?? 0;
   }, [watchedCategoryId, categories]);
 
-  // Current parent category name for subcategory step
+  // 3. Nom de la catégorie parente mémoïsé
   const parentCatName = useMemo(
     () => categories.find((c) => String(c.id) === selectedCategory)?.name ?? '',
     [categories, selectedCategory],
   );
 
-  // ── Loading screen ───────────────────────────────────────────────
+  // ── Écran de chargement initial ───────────────────────────────────
   if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
@@ -64,28 +75,20 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
     );
   }
 
-  // ── Render ───────────────────────────────────────────────────────
+  // ── Rendu de l'interface ──────────────────────────────────────────
   return (
     <form
       ref={formRef}
-      action={mode === 'create' ? createProductAction : updateProductAction}
+      onSubmit={(e) => e.preventDefault()}
       className="min-h-screen bg-slate-50 pb-20 font-sans relative"
     >
-      {/* Hidden canonical inputs */}
-      <input type="hidden" name="id" value={initialData?.id || ''} />
-      <input type="hidden" name="name" value={watchedName || ''} />
-      <input type="hidden" name="category" value={watchedCategory || ''} />
-      <input type="hidden" name="categoryLabel" value={watchedCategoryLabel || ''} />
-      <input type="hidden" name="categoryId" value={watchedCategoryId || ''} />
-      <input type="hidden" name="description" value={watchedDescription || ''} />
-      <input type="hidden" name="price" value={watchedPrice || ''} />
-      <input type="hidden" name="quantity" value={watchedQuantity || ''} />
-      <input type="hidden" name="unit" value={watchedUnit || 'KG'} />
+      {/* ⚡ RENDU ULTRA-PERFORMANT : Les inputs cachés s'auto-gèrent sans notifier le parent */}
+      <WatchedInputs form={form} initialId={initialData?.id || ''} />
 
-      {/* Overlay */}
+      {/* Overlay de statut */}
       <SubmitOverlay isSubmitting={isSubmitting} isSuccess={isSuccess} />
 
-      {/* Header */}
+      {/* Barre d'en-tête fixée */}
       <div className="bg-white p-4 sticky top-0 z-30 shadow-sm border-b border-slate-100">
         <div className="flex items-center gap-4 mb-4">
           <button type="button" onClick={goBack} className="p-2 bg-slate-100 rounded-full">
@@ -98,7 +101,7 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
         <ProductStepper currentStep={step} />
       </div>
 
-      {/* Error banner */}
+      {/* Bannière d'erreur contextuelle */}
       {errorMsg && (
         <div className="mx-6 mt-4 p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black border border-red-100 uppercase tracking-widest">
           {errorMsg}
@@ -106,10 +109,11 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
       )}
 
       <div className="p-6 max-w-md mx-auto">
-        {/* Hidden file inputs for native form submission */}
+        {/* Champs de fichiers HTML natifs masqués */}
         <input ref={audioInputRef} type="file" name="audio" accept="audio/*" className="hidden" />
         <input ref={imagesInputRef} type="file" name="images" accept="image/*" multiple className="hidden" />
 
+        {/* Moteur de rendu conditionnel des étapes par état atomique */}
         {step === 1 && (
           <StepCategories
             categories={categories}
@@ -155,22 +159,45 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
         )}
 
         {step === 6 && (
-          <StepReview
+          // On passe une fonction d'évaluation au moment M plutôt que d'observer en continu
+          <StepReviewWrapper
+            form={form}
             mode={mode}
-            name={watchedName}
-            categoryLabel={watchedCategoryLabel}
-            description={watchedDescription}
-            price={watchedPrice}
-            quantity={watchedQuantity}
-            unit={watchedUnit}
-            firstPreview={newPreviews[0] || null}
-            firstExistingImage={existingImages[0] || null}
-            hasAudio={!!audioBlob}
+            newPreviews={newPreviews}
+            existingImages={existingImages}
+            audioBlob={audioBlob}
             isSubmitting={isSubmitting}
-            onSubmit={prepareAndSubmit}
+            prepareAndSubmit={prepareAndSubmit}
           />
         )}
       </div>
     </form>
+  );
+}
+
+// ── SOUS-COMPOSANT POUR L'ÉTAPE DE REVUE ─────────────────────────────
+// S'isole également pour éviter les lags globaux lors de la saisie
+function StepReviewWrapper({ 
+  form, mode, newPreviews, existingImages, audioBlob, isSubmitting, prepareAndSubmit 
+}: { 
+  form: any; mode: any; newPreviews: any; existingImages: any; audioBlob: any; isSubmitting: any; prepareAndSubmit: any 
+}) {
+  const values = form.getValues(); // Récupère les valeurs statiques instantanément sans hook d'écoute réactif
+  
+  return (
+    <StepReview
+      mode={mode}
+      name={values.name}
+      categoryLabel={values.categoryLabel}
+      description={values.description}
+      price={values.price}
+      quantity={values.quantity}
+      unit={values.unit}
+      firstPreview={newPreviews[0] || null}
+      firstExistingImage={existingImages[0] || null}
+      hasAudio={!!audioBlob}
+      isSubmitting={isSubmitting}
+      onSubmit={prepareAndSubmit}
+    />
   );
 }

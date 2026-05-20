@@ -275,7 +275,7 @@ export default function BuyerDashboardPage() {
                     <div style={{ fontSize: 11, color: C.amber, fontWeight: 700 }}>{Number(p.price).toLocaleString()} CFA</div>
                   </div>
                   <button style={{ padding: 6, borderRadius: 8, border: 'none', background: 'rgba(16,185,129,0.1)', color: C.emerald, cursor: 'pointer' }}>
-                    <Link href={`/products/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: C.emerald, fontSize: 12, fontWeight: 700 }}>
+                    <Link href={`/publicProducts/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: C.emerald, fontSize: 12, fontWeight: 700 }}>
                     <ShoppingCart size={14} />
                     </Link>
                   </button>

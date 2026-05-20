@@ -22,10 +22,10 @@ export async function createProductAction(formData: FormData) {
     const producerId = await getProducerId();
     await createProductFromForm(formData, producerId);
     
-    // Force la mise à jour des données partout où les produits sont affichés
+    // ⚡ On invalide le cache sur le serveur pour forcer le rafraîchissement global
     revalidatePath('/products');
     
-    // On retourne un statut de succès au lieu de redirect()
+    // On renvoie le succès au client sans bloquer avec un redirect() serveur
     return { success: true };
   } catch (err: any) {
     console.error('createProductAction failed:', err?.message ?? err, { 
@@ -44,7 +44,6 @@ export async function updateProductAction(formData: FormData) {
     const producerId = await getProducerId();
     await updateProductFromForm(formData, producerId);
     
-    // Invalide le cache de la liste des produits
     revalidatePath('/products');
     
     return { success: true };

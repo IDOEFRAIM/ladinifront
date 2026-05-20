@@ -1,75 +1,111 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Truck, Package, MapPin, Phone, User, Loader2, RefreshCw,
-  CheckCircle2, XCircle, AlertTriangle, Navigation, KeyRound,
-  ArrowRight, ShieldCheck,
+  Truck, Package, MapPin, Loader2, RefreshCw,
+  CheckCircle2, XCircle, KeyRound, ShieldCheck,
 } from 'lucide-react';
 
-const C = { forest: '#064E3B', emerald: '#10B981', amber: '#D97706', red: '#DC2626', sand: '#F9FBF8', glass: 'rgba(255,255,255,0.72)', border: 'rgba(6,78,59,0.07)', muted: '#64748B', text: '#1F2937' };
-const F = { heading: "'Space Grotesk', sans-serif", body: "'Inter', sans-serif" };
+// Interface explicite pour la clarté du code et éviter les types 'any'
+interface DeliveryData {
+  id: string;
+  status: 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED';
+  orderId?: string;
+  order?: {
+    id: string;
+    customerName: string;
+    city: string;
+    totalAmount: number | string;
+  };
+}
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 20, border: `1px solid ${C.border}`, padding: 20, ...style }}>{children}</div>;
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white/72 backdrop-blur-md rounded-[20px] border border-[rgba(6,78,59,0.07)] p-5 shadow-[0_4px_12px_rgba(0,0,0,0.01)] ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 export default function ActiveDeliveriesPage() {
-  const [deliveries, setDeliveries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [deliveries, setDeliveries] = useState<DeliveryData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [otpInputs, setOtpInputs] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const fetchHistory = async () => {
-    setLoading(true);
+  // ── Récupération de l'historique mémoïsée ─────────────────────────
+  const fetchHistory = useCallback(async (showSilentLoader = false) => {
+    if (!showSilentLoader) setLoading(true);
     try {
       const res = await fetch('/api/delivery/status');
       if (res.ok) {
-        const all = await res.json();
-        // Show ASSIGNED and IN_TRANSIT at the top
-        const active = all.filter((d: any) => ['ASSIGNED', 'IN_TRANSIT'].includes(d.status));
-        const recent = all.filter((d: any) => !['ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 10);
+        const all: DeliveryData[] = await res.json();
+        
+        // Séparer les livraisons actives de l'historique passé
+        const active = all.filter((d) => ['ASSIGNED', 'IN_TRANSIT'].includes(d.status));
+        const recent = all.filter((d) => !['ASSIGNED', 'IN_TRANSIT'].includes(d.status)).slice(0, 10);
+        
         setDeliveries([...active, ...recent]);
       }
-    } catch { /* ignore */ }
-    setLoading(false);
-  };
+    } catch (error) {
+      console.error("Erreur lors de la récupération du statut:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { fetchHistory(); }, []);
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
-  const doAction = async (action: string, deliveryId: string, extra?: Record<string, string>) => {
+  // ── Actions : Prise en charge et Clôture de course ────────────────
+  const doAction = async (action: 'PICKUP' | 'CONFIRM' | 'FAILED', deliveryId: string, extra?: Record<string, string>) => {
+    if (actionLoading) return; // Anti-double clic global pendant une requête
     setActionLoading(`${deliveryId}-${action}`);
+    
     try {
-      const res = await fetch(
-        action === 'CONFIRM' ? '/api/delivery/confirm' : '/api/delivery/status',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            action === 'CONFIRM'
-              ? { deliveryId, otpCode: extra?.otpCode }
-              : { action, deliveryId, ...extra }
-          ),
-        }
-      );
+      const isConfirmAction = action === 'CONFIRM';
+      const endpoint = isConfirmAction ? '/api/delivery/confirm' : '/api/delivery/status';
+      
+      const payload = isConfirmAction 
+        ? { deliveryId, otpCode: extra?.otpCode }
+        : { action, deliveryId, ...extra };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      
       const data = await res.json();
+      
       if (res.ok && data.success) {
-        fetchHistory();
-        if (action === 'CONFIRM') alert('Livraison confirmée avec succès !');
-        if (action === 'PICKUP') alert('Ramassage confirmé. En route !');
+        // Nettoyer l'input OTP de cette carte si l'action est validée
+        if (isConfirmAction) {
+          setOtpInputs(prev => {
+            const next = { ...prev };
+            delete next[deliveryId];
+            return next;
+          });
+        }
+        
+        // Rafraîchissement silencieux des données en arrière-plan
+        await fetchHistory(true);
       } else {
-        alert(data.error || 'Erreur');
+        alert(data.error || 'Une erreur est survenue.');
       }
     } catch {
-      alert('Erreur réseau');
+      alert('Erreur réseau. Veuillez vérifier votre connexion.');
+    } finally {
+      setActionLoading(null);
     }
-    setActionLoading(null);
   };
 
+  // Loader d'état initial de la page
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', gap: 12 }}>
-      <Loader2 size={28} style={{ color: C.emerald, animation: 'spin 1s linear infinite' }} />
-      <p style={{ fontFamily: F.body, color: C.muted, fontSize: 13 }}>Chargement...</p>
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+      <Loader2 size={32} className="text-[#10B981] animate-spin" />
+      <p className="text-sm font-medium text-[#64748B]">Chargement de vos courses...</p>
     </div>
   );
 
@@ -77,142 +113,186 @@ export default function ActiveDeliveriesPage() {
   const pastDeliveries = deliveries.filter(d => !['ASSIGNED', 'IN_TRANSIT'].includes(d.status));
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontFamily: F.heading, fontSize: '1.4rem', fontWeight: 800, color: C.forest, margin: 0 }}>Mes livraisons</h1>
-        <button onClick={fetchHistory} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 100, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer', fontFamily: F.body, fontSize: 12, fontWeight: 600, color: C.muted }}>
-          <RefreshCw size={14} />
+    <div className="max-w-[700px] mx-auto px-4 pb-10 font-sans">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6 pt-4">
+        <h1 className="text-xl font-extrabold tracking-tight text-[#064E3B] m-0 font-['Space_Grotesk']">
+          Mes livraisons
+        </h1>
+        <button 
+          onClick={() => fetchHistory()} 
+          disabled={actionLoading !== null}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[rgba(6,78,59,0.07)] bg-white text-xs font-bold text-[#64748B] shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={actionLoading ? 'animate-spin' : ''} />
+          Actualiser
         </button>
       </div>
 
-      {/* Active deliveries */}
+      {/* SECTION : Livraisons Actives */}
       {activeDeliveries.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
-          <h2 style={{ fontFamily: F.heading, fontSize: '0.95rem', fontWeight: 700, color: C.forest, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.emerald, animation: 'pulse 2s infinite' }} />
+        <div className="mb-8">
+          <h2 className="text-sm font-bold text-[#064E3B] mb-3 flex items-center gap-2 font-['Space_Grotesk']">
+            <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
             En cours
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {activeDeliveries.map((d: any) => (
-              <Card key={d.id} style={{ border: `2px solid ${C.emerald}20` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-                  <div>
-                    <div style={{ fontFamily: F.body, fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 }}>
-                      #{d.order?.id?.substring(0, 8) || d.orderId?.substring(0, 8)}
+          <div className="flex flex-col gap-3">
+            {activeDeliveries.map((d) => {
+              const currentId = d.id;
+              const orderRef = d.order?.id?.substring(0, 8) || d.orderId?.substring(0, 8) || '';
+              const isPickupLoading = actionLoading === `${currentId}-PICKUP`;
+              const isConfirmLoading = actionLoading === `${currentId}-CONFIRM`;
+              const isFailedLoading = actionLoading === `${currentId}-FAILED`;
+              const otpValue = otpInputs[currentId] || '';
+
+              return (
+                <Card key={currentId} className="border-2 border-[#10B981]/10">
+                  <div className="flex justify-between items-start mb-3 flex-wrap gap-2">
+                    <div>
+                      <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-0.5 font-mono">
+                        #{orderRef.toUpperCase()}
+                      </div>
+                      <div className="text-base font-bold text-[#064E3B] font-['Space_Grotesk']">
+                        {d.order?.customerName || 'Client AgriMarket'}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-[#64748B] mt-0.5">
+                        <MapPin size={12} className="text-[#64748B]/70" /> 
+                        {d.order?.city || 'Adresse renseignée'}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: F.heading, fontWeight: 700, fontSize: '1rem', color: C.forest }}>
-                      {d.order?.customerName || 'Client'}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: F.body, fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      <MapPin size={12} /> {d.order?.city || 'Destination'}
-                    </div>
+                    
+                    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold ${
+                      d.status === 'ASSIGNED' 
+                        ? 'bg-blue-50 text-blue-600 border border-blue-100' 
+                        : 'bg-cyan-50 text-cyan-600 border border-cyan-100'
+                    }`}>
+                      {d.status === 'ASSIGNED' ? (
+                        <>
+                          <Package size={12} /> 
+                          À ramasser
+                        </>
+                      ) : (
+                        <>
+                          <Truck size={12} /> 
+                          En route
+                        </>
+                      )}
+                    </span>
                   </div>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    padding: '5px 12px', borderRadius: 100, fontSize: 11, fontWeight: 700, fontFamily: F.body,
-                    background: d.status === 'ASSIGNED' ? 'rgba(37,99,235,0.08)' : 'rgba(8,145,178,0.08)',
-                    color: d.status === 'ASSIGNED' ? '#2563EB' : '#0891B2',
-                  }}>
-                    {d.status === 'ASSIGNED' ? <><Package size={12} /> À ramasser</> : <><Truck size={12} /> En route</>}
-                  </span>
-                </div>
 
-                {/* Actions */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
-                  {d.status === 'ASSIGNED' && (
-                    <button
-                      onClick={() => doAction('PICKUP', d.id)}
-                      disabled={actionLoading === `${d.id}-PICKUP`}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        padding: '12px 20px', borderRadius: 14, border: 'none',
-                        background: '#2563EB', color: '#fff', cursor: 'pointer',
-                        fontFamily: F.body, fontSize: 14, fontWeight: 700, width: '100%',
-                        opacity: actionLoading === `${d.id}-PICKUP` ? 0.6 : 1,
-                      }}
-                    >
-                      {actionLoading === `${d.id}-PICKUP` ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <><Package size={16} /> Confirmer le ramassage</>}
-                    </button>
-                  )}
+                  {/* Actions de livraison */}
+                  <div className="flex flex-col gap-2.5 pt-3 border-t border-[rgba(6,78,59,0.07)]">
+                    
+                    {/* ÉTAPE 1 : Confirmer le ramassage chez le producteur */}
+                    {d.status === 'ASSIGNED' && (
+                      <button
+                        onClick={() => doAction('PICKUP', currentId)}
+                        disabled={actionLoading !== null}
+                        className="w-full py-3 rounded-xl border-none bg-blue-600 text-white font-bold text-sm cursor-pointer flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
+                      >
+                        {isPickupLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            <Package size={16} /> 
+                            Confirmer le ramassage
+                          </>
+                        )}
+                      </button>
+                    )}
 
-                  {d.status === 'IN_TRANSIT' && (
-                    <>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <KeyRound size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.muted, opacity: 0.5 }} />
+                    {/* ÉTAPE 2 : Livraison en route -> Clôture par OTP sécurisé */}
+                    {d.status === 'IN_TRANSIT' && (
+                      <div className="flex flex-col gap-2">
+                        <div className="relative w-full">
+                          <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B] opacity-50" />
                           <input
                             type="text"
                             placeholder="Code OTP du client"
                             maxLength={6}
-                            value={otpInputs[d.id] || ''}
-                            onChange={(e) => setOtpInputs({ ...otpInputs, [d.id]: e.target.value.replace(/\D/g, '') })}
-                            style={{
-                              width: '100%', paddingLeft: 42, paddingRight: 16, paddingTop: 14, paddingBottom: 14,
-                              borderRadius: 14, border: `1px solid ${C.border}`, background: '#fff',
-                              fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: C.forest,
-                              textAlign: 'center', letterSpacing: 6, boxSizing: 'border-box',
-                            }}
+                            value={otpValue}
+                            disabled={actionLoading !== null}
+                            onChange={(e) => setOtpInputs({ ...otpInputs, [currentId]: e.target.value.replace(/\D/g, '') })}
+                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-[rgba(6,78,59,0.07)] bg-white font-mono text-center text-lg font-bold text-[#064E3B] tracking-[0.4em] box-border focus:outline-none focus:border-[#10B981] disabled:bg-gray-50 disabled:text-gray-400"
                           />
                         </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => doAction('CONFIRM', currentId, { otpCode: otpValue })}
+                            disabled={actionLoading !== null || otpValue.length < 6}
+                            className="flex-1 py-3 rounded-xl border-none bg-[#10B981] text-white font-bold text-sm cursor-pointer flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed hover:bg-[#0eab76]"
+                          >
+                            {isConfirmLoading ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <>
+                                <ShieldCheck size={16} /> 
+                                Confirmer la livraison
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => { if (confirm('Signaler un échec définitif de livraison ?')) doAction('FAILED', currentId); }}
+                            disabled={actionLoading !== null}
+                            className="px-4 py-3 rounded-xl border border-red-200 bg-red-50/50 text-[#DC2626] font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5 transition-colors hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {isFailedLoading ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <>
+                                <XCircle size={14} /> 
+                                Échec
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => doAction('CONFIRM', d.id, { otpCode: otpInputs[d.id] || '' })}
-                          disabled={actionLoading === `${d.id}-CONFIRM` || (otpInputs[d.id]?.length || 0) < 6}
-                          style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                            padding: '12px 20px', borderRadius: 14, border: 'none',
-                            background: C.emerald, color: '#fff', cursor: 'pointer',
-                            fontFamily: F.body, fontSize: 14, fontWeight: 700,
-                            opacity: actionLoading === `${d.id}-CONFIRM` || (otpInputs[d.id]?.length || 0) < 6 ? 0.5 : 1,
-                          }}
-                        >
-                          {actionLoading === `${d.id}-CONFIRM` ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <><ShieldCheck size={16} /> Confirmer livraison</>}
-                        </button>
-                        <button
-                          onClick={() => { if (confirm('Signaler un échec de livraison ?')) doAction('FAILED', d.id); }}
-                          disabled={actionLoading === `${d.id}-FAILED`}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            padding: '12px 16px', borderRadius: 14, border: `1px solid ${C.red}30`,
-                            background: `${C.red}08`, color: C.red, cursor: 'pointer',
-                            fontFamily: F.body, fontSize: 13, fontWeight: 700,
-                          }}
-                        >
-                          <XCircle size={14} /> Échec
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </Card>
-            ))}
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Past deliveries */}
+      {/* SECTION : Historique des livraisons passées */}
       {pastDeliveries.length > 0 && (
         <div>
-          <h2 style={{ fontFamily: F.heading, fontSize: '0.95rem', fontWeight: 700, color: C.muted, marginBottom: 12 }}>Historique récent</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pastDeliveries.map((d: any) => (
-              <Card key={d.id} style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 className="text-xs font-extrabold text-[#64748B] uppercase tracking-wider mb-3 font-['Space_Grotesk']">
+            Historique récent
+          </h2>
+          <div className="flex flex-col gap-2">
+            {pastDeliveries.map((d) => (
+              <Card key={d.id} className="p-3.5 flex justify-between items-center transition-shadow hover:shadow-sm">
                 <div>
-                  <div style={{ fontFamily: F.body, fontSize: 12, fontWeight: 700, color: C.forest }}>
-                    {d.order?.customerName || 'Client'} · {d.order?.city || '—'}
+                  <div className="text-sm font-bold text-[#064E3B]">
+                    {d.order?.customerName || 'Client'} · <span className="font-normal text-xs text-[#64748B]">{d.order?.city || '—'}</span>
                   </div>
-                  <div style={{ fontFamily: F.body, fontSize: 11, color: C.muted }}>
+                  <div className="text-xs font-semibold text-[#64748B] mt-0.5">
                     {Number(d.order?.totalAmount || 0).toLocaleString()} CFA
                   </div>
                 </div>
-                <span style={{
-                  padding: '4px 10px', borderRadius: 100, fontSize: 10, fontWeight: 700, fontFamily: F.body,
-                  background: d.status === 'DELIVERED' ? 'rgba(16,185,129,0.08)' : 'rgba(220,38,38,0.08)',
-                  color: d.status === 'DELIVERED' ? C.emerald : C.red,
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}>
-                  {d.status === 'DELIVERED' ? <><CheckCircle2 size={10} /> Livré</> : <><XCircle size={10} /> Échoué</>}
+                
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${
+                  d.status === 'DELIVERED' 
+                    ? 'bg-emerald-50 text-[#10B981] border-emerald-100' 
+                    : 'bg-red-50 text-[#DC2626] border-red-100'
+                }`}>
+                  {d.status === 'DELIVERED' ? (
+                    <>
+                      <CheckCircle2 size={11} /> 
+                      Livré
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={11} /> 
+                      Échoué
+                    </>
+                  )}
                 </span>
               </Card>
             ))}
@@ -220,10 +300,11 @@ export default function ActiveDeliveriesPage() {
         </div>
       )}
 
+      {/* Aucun élément dans l'historique et état vide */}
       {deliveries.length === 0 && !loading && (
-        <Card style={{ textAlign: 'center', padding: 40 }}>
-          <Truck size={36} color={C.muted} style={{ marginBottom: 10, opacity: 0.4 }} />
-          <p style={{ fontFamily: F.body, color: C.muted, margin: 0 }}>Aucune livraison pour le moment</p>
+        <Card className="text-center py-12 px-4 border-dashed">
+          <Truck size={40} className="text-[#64748B] opacity-35 mx-auto mb-3" />
+          <p className="text-sm font-medium text-[#64748B] m-0">Aucune livraison enregistrée pour le moment</p>
         </Card>
       )}
     </div>

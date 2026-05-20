@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCategories, getStandardPrices } from '@/services/dr-governance.service';
 import { useZone } from '@/context/ZoneContext';
 import type { Category, PriceInfo, StandardPriceMap } from '@/types/product-flow';
@@ -15,64 +15,65 @@ export function useProductMetadata() {
   const [standardPriceMap, setStandardPriceMap] = useState<StandardPriceMap>({});
   const [loading, setLoading] = useState(true);
 
-  // ── Chargement des catégories (filtrage zone) ──────────────────────
+  // Cache de nettoyage des requêtes parallèles ou successives
+  const activeRequestsRef = useRef({ zoneId: '' });
+
+  // ── 1. Chargement des catégories ET des prix en parallèle (Ultra-Optimisé) ──
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    activeRequestsRef.current.zoneId = zoneId || '';
 
     (async () => {
       try {
-        const res = await getCategories();
-        if (!alive || !res?.success || !Array.isArray(res.data)) return;
+        // En mode Edit, on lance les deux requêtes en même temps pour gagner en fluidité
+        const [categoriesResp, pricesResp] = await Promise.all([
+          getCategories(),
+          zoneId ? getStandardPrices(zoneId) : Promise.resolve({ success: false, data: null })
+        ]);
 
-        const filtered: Category[] = res.data
-          .map((c: Category) => ({
-            ...c,
-            subCategories: (c.subCategories ?? []).filter(
-              (s) => !zoneId || !s.blockedZoneIds?.includes(zoneId),
-            ),
-          }))
-          .filter((c: Category) => c.subCategories.length > 0);
+        if (!alive) return;
 
-        setCategories(filtered);
+        // Traitement des Catégories
+        let filteredCategories: Category[] = [];
+        if (categoriesResp?.success && Array.isArray(categoriesResp.data)) {
+          filteredCategories = categoriesResp.data
+            .map((c: Category) => ({
+              ...c,
+              subCategories: (c.subCategories ?? []).filter(
+                (s) => !zoneId || !s.blockedZoneIds?.includes(zoneId),
+              ),
+            }))
+            .filter((c: Category) => c.subCategories.length > 0);
+          
+          setCategories(filteredCategories);
+        }
+
+        // Traitement de la Map des Prix (S'exécute de manière découplée)
+        const map: StandardPriceMap = {};
+        if (pricesResp?.success && Array.isArray(pricesResp.data)) {
+          for (const p of pricesResp.data) {
+            const key = String((p as any).subCategoryId ?? (p as any).subCategory?.id ?? '');
+            const price = Number((p as any).pricePerUnit ?? (p as any).price_per_unit ?? (p as any).price ?? NaN);
+            if (key && !Number.isNaN(price)) {
+              map[key] = { price, unit: (p as any).unit };
+            }
+          }
+        }
+        setStandardPriceMap(map);
+
       } catch (e) {
-        console.error('[useProductMetadata] Failed to load categories', e);
+        console.error('[useProductMetadata] Failed to load metadata suite', e);
       } finally {
         if (alive) setLoading(false);
       }
     })();
 
     return () => { alive = false; };
-  }, [zoneId]);
+  }, [zoneId]); // 🏎️ DISPARITION DE 'categories' ! Plus de double requête cyclique.
 
-  // ── Chargement de la carte des prix standards ──────────────────────
-  useEffect(() => {
-    let alive = true;
 
-    (async () => {
-      if (!zoneId) { setStandardPriceMap({}); return; }
-      try {
-        const resp = await getStandardPrices(zoneId);
-        if (!alive || !resp?.success || !Array.isArray(resp.data)) return;
-
-        const map: StandardPriceMap = {};
-        for (const p of resp.data) {
-          const key = String((p as any).subCategoryId ?? (p as any).subCategory?.id ?? '');
-          const price = Number((p as any).pricePerUnit ?? (p as any).price_per_unit ?? (p as any).price ?? NaN);
-          if (key && !Number.isNaN(price)) {
-            map[key] = { price, unit: (p as any).unit };
-          }
-        }
-        setStandardPriceMap(map);
-      } catch (e) {
-        console.error('[useProductMetadata] Failed to load standard prices', e);
-      }
-    })();
-
-    return () => { alive = false; };
-  }, [zoneId, categories]);
-
-  // ── Lookup du prix standard pour une sous-catégorie ────────────────
+  // ── 2. Lookup du prix standard pour une sous-catégorie ────────────────
   const getPriceForSubCategory = useCallback(
     (subCategoryId: string | undefined): PriceInfo | null => {
       if (!subCategoryId) return null;
@@ -97,11 +98,14 @@ export function useProductMetadata() {
     [standardPriceMap, categories, zoneId],
   );
 
-  // ── Résolution parent → sous-catégorie pour mode edit ──────────────
+  // ── 3. Résolution parent → sous-catégorie sécurisée pour mode edit ──────────────
   const findParentCategory = useCallback(
-    (subCategoryId: string): { parent: Category; sub: Category['subCategories'][number] } | null => {
+    (subCategoryId: string | undefined): { parent: Category; sub: Category['subCategories'][number] } | null => {
+      if (!subCategoryId) return null;
+      const key = String(subCategoryId);
+      
       for (const cat of categories) {
-        const sub = cat.subCategories.find((s) => String(s.id) === String(subCategoryId));
+        const sub = cat.subCategories.find((s) => String(s.id) === key);
         if (sub) return { parent: cat, sub };
       }
       return null;
@@ -110,8 +114,10 @@ export function useProductMetadata() {
   );
 
   const getSubCategories = useCallback(
-    (categoryId: string | null) =>
-      categories.find((c) => String(c.id) === categoryId)?.subCategories ?? [],
+    (categoryId: string | null) => {
+      if (!categoryId) return [];
+      return categories.find((c) => String(c.id) === String(categoryId))?.subCategories ?? [];
+    },
     [categories],
   );
 
@@ -119,7 +125,7 @@ export function useProductMetadata() {
     zoneId,
     categories,
     standardPriceMap,
-    loading,
+    loading, // 🟢 Permet à useProductForm d'attendre que TOUT soit prêt avant d'initialiser les champs en Edit
     getPriceForSubCategory,
     findParentCategory,
     getSubCategories,
