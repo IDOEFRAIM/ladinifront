@@ -33,6 +33,9 @@ export default async function AuctionPage({ params }: AuctionPageProps) {
     ? {
         ...auctionRes,
         deadline: auctionRes.deadline ? new Date(auctionRes.deadline).toISOString() : null,
+        deliveryDeadline: (auctionRes as any).deliveryDeadline ? new Date((auctionRes as any).deliveryDeadline).toISOString() : null,
+        awardedAt: (auctionRes as any).awardedAt ? new Date((auctionRes as any).awardedAt).toISOString() : null,
+        cancelledAt: (auctionRes as any).cancelledAt ? new Date((auctionRes as any).cancelledAt).toISOString() : null,
         createdAt: auctionRes.createdAt ? new Date(auctionRes.createdAt).toISOString() : undefined,
         updatedAt: auctionRes.updatedAt ? new Date(auctionRes.updatedAt).toISOString() : undefined,
       }

@@ -220,13 +220,13 @@ export default function BuyerDashboardPage() {
                        <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(16,185,129,0.1)', color: C.emerald, padding: '2px 8px', borderRadius: 6 }}>
                          {auc.bids?.length || 0} offres
                        </span>
-                       <Link href={`/auctions/${auc.id}`} style={{ fontSize: 12, fontWeight: 700, color: C.forest }}>Gérer →</Link>
+                       <Link href={`/auction/${auc.id}`} style={{ fontSize: 12, fontWeight: 700, color: C.forest }}>Gérer →</Link>
                     </div>
                   </Card>
                 ))}
               </div>
             ) : (
-              <p style={{ fontSize: 13, color: C.muted }}>Aucune enchère en cours. <Link href="/auctions/new" style={{ color: C.forest, fontWeight: 600 }}>Lancer un appel d'offre ?</Link></p>
+              <p style={{ fontSize: 13, color: C.muted }}>Aucune enchère en cours. <Link href="/auction/new" style={{ color: C.forest, fontWeight: 600 }}>Lancer un appel d'offre ?</Link></p>
             )}
           </div>
         </section>

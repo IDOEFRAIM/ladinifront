@@ -30,11 +30,11 @@ export async function POST(
   const { id } = await context.params;
   try {
     const body = await req.json();
-    const { offeredPrice, message } = body;
+    const { offeredPrice, message, estimatedDeliveryDate } = body;
     if (typeof offeredPrice !== 'number' || offeredPrice <= 0) {
       return NextResponse.json({ error: 'Prix invalide' }, { status: 400 });
     }
-    const res = await submitAuctionBid({ auctionId: id, offeredPrice, message });
+    const res = await submitAuctionBid({ auctionId: id, offeredPrice, message, estimatedDeliveryDate });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     if (!('data' in res)) return NextResponse.json({ error: 'Réponse invalide du serveur' }, { status: 500 });
     return NextResponse.json({ data: res.data });

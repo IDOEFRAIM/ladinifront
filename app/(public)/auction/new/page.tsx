@@ -22,6 +22,9 @@ export default async function NewAuctionPage() {
       unit: payload.unit.toUpperCase(), // Conversion 'kg' -> 'KG' pour matcher l'Enum
       maxPricePerUnit: payload.maxPricePerUnit,
       deadline: payload.deadline,
+      incoterm: payload.incoterm,
+      deliveryLocation: payload.deliveryLocation,
+      deliveryDeadline: payload.deliveryDeadline,
       targetZoneId: payload.targetZoneId,
     });
 

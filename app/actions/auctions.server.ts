@@ -33,7 +33,7 @@ export async function fetchEligibleProducers(params: { auctionId: string; subCat
   return await getEligibleProducers(params as any);
 }
 
-export async function submitAuctionBid(input: { auctionId: string; offeredPrice: number; message?: string; }) {
+export async function submitAuctionBid(input: { auctionId: string; offeredPrice: number; message?: string; estimatedDeliveryDate?: string; }) {
   return await submitBid(input as any);
 }
 

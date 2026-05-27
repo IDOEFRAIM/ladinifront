@@ -31,6 +31,9 @@ export default function NewAuctionClient({ serverCreateAuction, subCategories = 
     unit: "KG",
     maxPricePerUnit: "",
     deadline: "",
+    incoterm: "DDP",
+    deliveryLocation: "",
+    deliveryDeadline: "",
     targetZoneId: "",
   });
   const [loading, setLoading] = useState(false);
@@ -39,6 +42,7 @@ export default function NewAuctionClient({ serverCreateAuction, subCategories = 
   function onChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
     if (e.target.name === 'deadline') validateDate((e.target as HTMLInputElement).value);
+    if (e.target.name === 'deliveryDeadline') validateDeliveryDate((e.target as HTMLInputElement).value);
   }
 
   function validateDate(value: string) {
@@ -56,9 +60,33 @@ export default function NewAuctionClient({ serverCreateAuction, subCategories = 
     return true;
   }
 
+  function validateDeliveryDate(value: string) {
+    setError('');
+    if (!value) return true;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) {
+      setError('Date de livraison invalide');
+      return false;
+    }
+    if (d <= new Date()) {
+      setError('La date de livraison doit être dans le futur');
+      return false;
+    }
+    if (form.deadline) {
+      const end = new Date(form.deadline);
+      if (!isNaN(end.getTime()) && d <= end) {
+        setError('La date limite de livraison doit être après la fin de l\'enchère');
+        return false;
+      }
+    }
+    return true;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!validateDate(form.deadline)) return;
+    if (!validateDeliveryDate(form.deliveryDeadline)) return;
     setLoading(true);
 
     try {
@@ -68,6 +96,9 @@ export default function NewAuctionClient({ serverCreateAuction, subCategories = 
         unit: form.unit,
         maxPricePerUnit: Number(form.maxPricePerUnit),
         deadline: new Date(form.deadline).toISOString(),
+        incoterm: form.incoterm,
+        deliveryLocation: form.deliveryLocation,
+        deliveryDeadline: new Date(form.deliveryDeadline).toISOString(),
         targetZoneId: form.targetZoneId || undefined,
       };
 
@@ -213,6 +244,55 @@ export default function NewAuctionClient({ serverCreateAuction, subCategories = 
                 onChange={onChange}
                 required
                 className="w-full px-5 py-4 rounded-2xl border border-stone-100 bg-stone-50/50 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+              />
+            </div>
+
+            {/* Logistique */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-bold text-stone-500 uppercase tracking-wider ml-1">
+                  <Box size={14} className="text-emerald-500" /> Incoterm
+                </label>
+                <select
+                  name="incoterm"
+                  value={form.incoterm}
+                  onChange={onChange}
+                  className="w-full px-5 py-4 rounded-2xl border border-stone-100 bg-stone-50/50 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all appearance-none"
+                >
+                  <option value="DDP">DDP (livré chez l'acheteur)</option>
+                  <option value="EXW">EXW (à récupérer à la ferme)</option>
+                  <option value="FCA">FCA (remis au transporteur)</option>
+                  <option value="CPT">CPT (transport payé)</option>
+                  <option value="CIP">CIP (transport + assurance)</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-bold text-stone-500 uppercase tracking-wider ml-1">
+                  <Calendar size={14} className="text-emerald-500" /> Date limite de livraison
+                </label>
+                <input
+                  name="deliveryDeadline"
+                  type="datetime-local"
+                  value={form.deliveryDeadline}
+                  onChange={onChange}
+                  required
+                  className="w-full px-5 py-4 rounded-2xl border border-stone-100 bg-stone-50/50 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs font-bold text-stone-500 uppercase tracking-wider ml-1">
+                <MapPin size={14} className="text-emerald-500" /> Lieu de livraison / retrait
+              </label>
+              <input
+                name="deliveryLocation"
+                type="text"
+                value={form.deliveryLocation}
+                onChange={onChange}
+                required
+                className="w-full px-5 py-4 rounded-2xl border border-stone-100 bg-stone-50/50 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                placeholder="Ex: Entrepôt SIAO, Ouagadougou / Ferme de Koubri"
               />
             </div>
 

@@ -176,6 +176,9 @@ export async function createAuction(input: {
   unit?: 'TONNE' | 'KG' | 'LITRE' | 'BAG';
   maxPricePerUnit: number;
   deadline: string; // ISO
+  incoterm: string;
+  deliveryLocation: string;
+  deliveryDeadline: string; // ISO
   targetZoneId?: string | null;
 }) {
   const userId = await getUserIdFromSession();
@@ -188,6 +191,14 @@ export async function createAuction(input: {
     if (!input.maxPricePerUnit || input.maxPricePerUnit <= 0) return { success: false, error: 'Plafond prix invalide' };
     const dl = new Date(input.deadline);
     if (isNaN(dl.getTime()) || dl <= new Date()) return { success: false, error: 'Deadline invalide' };
+
+    if (!input.deliveryLocation || !String(input.deliveryLocation).trim()) return { success: false, error: 'Lieu de livraison requis' };
+    const deliveryDeadline = new Date(input.deliveryDeadline);
+    if (isNaN(deliveryDeadline.getTime()) || deliveryDeadline <= new Date()) return { success: false, error: 'Date limite de livraison invalide' };
+    if (deliveryDeadline <= dl) return { success: false, error: 'La date limite de livraison doit être après la fin de l\'enchère' };
+
+    const incoterm = String(input.incoterm || '').toUpperCase();
+    if (!incoterm) return { success: false, error: 'Incoterm requis' };
 
     // Verify subCategory exists
     const sub = await db.query.subCategories.findFirst({ where: eq(schema.subCategories.id, input.subCategoryId) });
@@ -206,6 +217,9 @@ export async function createAuction(input: {
       quantity: input.quantity,
       unit: input.unit ?? 'TONNE',
       maxPricePerUnit: input.maxPricePerUnit,
+      incoterm,
+      deliveryLocation: String(input.deliveryLocation).trim(),
+      deliveryDeadline,
       deadline: dl,
       targetZoneId: input.targetZoneId ?? null,
     }).returning();
@@ -215,7 +229,16 @@ export async function createAuction(input: {
       entityType: 'Auction',
       entityId: created.id,
       actorId: userId,
-      newValue: { subCategoryId: input.subCategoryId, quantity: input.quantity, maxPricePerUnit: input.maxPricePerUnit, deadline: input.deadline, targetZoneId: input.targetZoneId ?? null },
+      newValue: {
+        subCategoryId: input.subCategoryId,
+        quantity: input.quantity,
+        maxPricePerUnit: input.maxPricePerUnit,
+        deadline: input.deadline,
+        incoterm,
+        deliveryLocation: String(input.deliveryLocation).trim(),
+        deliveryDeadline: input.deliveryDeadline,
+        targetZoneId: input.targetZoneId ?? null,
+      },
     });
 
     return { success: true, data: created };
@@ -231,7 +254,8 @@ export async function submitBid(input: {
   auctionId: string;
   offeredPrice: number;
   linkedStockId?: string | null;
-  message:string | null
+  message?: string | null;
+  estimatedDeliveryDate?: string | null;
 }) {
   const userId = await getUserIdFromSession();
   if (!userId) return { success: false, error: 'Session expirée' };
@@ -265,6 +289,11 @@ export async function submitBid(input: {
       return { success: false, error: `Le prix ne peut dépasser le plafond de ${auction.maxPricePerUnit}` };
     }
 
+      const est = input.estimatedDeliveryDate ? new Date(input.estimatedDeliveryDate) : null;
+      if (input.estimatedDeliveryDate && (!est || isNaN(est.getTime()))) {
+        return { success: false, error: 'Date estimée de livraison invalide' };
+      }
+
       // Optional stock linkage validation
       const linkedStockId = input.linkedStockId ?? null;
       if (linkedStockId) {
@@ -294,6 +323,7 @@ export async function submitBid(input: {
           offeredPrice: input.offeredPrice,
           linkedStockId,
           message: input?.message ?? null,
+          estimatedDeliveryDate: est,
         })
         .onConflictDoUpdate({
           target: [schema.bids.auctionId, schema.bids.producerId],
@@ -301,6 +331,7 @@ export async function submitBid(input: {
             offeredPrice: input.offeredPrice,
             linkedStockId,
             message: input?.message ?? null,
+            estimatedDeliveryDate: est,
           },
         })
         .returning();
@@ -550,6 +581,7 @@ export async function getBidsForAuction(auctionId: string) {
       isWinner: b.isWinner,
       isBestBid: b.id === bestBidId,
       linkedStockId: b.linkedStockId,
+      estimatedDeliveryDate: b.estimatedDeliveryDate ?? null,
       createdAt: b.createdAt,
     }));
 
@@ -780,6 +812,8 @@ export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: 
       bidsCount: a.bids.length,
       targetZoneId: a.targetZoneId,
       status: a.status,
+      autoExtend: a.autoExtend,
+      escrowStatus: a.escrowStatus,
     }));
   } catch (e) {
     console.error('getOpenAuctions error:', e);
