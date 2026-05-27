@@ -1,35 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+﻿import { NextResponse } from 'next/server';
+import { getAccessContext } from '@/lib/api-guard';
 import { getOrderTrackingTimeline } from '@/services/buyer.service';
 
-/**
- * GET /api/buyer/tracking/[orderId]
- * Suivi chronologique complet d'une commande (timeline + livraison + agent).
- */
 export async function GET(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
-  try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    }
+  const { ctx, error } = await getAccessContext(['BUYER', 'ADMIN', 'SUPERADMIN']);
+  if (error) return error;
 
+  try {
     const { orderId } = await params;
     if (!orderId) {
       return NextResponse.json({ error: 'orderId requis' }, { status: 400 });
     }
 
-    const tracking = await getOrderTrackingTimeline(orderId, session.userId);
-
+    const tracking = await getOrderTrackingTimeline(orderId, ctx!.userId);
     if (!tracking) {
       return NextResponse.json({ error: 'Commande introuvable ou non autorisée' }, { status: 404 });
     }
 
     return NextResponse.json(tracking);
-  } catch (error: any) {
-    console.error('GET /api/buyer/tracking error:', error);
+  } catch (error) {
+    console.error('[buyer/tracking] error:', (error as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

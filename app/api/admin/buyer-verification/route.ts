@@ -1,38 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { requireAdmin } from '@/lib/api-guard';
 import { verifyBuyerProfile, getPendingBuyerVerifications, revokeBuyerTrustBadge } from '@/services/buyerVerification.service';
 
-/**
- * GET /api/admin/buyer-verification
- * Liste les profils acheteurs en attente de vérification.
- */
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId || !['ADMIN', 'SUPERADMIN'].includes(session.role || '')) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
-    }
+export async function GET() {
+  const { user, error: authError } = await requireAdmin();
+  if (authError) return authError;
 
+  try {
     const pending = await getPendingBuyerVerifications();
     return NextResponse.json(pending);
-  } catch (error: any) {
-    console.error('GET /api/admin/buyer-verification error:', error);
+  } catch (error) {
+    console.error('[buyer-verification] GET error:', (error as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }
 
-/**
- * POST /api/admin/buyer-verification
- * Vérifie ou révoque le badge de confiance d'un acheteur.
- * Body: { buyerProfileId: string, verificationType: 'CNIB' | 'COMMERCE_REGISTER', action?: 'verify' | 'revoke' }
- */
 export async function POST(req: NextRequest) {
-  try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId || !['ADMIN', 'SUPERADMIN'].includes(session.role || '')) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
-    }
+  const { user, error: authError } = await requireAdmin();
+  if (authError || !user) return authError ?? NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
 
+  try {
     const body = await req.json();
     const { buyerProfileId, verificationType, action: bodyAction } = body;
 
@@ -43,25 +30,25 @@ export async function POST(req: NextRequest) {
     let result;
 
     if (bodyAction === 'revoke') {
-      result = await revokeBuyerTrustBadge(buyerProfileId, session.userId);
+      result = await revokeBuyerTrustBadge(buyerProfileId, user.id);
     } else {
       if (!verificationType) {
         return NextResponse.json({ error: 'verificationType requis (CNIB ou COMMERCE_REGISTER)' }, { status: 400 });
       }
       result = await verifyBuyerProfile({
         buyerProfileId,
-        adminUserId: session.userId,
+        adminUserId: user.id,
         verificationType,
       });
     }
 
     if (!result.success) {
-      return NextResponse.json({ error: (result as any).error || 'Erreur' }, { status: 400 });
+      return NextResponse.json({ error: 'error' in result ? result.error : 'Erreur' }, { status: 400 });
     }
 
     return NextResponse.json(result);
-  } catch (error: any) {
-    console.error('POST /api/admin/buyer-verification error:', error);
+  } catch (error) {
+    console.error('[buyer-verification] POST error:', (error as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

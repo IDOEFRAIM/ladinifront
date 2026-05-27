@@ -91,29 +91,28 @@ async function createDeliveryInternal(orderId: string, allowedStatuses: string[]
     });
     if (existing) return { success: true, data: existing, message: 'Livraison déjà créée' };
 
-    // Résoudre les coordonnées d'origine (producteur)
     let originLat: number | null = null;
     let originLng: number | null = null;
 
-    const orderItems = await tx.query.orderItems.findMany({
+    const firstItem = await tx.query.orderItems.findFirst({
       where: eq(schema.orderItems.orderId, orderId),
       columns: { productId: true },
-      limit: 1,
+      with: {
+        product: {
+          columns: { producerId: true },
+          with: {
+            producer: {
+              columns: { id: true },
+              with: { user: { columns: { latitude: true, longitude: true } } },
+            },
+          },
+        },
+      },
     });
 
-    if (orderItems.length > 0) {
-      const product = await tx.query.products.findFirst({
-        where: eq(schema.products.id, orderItems[0].productId),
-        columns: { producerId: true },
-      });
-      if (product) {
-        const producer = await tx.query.producers.findFirst({
-          where: eq(schema.producers.id, product.producerId),
-          with: { user: { columns: { latitude: true, longitude: true } } },
-        });
-        originLat = producer?.user?.latitude ?? null;
-        originLng = producer?.user?.longitude ?? null;
-      }
+    if (firstItem?.product?.producer?.user) {
+      originLat = firstItem.product.producer.user.latitude ?? null;
+      originLng = firstItem.product.producer.user.longitude ?? null;
     }
 
     // Calculer la distance estimée

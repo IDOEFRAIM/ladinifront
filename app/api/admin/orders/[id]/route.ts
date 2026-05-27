@@ -4,12 +4,14 @@ import * as schema from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { assertTransition } from '@/lib/orderStateMachine';
 import { runOrderStatusHooks } from '@/services/order.hooks';
+import { requireAdmin } from '@/lib/api-guard';
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { user, error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   try {
-    const url = new URL(req.url);
-    const parts = url.pathname.split('/').filter(Boolean);
-    const id = parts[parts.indexOf('orders') + 1];
+    const { id } = await context.params;
     const body = await req.json();
     const status = body.status;
     if (!status) return NextResponse.json({ error: 'Missing status' }, { status: 400 });

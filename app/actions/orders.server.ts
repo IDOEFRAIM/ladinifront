@@ -5,7 +5,9 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { uploadBufferToSupabase } from '@/lib/supabase.server';
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
-import { getInitialStatus, shouldCreateDelivery } from '@/lib/orderStateMachine';
+import { getInitialStatus, shouldCreateDelivery, assertTransition } from '@/lib/orderStateMachine';
+import { userHasPermission } from '@/services/role.service';
+import { runOrderStatusHooks } from '@/services/order.hooks';
 
 
 const MAX_AUDIO_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -77,13 +79,10 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
     }
   }
 
-  // 4. Résolution du profil acheteur
-  // @ts-ignore (Utilise ta logique resolveBuyerProfileId)
   const buyerProfileId = await resolveBuyerProfileId(buyerId);
   if (!buyerProfileId) throw new Error('BUYER_PROFILE_NOT_FOUND');
 
   const paymentMethod = (payload.paymentMethod || 'CASH').toUpperCase();
-  // @ts-ignore (Utilise ta logique de machine à état)
   const initialStatus = getInitialStatus(paymentMethod);
 
   // 5. TRANSACTION ATOMIQUE (Insertion Order + Items)
@@ -116,8 +115,6 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
     return order;
   });
 
-  // 6. Déclenchement automatique de la livraison
-  // @ts-ignore
   if (shouldCreateDelivery(initialStatus)) {
     try {
       const { createDeliveryForConfirmedOrder } = await import('@/services/delivery.service');
@@ -131,16 +128,15 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
 }
 
 /**
- * Récupère les commandes pour un producteur spécifique
+ * Récupère les commandes pour un producteur — single query with nested relations.
  */
 export async function fetchProducerOrders(userId?: string) {
   if (!userId) return [];
 
-  const producer = await db.query.producers.findFirst({ 
+  const producer = await db.query.producers.findFirst({
     where: eq(schema.producers.userId, userId),
-    columns: { id: true } 
+    columns: { id: true },
   });
-  
   if (!producer) return [];
 
   const producerProducts = await db.select({ id: schema.products.id })
@@ -153,13 +149,12 @@ export async function fetchProducerOrders(userId?: string) {
   const orderItems = await db.query.orderItems.findMany({
     where: inArray(schema.orderItems.productId, productIds),
     with: {
-      order: true,
-      product: { columns: { name: true, unit: true } }
-    }
+      order: { columns: { id: true, customerName: true, customerPhone: true, city: true, deliveryDesc: true, createdAt: true, status: true } },
+      product: { columns: { name: true, unit: true } },
+    },
   });
 
-  // Groupement par commande pour une interface propre
-  const ordersMap = new Map();
+  const ordersMap = new Map<string, { id: string; customerName: string; customerPhone: string; location: string; date: Date; status: string; total: number; items: { name: string; quantity: number; unit: string | null; price: number }[] }>();
   for (const item of orderItems) {
     if (!ordersMap.has(item.orderId)) {
       ordersMap.set(item.orderId, {
@@ -168,17 +163,17 @@ export async function fetchProducerOrders(userId?: string) {
         customerPhone: item.order.customerPhone || '',
         location: item.order.city || item.order.deliveryDesc || '',
         date: item.order.createdAt,
-        status: (item.order.status as string).toLowerCase(),
+        status: String(item.order.status ?? 'PENDING').toLowerCase(),
         total: 0,
-        items: []
+        items: [],
       });
     }
-    const order = ordersMap.get(item.orderId);
+    const order = ordersMap.get(item.orderId)!;
     order.items.push({
       name: item.product.name,
       quantity: item.quantity,
       unit: item.product.unit,
-      price: item.priceAtSale
+      price: item.priceAtSale,
     });
     order.total += Number(item.priceAtSale) * item.quantity;
   }
@@ -189,8 +184,11 @@ export async function fetchProducerOrders(userId?: string) {
 
 export async function fetchOrderDetailsForProducer(orderId: string, userId?: string) {
   if (!orderId || !userId) return null;
-  // Ensure producer
-  const producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId), columns: { id: true } });
+
+  const producer = await db.query.producers.findFirst({
+    where: eq(schema.producers.userId, userId),
+    columns: { id: true },
+  });
   if (!producer) return null;
 
   const order = await db.query.orders.findFirst({
@@ -199,14 +197,27 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
   });
   if (!order) return null;
 
-  const producerProducts = await db.select({ id: schema.products.id }).from(schema.products).where(eq(schema.products.producerId, producer.id));
-  const productIds = producerProducts.map((p: any) => p.id);
+  const producerProducts = await db.select({ id: schema.products.id })
+    .from(schema.products)
+    .where(eq(schema.products.producerId, producer.id));
+  const productIds = producerProducts.map(p => p.id);
+  if (productIds.length === 0) return null;
 
-  const filteredItems = await db.query.orderItems.findMany({ where: (t, { and }) => and(eq(schema.orderItems.orderId, orderId), inArray(schema.orderItems.productId, productIds)), with: { product: { columns: { name: true, unit: true } } } });
+  const filteredItems = await db.query.orderItems.findMany({
+    where: (t, { and: $and }) => $and(
+      eq(schema.orderItems.orderId, orderId),
+      inArray(schema.orderItems.productId, productIds),
+    ),
+    with: { product: { columns: { name: true, unit: true } } },
+  });
   if (filteredItems.length === 0) return null;
 
   let producerSubtotal = 0;
-  const formattedItems = filteredItems.map(item => { const price = item.priceAtSale; producerSubtotal += item.quantity * price; return { id: item.id, name: item.product.name, quantity: item.quantity, unit: item.product.unit, price }; });
+  const formattedItems = filteredItems.map(item => {
+    const price = item.priceAtSale;
+    producerSubtotal += item.quantity * price;
+    return { id: item.id, name: item.product.name, quantity: item.quantity, unit: item.product.unit, price };
+  });
 
   return {
     id: order.id,
@@ -215,15 +226,11 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
     location: order.city || order.deliveryDesc || '',
     date: order.createdAt,
     total: producerSubtotal,
-    status: (String(order.status || 'PENDING')).toLowerCase(),
+    status: String(order.status || 'PENDING').toLowerCase(),
     items: formattedItems,
     deliveryFee: 1500,
   };
 }
-
-import { userHasPermission } from '@/services/role.service';
-import { assertTransition } from '@/lib/orderStateMachine';
-import { runOrderStatusHooks } from '@/services/order.hooks';
 
 export async function updateOrderStatusAction(orderId: string, newStatus: string, userId?: string) {
   if (!orderId) return null;

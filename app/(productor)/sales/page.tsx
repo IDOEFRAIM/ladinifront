@@ -8,89 +8,110 @@ import OrdersTabs from './OrderTable';
 
 export const dynamic = 'force-dynamic';
 
-function createOrderObject(item: any) {
-  const { order, product, quantity, priceAtSale } = item;
-  return {
-    id: item.orderId,
-    customerName: order.buyer?.name || order.customerName || 'Client',
-    customerPhone: order.buyer?.phone || order.customerPhone || '',
-    location: order.city || order.deliveryDesc || 'Lieu non précisé',
-    date: new Date(order.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
-    total: 0,
-    status: String(order.status || 'PENDING').toLowerCase(),
-    items: []
-  };
+// Types stricts pour garantir la cohérence des données avec le composant OrdersTabs
+interface OrderItemMapped {
+  name: string;
+  quantity: number;
+  unit: string;
 }
 
-function transformOrderItems(orderItems: any[]) {
-  const ordersMap = new Map<string, any>();
-  for (const item of orderItems) {
-    if (!ordersMap.has(item.orderId)) ordersMap.set(item.orderId, createOrderObject(item));
-    const order = ordersMap.get(item.orderId);
-    order.items.push({ name: item.product.name, quantity: item.quantity });
-    order.total += item.quantity * item.priceAtSale;
-  }
-  return Array.from(ordersMap.values());
+interface OrderMapped {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  location: string;
+  date: string;
+  total: number; // Somme calculée uniquement pour les produits de ce producteur
+  status: string;
+  items: OrderItemMapped[];
 }
 
 export default async function OrdersPage() {
+  // 1. Protection de la route : On récupère le producteur connecté
   const { user, error } = await requireProducer();
   if (error || !user) return <RestrictedScreen />;
   const producerId = user.producerId as string;
 
-  // Join products -> filter by product.producerId, include order + buyer + product fields
-  const rows = await db.select({
-    id: schema.orderItems.id,
-    orderId: schema.orderItems.orderId,
-    productId: schema.orderItems.productId,
-    quantity: schema.orderItems.quantity,
-    priceAtSale: schema.orderItems.priceAtSale,
-
-    order_id: schema.orders.id,
-    order_status: schema.orders.status,
-    order_createdAt: schema.orders.createdAt,
-    order_customerName: schema.orders.customerName,
-    order_customerPhone: schema.orders.customerPhone,
-    order_city: schema.orders.city,
-    order_deliveryDesc: schema.orders.deliveryDesc,
-    order_deliveryStatus: schema.orders.deliveryStatus,
-    order_auctionId: schema.orders.auctionId,
-    order_winningBidId: schema.orders.winningBidId,
-
-    buyer_name: schema.users.name,
-    buyer_phone: schema.users.phone,
-
-    product_name: schema.products.name,
-    product_unit: schema.products.unit,
-  })
+  // 2. Requête Drizzle optimisée basée strictement sur ton schéma
+  const rows = await db
+    .select({
+      orderId: schema.orderItems.orderId,
+      quantity: schema.orderItems.quantity,
+      priceAtSale: schema.orderItems.priceAtSale,
+      // Champs issus de la table 'products'
+      productName: schema.products.name,
+      productUnit: schema.products.unit,
+      // Champs issus de la table 'orders'
+      orderStatus: schema.orders.status,
+      orderCreatedAt: schema.orders.createdAt,
+      orderCustomerName: schema.orders.customerName,
+      orderCustomerPhone: schema.orders.customerPhone,
+      orderCity: schema.orders.city,
+      orderDeliveryDesc: schema.orders.deliveryDesc,
+    })
     .from(schema.orderItems)
+    // Jointure pour filtrer par rapport au propriétaire du produit
     .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
+    // Jointure pour récupérer les métadonnées de livraison et de statut de la commande
     .leftJoin(schema.orders, eq(schema.orders.id, schema.orderItems.orderId))
-    .leftJoin(schema.buyerProfiles, eq(schema.buyerProfiles.id, schema.orders.buyerId))
-    .leftJoin(schema.users, eq(schema.users.id, schema.buyerProfiles.userId))
+    // On cible uniquement les produits qui appartiennent au producteur connecté
     .where(eq(schema.products.producerId, producerId))
+    // Tri par commandes les plus récentes
     .orderBy(desc(schema.orderItems.orderId));
+    console.log('rows',rows)
+  // 3. Transformation et regroupement par commande (Structure Map)
+  const ordersMap = new Map<string, OrderMapped>();
 
-  const orderItems = rows.map((r: any) => ({
-    orderId: r.orderId,
-    order: {
-      id: r.order_id,
-      status: r.order_status,
-      createdAt: r.order_createdAt,
-      customerName: r.order_customerName,
-      customerPhone: r.order_customerPhone,
-      city: r.order_city,
-      deliveryDesc: r.order_deliveryDesc,
-      deliveryStatus: r.order_deliveryStatus,
-      auctionId: r.order_auctionId,
-      winningBidId: r.order_winningBidId,
-      buyer: { name: r.buyer_name, phone: r.buyer_phone },
-    },
-    product: { name: r.product_name, unit: r.product_unit },
-    quantity: r.quantity,
-    priceAtSale: r.priceAtSale,
-  }));
+  for (const row of rows) {
+    if (!row.orderId) continue;
 
-  const allOrders = transformOrderItems(orderItems);
+    // Si la commande n'est pas encore enregistrée dans notre Map, on l'initialise
+    if (!ordersMap.has(row.orderId)) {
+      const customerName = row.orderCustomerName || 'Client';
+      const customerPhone = row.orderCustomerPhone || '';
+      const location = row.orderCity || row.orderDeliveryDesc || 'Lieu non précisé';
+      
+      const formattedDate = row.orderCreatedAt
+        ? new Date(row.orderCreatedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '';
+
+      ordersMap.set(row.orderId, {
+        id: row.orderId,
+        customerName,
+        customerPhone,
+        location,
+        date: formattedDate,
+        total: 0, // Sera incrémenté juste en dessous
+        status: String(row.orderStatus || 'PENDING').toLowerCase(),
+        items: [],
+      });
+    }
+
+    const currentOrder = ordersMap.get(row.orderId)!;
+    
+    // Ajout de l'article acheté dans le tableau de la commande
+    if (row.productName) {
+      currentOrder.items.push({
+        name: row.productName,
+        quantity: Number(row.quantity || 0),
+        unit: row.productUnit || 'KG',
+      });
+    }
+
+    // Calcul du sous-total propre à ce producteur (quantité * prix fixé à la vente)
+    const quantity = Number(row.quantity || 0);
+    const priceAtSale = Number(row.priceAtSale || 0);
+    
+    currentOrder.total += quantity * priceAtSale;
+  }
+
+  // 4. Conversion de notre dictionnaire (Map) en tableau propre pour ton interface
+  const allOrders = Array.from(ordersMap.values());
+
   return <OrdersTabs initialOrders={allOrders} />;
 }

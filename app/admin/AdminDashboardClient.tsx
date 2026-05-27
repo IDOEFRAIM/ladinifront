@@ -37,12 +37,10 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
     try {
       if (serverRefresh) {
         const res = await serverRefresh();
-        console.log('Server refresh result:', res);
         setData(res || null);
       } else {
         const res = await axios.get('/api/admin/metrics', { withCredentials: true });
         const result = res.data;
-        console.log('result',result)
         if (result && result.success && result.data) {
           setData(result.data);
         } else {
@@ -78,7 +76,7 @@ export default function AdminDashboardClient({ initialData, serverRefresh }: any
       </div>
     </div>
   );
-console.log('Admin Dashboard data:', data);
+
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n || 0);
 
   // Sécurité pour éviter les erreurs si les tableaux sont vides

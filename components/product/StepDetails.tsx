@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { ProductFormData, PriceInfo, SubCategory } from '@/types/product-flow';
+import type { ProductFormData, PriceInfo } from '@/types/product-flow';
 import { UNIT_OPTIONS } from '@/types/product-flow';
 import PriceIndicator from './PriceIndicator';
 
@@ -15,16 +15,22 @@ interface StepDetailsProps {
 
 export default function StepDetails({ form, defaultPriceInfo, competitorCount, onNext }: StepDetailsProps) {
   const { register, watch } = form;
+  
+  // On récupère les valeurs en temps réel
   const watchedPrice = watch('price');
+  
+  // ATTENTION : Assure-toi que ton type 'ProductFormData' et ton composant final
+  // utilisent bien le même nom (ici 'quantityForSale')
   const watchedQuantity = watch('quantityForSale');
-  const watchedUnit = watch('unit');
+  const watchedUnit = watch('unit') || 'KG'; // 'KG' par défaut si non encore défini
   const watchedName = watch('name');
 
-  const canProceed = !!watchedPrice && !!watchedQuantity && !!watchedName;
+  // Le bouton suivant s'active si les trois champs requis sont remplis et valides
+  const canProceed = !!watchedName && Number(watchedQuantity) > 0 && Number(watchedPrice) > 0;
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right-10">
-      {/* Name */}
+      {/* Nom */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <label className="text-[10px] font-black text-slate-400 uppercase mb-4 block">
           Nom du produit
@@ -33,7 +39,7 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
           type="text"
           placeholder="Ex: Maïs blanc de Bama"
           className="w-full text-xl font-black bg-transparent border-b-4 border-slate-100 focus:border-green-500 outline-none pb-2"
-          {...register('name', { required: true })}
+          {...register('name', { required: true, setValueAs: (v) => v.trim() })}
         />
       </div>
 
@@ -50,7 +56,7 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
         />
       </div>
 
-      {/* Quantity + Unit */}
+      {/* Quantité + Unité */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <label className="text-[10px] font-black text-slate-400 uppercase mb-4 block">
           Quantité disponible
@@ -59,11 +65,15 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
           <input
             type="number"
             placeholder="0"
+            min="0"
             className="flex-1 text-3xl font-black bg-transparent border-b-4 border-slate-100 focus:border-green-500 outline-none pb-2"
-            {...register('quantityForSale', { required: true })}
+            {...register('quantityForSale', { 
+              required: true, 
+              valueAsNumber: true // Force le type number dans l'objet du formulaire
+            })}
           />
           <select
-            className="bg-slate-100 font-black rounded-2xl px-4 text-xs outline-none"
+            className="bg-slate-100 font-black rounded-2xl px-4 text-xs outline-none cursor-pointer"
             {...register('unit')}
           >
             {UNIT_OPTIONS.map((u) => (
@@ -73,7 +83,7 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
         </div>
       </div>
 
-      {/* Price (single input — bug fix: was registered twice before) */}
+      {/* Prix unitaire */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <label className="text-[10px] font-black text-slate-400 uppercase mb-4 block">
           Prix unitaire (F/{watchedUnit})
@@ -81,29 +91,34 @@ export default function StepDetails({ form, defaultPriceInfo, competitorCount, o
         <div className="relative">
           <input
             type="number"
-            step="0.01"
+            step="1"
             placeholder="Ex: 500"
             className="w-full text-3xl font-black bg-transparent border-b-4 border-slate-100 focus:border-green-500 outline-none pb-2"
-            {...register('price', { required: true })}
+            {...register('price', { 
+              required: true, 
+              valueAsNumber: true // Évite les soucis de conversion string/number après
+            })}
           />
           <span className="absolute right-0 bottom-3 font-black text-slate-300">F</span>
         </div>
 
+        {/* Le composant PriceIndicator reçoit maintenant un vrai nombre propre */}
         {defaultPriceInfo && (
           <PriceIndicator
             defaultPriceInfo={defaultPriceInfo}
-            enteredPrice={parseFloat(String(watchedPrice || '0')) || 0}
+            enteredPrice={Number(watchedPrice) || 0}
             unit={watchedUnit}
             competitorCount={competitorCount}
           />
         )}
       </div>
 
+      {/* Bouton de validation d'étape */}
       <button
         type="button"
         disabled={!canProceed}
         onClick={onNext}
-        className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest disabled:opacity-40"
+        className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase tracking-widest disabled:opacity-40 transition-opacity duration-200"
       >
         Suivant
       </button>

@@ -15,11 +15,12 @@ import { settleExpiredAuctions } from '@/services/auctionSettlement.service';
  */
 export async function POST(req: NextRequest) {
   try {
-    // Vérification du secret
     const cronSecret = process.env.CRON_SECRET;
-    const headerSecret = req.headers.get('x-cron-secret');
-
-    if (cronSecret && headerSecret !== cronSecret) {
+    if (!cronSecret) {
+      return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
+    }
+    const headerSecret = req.headers.get('x-cron-secret') || req.headers.get('authorization')?.replace('Bearer ', '');
+    if (headerSecret !== cronSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

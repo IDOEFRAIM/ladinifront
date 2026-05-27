@@ -42,14 +42,13 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
-export async function getSessionFromRequest(request: Request | { cookies?: any } | { headers?: any }) {
+type SessionRequest = Request | { cookies?: { get(name: string): { value: string } | undefined } } | { headers?: { get(name: string): string | null } };
+
+export async function getSessionFromRequest(request: SessionRequest) {
   const isDev = process.env.NODE_ENV !== 'production';
   let token: string | undefined;
   try {
-    // @ts-ignore
-    if (request.cookies && typeof request.cookies.get === 'function') {
-      // NextRequest
-      // @ts-ignore
+    if ('cookies' in request && request.cookies && typeof request.cookies.get === 'function') {
       token = request.cookies.get(COOKIE_NAMES.SESSION_TOKEN)?.value;
     }
   } catch (e) {
@@ -58,9 +57,7 @@ export async function getSessionFromRequest(request: Request | { cookies?: any }
 
   if (!token) {
     try {
-      // Try headers
-      // @ts-ignore
-      const headers = request.headers;
+      const headers = 'headers' in request ? request.headers : undefined;
       const raw = headers?.get ? headers.get('cookie') : undefined;
       if (raw) {
         const match = raw.match(new RegExp(COOKIE_NAMES.SESSION_TOKEN + '=([^;]+)'));

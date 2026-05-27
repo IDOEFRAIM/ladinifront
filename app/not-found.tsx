@@ -8,9 +8,13 @@ export default function NotFound() {
       <p style={{ color: '#334155', marginBottom: 16 }}>La page que vous recherchez n'existe pas ou a été déplacée.</p>
       <div style={{ display: 'flex', gap: 12 }}>
         <Link href="/" style={{ background: '#0ea5e9', color: 'white', padding: '8px 12px', borderRadius: 6, textDecoration: 'none' }}>Accueil</Link>
-        <Link href="/distributions" style={{ border: '1px solid #e6e6e6', padding: '8px 12px', borderRadius: 6, textDecoration: 'none' }}>Mes distributions</Link>
+        <Link href="/catalogue" style={{ border: '1px solid #e6e6e6', padding: '8px 12px', borderRadius: 6, textDecoration: 'none' }}>Le marche</Link>
       </div>
-      <p style={{ marginTop: 20, color: '#64748b' }}>Si vous pensez qu'il s'agit d'une erreur, contactez l'administrateur.</p>
+      <p style={{ marginTop: 20, color: '#64748b' }}>Si vous pensez qu'il s'agit d'une erreur, contactez l'administrateur au 
+        <Link
+        href='https://wa.me/22601479800'
+        >+22601479800</Link>
+        .</p>
     </div>
   );
 }

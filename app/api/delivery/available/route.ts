@@ -1,24 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { NextResponse } from 'next/server';
+import { getAccessContext } from '@/lib/api-guard';
 import { getAvailableDeliveries } from '@/services/delivery.service';
 
-/**
- * GET /api/delivery/available
- * Liste les livraisons disponibles pour le transporteur connecté.
- */
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId) {
-      console.log('no session buddy')
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    }
+export async function GET() {
+  const { ctx, error } = await getAccessContext(['AGENT', 'ADMIN', 'SUPERADMIN']);
+  if (error) return error;
 
-    const deliveries = await getAvailableDeliveries(session.userId);
-    console.log('deliveries',deliveries)
+  try {
+    const deliveries = await getAvailableDeliveries(ctx!.userId);
     return NextResponse.json(deliveries);
-  } catch (error: any) {
-    console.error('GET /api/delivery/available error:', error);
+  } catch (e) {
+    console.error('[delivery/available] error:', (e as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

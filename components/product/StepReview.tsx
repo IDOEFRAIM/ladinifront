@@ -10,8 +10,8 @@ interface StepReviewProps {
   name: string;
   categoryLabel: string;
   description: string;
-  price: string;
-  quantity: string;
+  price: string | number;     // Mis à jour pour accepter les types numériques de RHF
+  quantity: string | number;  // Sera mappé sur 'quantityForSale' depuis le parent
   unit: string;
   firstPreview: string | null;
   firstExistingImage: string | null;
@@ -35,7 +35,10 @@ export default function StepReview({
   onSubmit,
 }: StepReviewProps) {
   const imgSrc = firstPreview || (firstExistingImage ? normalizeAssetUrl(firstExistingImage, 'products') : '');
-  const canSubmit = !!name && !!quantity && Number(price) > 0;
+
+  // CORRECTION : On s'assure de tester si quantity existe sous forme de texte ou de nombre > 0
+  const hasQuantity = quantity !== undefined && quantity !== null && quantity !== '';
+  const canSubmit = !!name && hasQuantity && Number(price) > 0;
 
   return (
     <div className="space-y-6 animate-in zoom-in-95 duration-500">
@@ -62,12 +65,15 @@ export default function StepReview({
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Stock</p>
-              <p className="text-xl font-black text-slate-800 italic">{quantity} {unit}</p>
+              {/* CORRECTION UX : Si la quantité manque ou vaut 0, on met un message d'alerte explicite */}
+              <p className="text-xl font-black text-slate-800 italic">
+                {hasQuantity ? `${quantity} ${unit || 'KG'}` : '0 (Quantité manquante)'}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-[9px] font-black text-green-600 uppercase tracking-widest">Prix</p>
               <p className="text-xl font-black text-green-700 italic">
-                {Number(price).toLocaleString()} F
+                {Number(price || 0).toLocaleString()} F
               </p>
             </div>
           </div>
@@ -90,7 +96,7 @@ export default function StepReview({
             type="button"
             onClick={onSubmit}
             disabled={isSubmitting || !canSubmit}
-            className="w-full bg-green-600 text-white py-6 rounded-[2.2rem] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-200 flex items-center justify-center gap-4 hover:bg-green-700 transition-all disabled:opacity-50"
+            className="w-full bg-green-600 text-white py-6 rounded-[2.2rem] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-200 flex items-center justify-center gap-4 hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? <FaSpinner className="animate-spin" /> : <FaSave />}
             {mode === 'create' ? 'Publier' : 'Enregistrer'}

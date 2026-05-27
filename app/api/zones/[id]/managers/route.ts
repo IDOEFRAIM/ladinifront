@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, or, sql } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { assignAgentToWorkZone } from '@/services/membership.service';
@@ -20,22 +20,24 @@ export async function GET(req: Request) {
       .from(schema.userOrganizations)
       .where(eq(schema.userOrganizations.managedZoneId, zoneId));
 
-    // Enrich with user info
-    const userIds = Array.from(new Set([...(work.map(w => w.managerId || '')), ...(managed.map(m => m.userId || ''))].filter(Boolean)));
-    let users: any[] = [];
-    if (userIds.length > 0) {
-      for (const uid of userIds) {
-        try {
-          const u = await db.query.users.findFirst({ where: eq(schema.users.id, uid) });
-          if (u) users.push(u);
-        } catch (e) { /* ignore individual lookup errors */ }
-      }
-    }
+    // Enrich with user info (1 seule requête — interdit de requêter dans une boucle)
+    const userIds = Array.from(
+      new Set(
+        [...work.map((w) => w.managerId || ''), ...managed.map((m) => m.userId || '')].filter(Boolean),
+      ),
+    );
 
-    return NextResponse.json({ success: true, data: { workZones: work, managedMembers: managed, users } });
+    const users =
+      userIds.length > 0
+        ? await db.query.users.findMany({
+            where: inArray(schema.users.id, userIds),
+          })
+        : [];
+
+    return NextResponse.json({ success: true, data: { workZones: work, managedMembers: managed, users }, error: null });
   } catch (e) {
     console.error('api/zones/[id]/managers GET error', e);
-    return NextResponse.json({ success: false, error: 'Erreur' }, { status: 500 });
+    return NextResponse.json({ success: false, data: null, error: 'Erreur' }, { status: 500 });
   }
 }
 
@@ -61,13 +63,13 @@ export async function PATCH(req: Request) {
 
     if (!agentUserId) {
       console.debug('[api/zones/[id]/managers PATCH] missing agentUserId, body:', body);
-      return NextResponse.json({ success: false, error: 'agentUserId required (or agentIdentifier that resolves to a user)' }, { status: 400 });
+      return NextResponse.json({ success: false, data: null, error: 'agentUserId required (or agentIdentifier that resolves to a user)' }, { status: 400 });
     }
 
     // Get session user (admin) and active org from cookies/header
     const session = await getSessionFromRequest(req as any);
     const adminUserId = session?.userId;
-    if (!adminUserId) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    if (!adminUserId) return NextResponse.json({ success: false, data: null, error: 'Unauthorized' }, { status: 401 });
 
     // Resolve organization id: prefer explicit header, cookie, fall back to request body or session payload
     let orgId: string | undefined;
@@ -145,7 +147,7 @@ export async function PATCH(req: Request) {
 
     if (!orgId) {
       console.debug('[api/zones/[id]/managers PATCH] missing orgId, attempted sources: header|cookie|body|session|zone|work_zones|user_membership, body:', body, 'resolved agentUserId:', agentUserId, 'session:', session && { userId: session.userId, activeOrgId: (session as any).activeOrgId });
-      return NextResponse.json({ success: false, error: 'Active organization not found. Provide orgId in request body or x-organization-id header, or ensure the zone is linked to an organization.' }, { status: 400 });
+      return NextResponse.json({ success: false, data: null, error: 'Active organization not found. Provide orgId in request body or x-organization-id header, or ensure the zone is linked to an organization.' }, { status: 400 });
     }
 
     // Ensure orgId is a plain string (defensive in case a caller sent an object)
@@ -179,15 +181,15 @@ export async function PATCH(req: Request) {
     const normalizedOrg = normalizeOrgId(orgId);
     if (!normalizedOrg) {
       console.error('[api/zones/[id]/managers PATCH] invalid orgId value (cannot normalize):', orgId, 'headers:', { 'x-organization-id': (req.headers as any).get && (req.headers as any).get('x-organization-id'), cookie: (req.headers as any).get && (req.headers as any).get('cookie') });
-      return NextResponse.json({ success: false, error: 'Invalid organization id provided. Send plain organization id string or x-organization-id header.' }, { status: 400 });
+      return NextResponse.json({ success: false, data: null, error: 'Invalid organization id provided. Send plain organization id string or x-organization-id header.' }, { status: 400 });
     }
     orgId = normalizedOrg;
 
     // Delegate to service which enforces admin rights
     const workZone = await assignAgentToWorkZone(adminUserId, orgId, agentUserId, zoneId, 'ZONE_MANAGER');
-    return NextResponse.json({ success: true, data: workZone });
+    return NextResponse.json({ success: true, data: workZone, error: null });
   } catch (e) {
     console.error('api/zones/[id]/managers PATCH error', e);
-    return NextResponse.json({ success: false, error: 'Erreur' }, { status: 500 });
+    return NextResponse.json({ success: false, data: null, error: 'Erreur' }, { status: 500 });
   }
 }

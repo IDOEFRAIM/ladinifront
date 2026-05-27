@@ -74,7 +74,7 @@ export default function AdminSettingsClient({ initialProfile, serverUpdateRole }
         if (j.success) {
           setProfile(p => ({ ...p, role: roleDraft }));
           setEditingRole(false);
-          toast.success('Rôle mis à jour');
+          toast.success('Le Rôle a ete mis à jour');
         } else {
           toast.error(j.error || 'Erreur');
         }

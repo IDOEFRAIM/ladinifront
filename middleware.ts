@@ -29,7 +29,6 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/admin':         ['ORG_MANAGE'],
   '/org':           [],                   // authenticated + active org (checked in layout)
   '/market':        [],
-  //'/orders':        ['ORDER_VIEW'],
   '/conversations': [],
   '/agent':         [],
   '/buyer-dashboard': [],
@@ -190,11 +189,9 @@ export async function middleware(request: NextRequest) {
     const sessionRole = roleFromToken ? String(roleFromToken).toUpperCase() : undefined;
     const roleKey = (sessionRole ?? normalizedUserRole ?? userRole ?? '').toUpperCase();
     const target = redirectMap[roleKey] || '/';
-  
-  if (pathname !== target) {
-    return NextResponse.redirect(new URL(target, request.url));
-  }
-      // to be checked return NextResponse.redirect(new URL(target, request.url));
+    if (pathname !== target) {
+      return NextResponse.redirect(new URL(target, request.url));
+    }
   }
 
   // ╔══════════════════════════════════════════════╗
@@ -249,7 +246,6 @@ export const config = {
     '/admin/:path*',
     '/market/:path*',
     '/checkout/:path*',
-    //'/orders/:path*',
     '/conversations/:path*',
     '/org/:path*',
     '/agent/:path*',

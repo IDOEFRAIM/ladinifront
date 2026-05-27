@@ -52,8 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateSession = useCallback((userData: any) => {
     if (isDev) console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
-    // Quick debug: always log the user id to the browser console
-    try { console.log('[Auth] user id:', userData?.id); } catch (e) { /* ignore */ }
     const normalizedRole = (userData.role || '').toString().toUpperCase();
     Cookies.set(COOKIE_NAMES.USER_ROLE, normalizedRole, { expires: 7, sameSite: 'lax' });
     Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
@@ -117,17 +115,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (res.ok) {
           const data = await res.json();
-          if (data?.success && data.user) {
+          if (data?.success && data.data) {
             try {
               const clientPv = Cookies.get(COOKIE_NAMES.PERMISSION_VERSION);
-              if (clientPv && data.user.permissionVersion && String(data.user.permissionVersion) !== String(clientPv)) {
-                if (isDev) console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.user.permissionVersion });
+              if (clientPv && data.data.permissionVersion && String(data.data.permissionVersion) !== String(clientPv)) {
+                if (isDev) console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.data.permissionVersion });
               }
             } catch (e) {
               // ignore
             }
 
-            if (mounted) hydrateSession(data.user);
+            if (mounted) hydrateSession(data.data);
             return;
           }
         }

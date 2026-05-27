@@ -4,16 +4,20 @@ import * as schema from './schema';
 import fs from 'fs';
 import path from 'path';
 
-// Utilisation d'une variable globale typée de manière sûre pour Next.js
-const globalForDb = globalThis as unknown as { 
-  postgresClient: postgres.Sql<{}> | undefined 
-};
+type PostgresClient = ReturnType<typeof postgres>;
 
-const connectionString = process.env.DATABASE_URL!;
-if (!connectionString) throw new Error('DATABASE_URL is not set');
+declare global {
+  // eslint-disable-next-line no-var
+  var __frontag_postgres_client__: PostgresClient | undefined;
+}
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL is not set');
+}
 
 // Configuration SSL robuste
-const sslOptions: any = {};
+const sslOptions: Partial<postgres.Options<any>> = {};
 const caPath = process.env.DB_SSL_CA_PATH || process.env.DATABASE_SSL_CA_PATH;
 const caInline = process.env.DB_SSL_CA || process.env.DATABASE_SSL_CA;
 
@@ -26,20 +30,23 @@ if (caPath && fs.existsSync(path.resolve(caPath))) {
   sslOptions.ssl = { rejectUnauthorized: false };
 }
 
-// CRÉATION DU CLIENT
-// max: 1 est le choix le plus stable pour Vercel sans pooler. 
-// Cela évite la saturation et force la file d'attente propre.
-const client = globalForDb.postgresClient ?? postgres(connectionString, {
-  max: 1, 
-  prepare: false, 
-  idle_timeout: 10,
-  connect_timeout: 10,
-  ...sslOptions,
-});
+const isVercel = !!process.env.VERCEL;
+const poolMax = parseInt(process.env.DB_POOL_MAX || '', 10) || (isVercel ? 5 : 10);
+
+const client: PostgresClient =
+  globalThis.__frontag_postgres_client__ ??
+  postgres(connectionString, {
+    max: poolMax,
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    max_lifetime: isVercel ? 60 : 300,
+    ...sslOptions,
+  });
 
 // En développement, on attache le client au scope global pour le Hot Reload
 if (process.env.NODE_ENV !== 'production') {
-  globalForDb.postgresClient = client;
+  globalThis.__frontag_postgres_client__ = client;
 }
 
 export const db = drizzle(client, { schema });

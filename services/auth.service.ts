@@ -296,7 +296,7 @@ export async function registerUser(data: {
         };
 
     } catch (error: any) {
-        console.error("❌ Erreur Inscription:", error);
+        console.error('[auth] register error:', error?.message || error);
         if (error.code === '23505') {
             return { success: false, error: "L'email ou le numéro de téléphone est déjà utilisé." };
         }
@@ -377,7 +377,7 @@ export async function loginUser(credentials: { email: string; password: string }
         };
 
     } catch (error) {
-        console.error("❌ Erreur Login:", error);
+        console.error('[auth] login error:', (error as Error)?.message || error);
         return { success: false, error: "Une erreur est survenue lors de la connexion" };
     }
 }

@@ -1,10 +1,9 @@
 // app/actions/monitoring.server.ts
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, gte, lte, or, ilike, count, avg, sum, sql, gt, lt, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, or, ilike, count, avg, sum, sql, gt, lt, desc, inArray } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { userHasPermission } from '@/services/role.service';
-import { inArray } from 'drizzle-orm';
 
 type FetchAgentActionsOpts = {
   userId: string;
@@ -47,12 +46,13 @@ export async function fetchAgentActions(opts: FetchAgentActionsOpts) {
   if (filters.dateFrom) conditions.push(gte(schema.agentActions.createdAt, new Date(filters.dateFrom)));
   if (filters.dateTo) conditions.push(lte(schema.agentActions.createdAt, new Date(filters.dateTo)));
   if (filters.search) {
+    const term = `%${filters.search}%`;
     conditions.push(
       or(
-        ilike(schema.agentActions.agentName, `%${filters.search}%`),
-        ilike(schema.agentActions.actionType, `%${filters.search}%`),
-        ilike(schema.agentActions.aiReasoning, `%${filters.search}%`),
-      ) as unknown as any,
+        ilike(schema.agentActions.agentName, term),
+        ilike(schema.agentActions.actionType, term),
+        ilike(schema.agentActions.aiReasoning, term),
+      ),
     );
   }
 
@@ -322,18 +322,55 @@ export async function fetchAdminView() {
   const totalConversations = Number(totalConversationsResult[0]?.value ?? 0);
   const activeConversations = Number(activeConversationsResult[0]?.value ?? 0);
 
-  const agentHealth = await Promise.all(agentNames.map(async (a) => {
-    const lastAction = await db.query.agentActions.findFirst({ where: eq(schema.agentActions.agentName, a.agentName), orderBy: (t, { desc: d }) => [d(t.createdAt)], columns: { createdAt: true } });
-    const [failedResult] = await db.select({ value: count() }).from(schema.agentActions).where(and(eq(schema.agentActions.agentName, a.agentName), eq(schema.agentActions.status, 'FAILED'), gte(schema.agentActions.createdAt, twentyFourHoursAgo)));
-    const [last24hResult] = await db.select({ value: count() }).from(schema.agentActions).where(and(eq(schema.agentActions.agentName, a.agentName), gte(schema.agentActions.createdAt, twentyFourHoursAgo)));
+  // ⚠️ Important: no DB calls inside loops/maps (serverless hardening)
+  const [lastActivityRows, last24hRows] = await Promise.all([
+    db
+      .select({
+        agentName: schema.agentActions.agentName,
+        lastActivityAt: sql<Date>`MAX(${schema.agentActions.createdAt})`,
+      })
+      .from(schema.agentActions)
+      .groupBy(schema.agentActions.agentName),
 
-    const failedCount = Number(failedResult?.value ?? 0);
-    const last24hCount = Number(last24hResult?.value ?? 0);
-    const errorRate = last24hCount > 0 ? failedCount / last24hCount : 0;
-    const isRecent = lastAction?.createdAt && lastAction.createdAt > oneHourAgo;
+    db
+      .select({
+        agentName: schema.agentActions.agentName,
+        actionsLast24h: count(),
+        failedLast24h: sql<number>`SUM(CASE WHEN ${schema.agentActions.status} = 'FAILED' THEN 1 ELSE 0 END)`,
+      })
+      .from(schema.agentActions)
+      .where(gte(schema.agentActions.createdAt, twentyFourHoursAgo))
+      .groupBy(schema.agentActions.agentName),
+  ]);
 
-    return { agentName: a.agentName, status: !lastAction?.createdAt ? 'unknown' : !isRecent ? 'down' : errorRate > 0.3 ? 'degraded' : 'healthy', lastActivityAt: lastAction?.createdAt?.toISOString(), actionsLast24h: last24hCount, errorRate: Math.round(errorRate * 100) / 100, avgResponseTimeMs: 0 };
-  }));
+  const lastActivityByAgent = new Map<string, Date>();
+  for (const r of lastActivityRows) {
+    if (r.agentName && r.lastActivityAt) lastActivityByAgent.set(r.agentName, r.lastActivityAt);
+  }
+
+  const last24hByAgent = new Map<string, { actions: number; failed: number }>();
+  for (const r of last24hRows) {
+    last24hByAgent.set(r.agentName, {
+      actions: Number(r.actionsLast24h ?? 0),
+      failed: Number(r.failedLast24h ?? 0),
+    });
+  }
+
+  const agentHealth = agentNames.map((a) => {
+    const lastActivityAt = lastActivityByAgent.get(a.agentName);
+    const last24h = last24hByAgent.get(a.agentName) ?? { actions: 0, failed: 0 };
+    const errorRate = last24h.actions > 0 ? last24h.failed / last24h.actions : 0;
+    const isRecent = !!lastActivityAt && lastActivityAt > oneHourAgo;
+
+    return {
+      agentName: a.agentName,
+      status: !lastActivityAt ? 'unknown' : !isRecent ? 'down' : errorRate > 0.3 ? 'degraded' : 'healthy',
+      lastActivityAt: lastActivityAt?.toISOString(),
+      actionsLast24h: last24h.actions,
+      errorRate: Math.round(errorRate * 100) / 100,
+      avgResponseTimeMs: 0,
+    };
+  });
 
   const actionsByAgentMap: Record<string, number> = {};
   agentNames.forEach((a) => { actionsByAgentMap[a.agentName] = Number(a.agentCount); });
@@ -438,11 +475,12 @@ export async function fetchConversations(opts: {
   if (filters.dateTo) conditions.push(lte(schema.conversations.createdAt, new Date(filters.dateTo)));
 
   if (filters.search) {
+    const term = `%${filters.search}%`;
     conditions.push(
       or(
-        ilike(schema.conversations.crop, `%${filters.search}%`),
-        ilike(schema.conversations.agentType, `%${filters.search}%`),
-      ) as unknown as any,
+        ilike(schema.conversations.crop, term),
+        ilike(schema.conversations.agentType, term),
+      ),
     );
   }
 
@@ -478,7 +516,7 @@ export async function fetchStreamDeltas(userId: string, since: Date) {
 
   const newActionsWhere = scope.userId
     ? and(eq(schema.agentActions.userId, scope.userId), gt(schema.agentActions.createdAt, since))
-    : gt(schema.agentActions.createdAt, since as any);
+    : gt(schema.agentActions.createdAt, since);
   const newActions = await db.query.agentActions.findMany({
     where: newActionsWhere,
     orderBy: (t, ops) => [ops.desc(t.createdAt)],
@@ -487,8 +525,8 @@ export async function fetchStreamDeltas(userId: string, since: Date) {
   });
 
   const convWhere = canViewConversationsAll
-    ? gt(schema.conversations.createdAt, since as any)
-    : and(eq(schema.conversations.userId, userId), gt(schema.conversations.createdAt, since as any));
+    ? gt(schema.conversations.createdAt, since)
+    : and(eq(schema.conversations.userId, userId), gt(schema.conversations.createdAt, since));
   const newConversations = await db.query.conversations.findMany({ where: convWhere, orderBy: (t, ops) => [ops.desc(t.createdAt)], limit: 10 });
 
   const updatedWhere = scope.userId

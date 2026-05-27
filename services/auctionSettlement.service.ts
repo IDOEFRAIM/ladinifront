@@ -2,7 +2,7 @@
 
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, lt, desc, sql } from 'drizzle-orm';
+import { eq, and, inArray, lt, desc, sql } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import { sendUserNotification } from '@/services/notification.service';
 
@@ -207,13 +207,27 @@ export async function settleExpiredAuctions() {
 
         // Notifier les perdants
         const loserBids = sortedBids.slice(1);
+        const loserProducerIds = Array.from(
+          new Set(loserBids.map((b) => b.producerId).filter(Boolean)),
+        ) as string[];
+
+        const loserProducers =
+          loserProducerIds.length > 0
+            ? await db.query.producers.findMany({
+                where: inArray(schema.producers.id, loserProducerIds),
+                columns: { id: true, userId: true },
+              })
+            : [];
+
+        const loserUserIdByProducerId = new Map<string, string>();
+        for (const p of loserProducers) {
+          if (p.userId) loserUserIdByProducerId.set(p.id, p.userId);
+        }
+
         for (const loser of loserBids) {
-          const loserProducer = await db.query.producers.findFirst({
-            where: eq(schema.producers.id, loser.producerId),
-            columns: { userId: true },
-          });
-          if (loserProducer) {
-            await sendUserNotification(loserProducer.userId, 'AUCTION_LOST', { auctionId: auction.id });
+          const userId = loserUserIdByProducerId.get(loser.producerId);
+          if (userId) {
+            await sendUserNotification(userId, 'AUCTION_LOST', { auctionId: auction.id });
           }
         }
 

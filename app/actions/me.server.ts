@@ -2,9 +2,21 @@ import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { buildAccessContext } from '@/lib/access-context';
+import { ok, fail, type ApiResult } from '@/lib/api-result';
 
-export async function fetchMeServer(userId: string) {
-  if (!userId) throw new Error('USER_NOT_FOUND');
+export type MePayload = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  producerId: string | null;
+  organizations: Array<{ organizationId: string; role: string; name: string }>;
+  permissions: string[];
+  permissionVersion: number;
+};
+
+export async function fetchMeServer(userId: string): Promise<ApiResult<MePayload>> {
+  if (!userId) return fail('USER_NOT_FOUND');
 
   const ctx = await buildAccessContext(userId);
 
@@ -13,7 +25,7 @@ export async function fetchMeServer(userId: string) {
     columns: { name: true, email: true },
   });
 
-  if (!userProfile) throw new Error('USER_NOT_FOUND');
+  if (!userProfile) return fail('USER_NOT_FOUND');
 
   const orgIds = (ctx.orgScopes || []).map((o: any) => o.organizationId);
   const orgs = orgIds.length > 0
@@ -41,7 +53,7 @@ export async function fetchMeServer(userId: string) {
     permissionVersion: ctx.permissionVersion,
   };
 
-  return { success: true, user: payload };
+  return ok(payload);
 }
 
 export default { fetchMeServer };

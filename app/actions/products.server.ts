@@ -226,7 +226,7 @@ export async function updateProductFromForm(formData: FormData, actorProducerId?
     throw err;
   }
 
-  const oldProduct = await db.query.products.findFirst({ where: (p: any, { eq }: any) => eq(p.id, productId) } as any);
+  const oldProduct = await db.query.products.findFirst({ where: eq(schema.products.id, productId) });
   if (!oldProduct) {
     const err = new Error('NOT_FOUND');
     (err as any).code = 'NOT_FOUND';
@@ -254,8 +254,3 @@ export async function updateProductFromForm(formData: FormData, actorProducerId?
   return updated;
 }
 
-export default {
-  saveFile,
-  createProductFromForm,
-  updateProductFromForm,
-};

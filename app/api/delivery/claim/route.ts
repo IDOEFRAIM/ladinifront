@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { getAccessContext } from '@/lib/api-guard';
 import { claimDelivery } from '@/services/delivery.service';
 
 /**
@@ -8,26 +8,24 @@ import { claimDelivery } from '@/services/delivery.service';
  * Body: { deliveryId: string }
  */
 export async function POST(req: NextRequest) {
-  try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    }
+  const { ctx, error } = await getAccessContext(['AGENT', 'ADMIN', 'SUPERADMIN']);
+  if (error) return error;
 
+  try {
     const body = await req.json();
     if (!body.deliveryId) {
       return NextResponse.json({ error: 'deliveryId requis' }, { status: 400 });
     }
 
-    const result = await claimDelivery(body.deliveryId, session.userId);
+    const result = await claimDelivery(body.deliveryId, ctx!.userId);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
 
     return NextResponse.json(result);
-  } catch (error: any) {
-    console.error('POST /api/delivery/claim error:', error);
+  } catch (error) {
+    console.error('[delivery/claim] error:', (error as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

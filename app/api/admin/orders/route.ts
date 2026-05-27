@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { desc, eq, and } from 'drizzle-orm';
+import { requireAdmin } from '@/lib/api-guard';
 
 export async function GET(req: Request) {
+  const { user, error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   try {
     const url = new URL(req.url);
     const zoneId = url.searchParams.get('zoneId');

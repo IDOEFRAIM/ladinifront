@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/api-guard';
+
 export async function POST(req: NextRequest) {
+  const { error: authError } = await requireAdmin();
+  if (authError) return authError;
+
   try {
     const body = await req.json();
     const { name, type, taxId, description } = body || {};

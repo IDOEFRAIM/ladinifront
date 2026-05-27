@@ -28,8 +28,7 @@ export default function ProductorSidebar({ isOpen, onClose }: ProductorSidebarPr
 
   // Optimisation : Mémoisation des liens pour éviter de recréer le tableau à chaque rendu
   const sidebarLinks = useMemo(() => [
-    { name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
-    { name: 'Mes Agents IA', href: '/agents', icon: Bot },
+    //{ name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
     { name: 'Mon Stock', href: '/inventory', icon: Warehouse },
     { name: 'Catalogue', href: '/products', icon: Package },
     { name: 'Ventes', href: '/sales', icon: ShoppingCart },

@@ -291,7 +291,7 @@ export default function TerritoriesPage() {
   const handleRegionFormChange = (field: string, value: string) => {
     setRegionForm(prev => ({ ...prev, [field]: value }));
   };
-console.log('TerritoriesPage render - stats:', stats, 'regions:', regions, 'locations:', locations);
+
   return (
     <div style={{ minHeight: '100vh', background: C.sand, paddingBottom: 80 }}>
       {/* Header (non-sticky to avoid overlapping global admin header/nav) */}

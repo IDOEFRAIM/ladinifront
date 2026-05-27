@@ -657,7 +657,7 @@ function ImpactSection() {
 
 function TeamSection() {
   const team = [
-    { name: 'IDO EFRAIM', role: 'CEO' },
+    { name: 'IDO EFRAIM MARIE', role: 'CEO' },
     { name: 'BAMOGO DAVID', role: 'CSO' },
     { name: 'MIDIOUR JEROME', role: 'Relation' },
     { name: 'Tougma Ars\u00e8ne', role: 'Zone Ziniar\u00e9' },

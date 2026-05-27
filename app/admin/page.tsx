@@ -1,4 +1,3 @@
-import React from 'react';
 import AdminDashboardClient from './AdminDashboardClient';
 import { fetchAdminMetrics } from '@/app/actions/admin.server';
 

@@ -15,7 +15,6 @@ import StepAudio from '@/components/product/StepAudio';
 import StepReview from '@/components/product/StepReview';
 
 // ── SOUS-COMPOSANT OPTIMISÉ POUR LES INPUTS CACHÉS ───────────────────
-// Évite de faire re-rendre tout l'arbre de composants à chaque touche pressée
 function WatchedInputs({ form, initialId }: { form: any; initialId: string }) {
   const watched = form.watch(); // S'abonne aux changements localement
   return (
@@ -27,7 +26,8 @@ function WatchedInputs({ form, initialId }: { form: any; initialId: string }) {
       <input type="hidden" name="categoryId" value={watched.categoryId || ''} />
       <input type="hidden" name="description" value={watched.description || ''} />
       <input type="hidden" name="price" value={watched.price || ''} />
-      <input type="hidden" name="quantity" value={watched.quantity || ''} />
+      {/* CORRECTION : On s'aligne sur la clé du formulaire 'quantityForSale' */}
+      <input type="hidden" name="quantity" value={watched.quantityForSale || ''} />
       <input type="hidden" name="unit" value={watched.unit || 'KG'} />
     </>
   );
@@ -82,7 +82,7 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
       onSubmit={(e) => e.preventDefault()}
       className="min-h-screen bg-slate-50 pb-20 font-sans relative"
     >
-      {/* ⚡ RENDU ULTRA-PERFORMANT : Les inputs cachés s'auto-gèrent sans notifier le parent */}
+      {/* Inputs cachés synchronisés */}
       <WatchedInputs form={form} initialId={initialData?.id || ''} />
 
       {/* Overlay de statut */}
@@ -159,7 +159,6 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
         )}
 
         {step === 6 && (
-          // On passe une fonction d'évaluation au moment M plutôt que d'observer en continu
           <StepReviewWrapper
             form={form}
             mode={mode}
@@ -175,14 +174,13 @@ export default function ProductFlow({ mode, initialData }: ProductFlowProps) {
   );
 }
 
-// ── SOUS-COMPOSANT POUR L'ÉTAPE DE REVUE ─────────────────────────────
-// S'isole également pour éviter les lags globaux lors de la saisie
+// ── SOUS-COMPOSANT POUR L'ÉTAPE DE REVUE CORRIGÉ ─────────────────────
 function StepReviewWrapper({ 
   form, mode, newPreviews, existingImages, audioBlob, isSubmitting, prepareAndSubmit 
 }: { 
   form: any; mode: any; newPreviews: any; existingImages: any; audioBlob: any; isSubmitting: any; prepareAndSubmit: any 
 }) {
-  const values = form.getValues(); // Récupère les valeurs statiques instantanément sans hook d'écoute réactif
+  const values = form.getValues(); // Récupère l'état figé du formulaire instantanément
   
   return (
     <StepReview
@@ -191,7 +189,9 @@ function StepReviewWrapper({
       categoryLabel={values.categoryLabel}
       description={values.description}
       price={values.price}
-      quantity={values.quantity}
+      // CORRECTION CRITIQUE : Changé de values.quantity à values.quantityForSale
+      // pour correspondre exactement à l'input de StepDetails.tsx
+      quantity={values.quantityForSale} 
       unit={values.unit}
       firstPreview={newPreviews[0] || null}
       firstExistingImage={existingImages[0] || null}

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getAccessContext } from '@/lib/api-guard';
 import {
   getBuyerDashboardProfile,
   getBuyerActiveOrders,
@@ -8,57 +8,46 @@ import {
 } from '@/services/buyer.service';
 import { suggestedProducts } from '@/services/crossSelling.service';
 
-/**
- * GET /api/buyer/dashboard
- * Dashboard complet de l'acheteur : profil, commandes actives, historique, enchères, suggestions.
- * Query params: ?section=all|orders|auctions|suggestions
- */
+const ALLOWED_SECTIONS = new Set(['all', 'profile', 'orders', 'auctions', 'suggestions']);
+
 export async function GET(req: NextRequest) {
+  const { ctx, error } = await getAccessContext(['BUYER', 'ADMIN', 'SUPERADMIN']);
+  if (error) return error;
+
   try {
-    const session = await getSessionFromRequest(req as any);
-    if (!session?.userId) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    }
-
     const url = new URL(req.url);
-    const section = url.searchParams.get('section') || 'all';
-    const userId = session.userId;
+    const requestedSection = url.searchParams.get('section') || 'all';
+    const section = ALLOWED_SECTIONS.has(requestedSection) ? requestedSection : 'all';
+    const userId = ctx!.userId;
 
-    // Initialisation avec les clés attendues par l'interface DashboardData du Hook
-    // Cela évite que le front reçoive "undefined" sur certaines propriétés
-    const data: any = {
-      profile: null,
-      activeOrders: [],
-      orderHistory: [],
-      auctions: { active: [], won: [], lost: [] },
-      suggestedProducts: []
+    const data = {
+      profile: null as Awaited<ReturnType<typeof getBuyerDashboardProfile>> | null,
+      activeOrders: [] as Awaited<ReturnType<typeof getBuyerActiveOrders>>,
+      orderHistory: [] as Awaited<ReturnType<typeof getBuyerOrderHistory>>,
+      auctions: { active: [], won: [], lost: [] } as Awaited<ReturnType<typeof getBuyerAuctionHistory>>,
+      suggestedProducts: [] as Awaited<ReturnType<typeof suggestedProducts>>,
     };
 
-    // OPTIMISATION : Lancer les appels en parallèle pour éviter les lenteurs
     const promises: Promise<void>[] = [];
 
     if (section === 'all' || section === 'profile') {
-      promises.push(getBuyerDashboardProfile(userId).then(res => { data.profile = res; }));
+      promises.push(getBuyerDashboardProfile(userId).then((res) => { data.profile = res; }));
     }
-
     if (section === 'all' || section === 'orders') {
-      promises.push(getBuyerActiveOrders(userId).then(res => { data.activeOrders = res; }));
-      promises.push(getBuyerOrderHistory(userId).then(res => { data.orderHistory = res; }));
+      promises.push(getBuyerActiveOrders(userId).then((res) => { data.activeOrders = res; }));
+      promises.push(getBuyerOrderHistory(userId).then((res) => { data.orderHistory = res; }));
     }
-
     if (section === 'all' || section === 'auctions') {
-      promises.push(getBuyerAuctionHistory(userId).then(res => { data.auctions = res; }));
+      promises.push(getBuyerAuctionHistory(userId).then((res) => { data.auctions = res; }));
     }
-
     if (section === 'all' || section === 'suggestions') {
-      promises.push(suggestedProducts(userId).then(res => { data.suggestedProducts = res; }));
+      promises.push(suggestedProducts(userId).then((res) => { data.suggestedProducts = res; }));
     }
 
     await Promise.all(promises);
-
     return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('GET /api/buyer/dashboard error:', error);
+  } catch (error) {
+    console.error('[buyer/dashboard] error:', (error as Error).message);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

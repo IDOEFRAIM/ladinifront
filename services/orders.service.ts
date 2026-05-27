@@ -1,7 +1,7 @@
 'use server'
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { audit, snapshot } from "@/lib/audit";
 import getUserIdFromSession from "@/lib/get-userId";
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
@@ -48,6 +48,14 @@ interface OrderItem {
   priceAtSale: number;
 }
 
+function aggregateQuantities(items: CreateOrderParams['items']): Map<string, number> {
+  const requiredByProductId = new Map<string, number>();
+  for (const item of items) {
+    requiredByProductId.set(item.productId, (requiredByProductId.get(item.productId) ?? 0) + item.quantity);
+  }
+  return requiredByProductId;
+}
+
 /**
  * Maps payment method string to PaymentMethodRef code.
  */
@@ -61,29 +69,41 @@ function mapPaymentMethodCode(method?: string): string {
 }
 
 /**
- * Validates inventory for all items in the order.
+ * Validates inventory for all items in a single DB query (no DB calls in loops).
  */
-async function validateInventory(tx: any, items: CreateOrderParams['items']): Promise<void> {
-  for (const item of items) {
-    const product: ProductInventoryCheck | null = await tx.query.products.findFirst({
-      where: eq(schema.products.id, item.productId),
-      columns: { id: true, quantityForSale: true, name: true }
-    });
+async function validateInventory(tx: any, items: CreateOrderParams['items']): Promise<Map<string, ProductInventoryCheck>> {
+  const requiredByProductId = aggregateQuantities(items);
+  const productIds = Array.from(requiredByProductId.keys());
 
+  const products: ProductInventoryCheck[] =
+    productIds.length > 0
+      ? await tx.query.products.findMany({
+          where: inArray(schema.products.id, productIds),
+          columns: { id: true, quantityForSale: true, name: true },
+        })
+      : [];
+
+  const productById = new Map<string, ProductInventoryCheck>();
+  for (const p of products) productById.set(p.id, p);
+
+  for (const [productId, requiredQty] of requiredByProductId) {
+    const product = productById.get(productId);
     if (!product) {
-      throw new Error(`Produit introuvable: ${item.productId}`);
+      throw new Error(`Produit introuvable: ${productId}`);
     }
-    if (product.quantityForSale < item.quantity) {
+    if ((product.quantityForSale ?? 0) < requiredQty) {
       throw new Error(`Stock insuffisant pour "${product.name}" (disponible: ${product.quantityForSale})`);
     }
   }
+
+  return productById;
 }
 
 /**
  * Creates the order record in the database.
  */
 async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethodCode: string): Promise<OrderCreated> {
-  const buyerProfileId = await resolveBuyerProfileId(data.buyerId ?? null);
+  const buyerProfileId = await resolveBuyerProfileId(data.buyerId ?? null, { tx });
   // Look up ref IDs for status and payment method
   const [order] = await tx.insert(schema.orders).values({
     buyerId: buyerProfileId,
@@ -123,13 +143,31 @@ async function createOrderRecord(tx: any, data: CreateOrderParams, paymentMethod
 }
 
 /**
- * Decrements stock for all items in the order.
+ * Decrements stock for all items in ONE statement (atomic, no DB calls in loops).
+ * Also guards against concurrency by requiring sufficient stock in the UPDATE.
  */
 async function decrementStock(tx: any, items: CreateOrderParams['items']): Promise<void> {
-  for (const item of items) {
-    await tx.update(schema.products)
-      .set({ quantityForSale: sql`${schema.products.quantityForSale} - ${item.quantity}` })
-      .where(eq(schema.products.id, item.productId));
+  const requiredByProductId = aggregateQuantities(items);
+  if (requiredByProductId.size === 0) return;
+
+  const tuples = Array.from(requiredByProductId.entries()).map(([productId, qty]) =>
+    sql`(${productId}::uuid, ${qty}::double precision)`,
+  );
+
+  // UPDATE ... FROM (VALUES ...) ... RETURNING id
+  const updatedRows: Array<{ id: string }> = (await tx.execute(
+    sql`
+      UPDATE ${schema.products}
+      SET ${schema.products.quantityForSale} = ${schema.products.quantityForSale} - v.qty
+      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, qty)
+      WHERE ${schema.products.id} = v.id
+        AND ${schema.products.quantityForSale} >= v.qty
+      RETURNING ${schema.products.id} AS id
+    `,
+  )) as any;
+
+  if ((updatedRows?.length ?? 0) !== requiredByProductId.size) {
+    throw new Error('STOCK_CONFLICT');
   }
 }
 
@@ -144,8 +182,8 @@ export async function createOrderService(data: CreateOrderParams) {
 
   const order: OrderCreated = await db.transaction(async (tx: any) => {
     await validateInventory(tx, data.items);
-    const created = await createOrderRecord(tx, data, mappedPayment);
     await decrementStock(tx, data.items);
+    const created = await createOrderRecord(tx, data, mappedPayment);
     return created;
   });
 
