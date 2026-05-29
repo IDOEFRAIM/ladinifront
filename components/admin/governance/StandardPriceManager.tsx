@@ -16,7 +16,7 @@ const C = {
   glass: 'rgba(255,255,255,0.72)', border: 'rgba(6,78,59,0.07)', muted: '#64748B', text: '#1F2937',
 };
 
-const UNIT_OPTIONS = ['KG', 'TONNE', 'LITRE', 'BAG'] as const;
+const UNIT_OPTIONS = ['KG', 'TONNE', 'LITRE', 'BAG','UNITE'] as const;
 
 interface PriceRow {
   subCategoryId: string;

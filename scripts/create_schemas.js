@@ -18,10 +18,12 @@ async function main(){
   }
   const sql = postgres(url, opts);
   try{
-    console.log('Creating schemas: governance, marketplace, intelligence, public');
+    console.log('Creating schemas: auth, governance, marketplace, intelligence, inventory, public');
+    await sql`CREATE SCHEMA IF NOT EXISTS auth`;
     await sql`CREATE SCHEMA IF NOT EXISTS governance`;
     await sql`CREATE SCHEMA IF NOT EXISTS marketplace`;
     await sql`CREATE SCHEMA IF NOT EXISTS intelligence`;
+    await sql`CREATE SCHEMA IF NOT EXISTS inventory`;
     await sql`CREATE SCHEMA IF NOT EXISTS public`;
     console.log('Schemas ensured.');
   }catch(e){
