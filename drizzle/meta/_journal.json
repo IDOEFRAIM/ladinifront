@@ -8,6 +8,20 @@
       "when": 1779865271949,
       "tag": "0000_certain_silver_surfer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780121964355,
+      "tag": "0001_dashing_alice",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780122904919,
+      "tag": "0002_dear_champions",
+      "breakpoints": true
     }
   ]
 }

@@ -474,6 +474,9 @@ export const auctions = marketplaceSchema.table('auctions', {
   status: auctionStatusEnum('status').default('OPEN').notNull(), // OPEN, CLOSED, AWARDED, CANCELLED, EXPIRED
   winnerBidId: uuid('winner_bid_id'), // FK ajoutée après bids (circular) — relation Drizzle seulement
   awardedAt: timestamp('awarded_at'),
+  incoterm: text('incoterm'),
+  deliveryLocation: text('delivery_location'),
+  deliveryDeadline: timestamp('delivery_deadline'),
   cancelledAt: timestamp('cancelled_at'),
   cancellationReason: text('cancellation_reason'),
   targetZoneId: uuid('target_zone_id'),
@@ -498,6 +501,7 @@ export const bids = marketplaceSchema.table('bids', {
   status: text('status').default('PENDING').notNull(), // PENDING, WINNER, LOST
   message: text('message'), // Note optionnelle du producteur
   notifiedAt: timestamp('notified_at'), // Quand le participant a été notifié du résultat
+  estimatedDeliveryDate:timestamp('estimated_delivery_date'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [

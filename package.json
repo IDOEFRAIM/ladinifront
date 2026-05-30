@@ -21,6 +21,7 @@
     "bcryptjs": "^3.0.3",
     "dexie": "^3.2.3",
     "dexie-react-hooks": "^4.2.0",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.1",
     "framer-motion": "^12.23.26",
     "jose": "^4.15.9",
