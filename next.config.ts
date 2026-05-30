@@ -2,6 +2,36 @@
 const path = require('path');
 
 const runtimeCaching = [
+  // API produits: Stale-While-Revalidate pour navigation fluide offline-first
+  {
+    urlPattern: /\/api\/(products|publicProduct)(\/|$)/i,
+    handler: 'StaleWhileRevalidate',
+    options: {
+      cacheName: 'api-products',
+      expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
+    },
+  },
+  // Images optimisées Next.js (next/image): Cache-First
+  {
+    urlPattern: /\/_next\/image/i,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'next-image',
+      expiration: { maxEntries: 256, maxAgeSeconds: 30 * 24 * 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
+    },
+  },
+  // Images statiques du site (public/*)
+  {
+    urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg|ico)$/i,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'static-images',
+      expiration: { maxEntries: 256, maxAgeSeconds: 30 * 24 * 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
+    },
+  },
   {
     urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
     handler: 'CacheFirst',
@@ -21,12 +51,30 @@ const runtimeCaching = [
   },
 ];
 
-const withPWA = require('next-pwa')({
+const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   register: true,
-  skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
   runtimeCaching,
+
+  // Optimisation App Router / navigation via next/link
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+
+  // Gestion élégante des erreurs réseau (fallback offline)
+  fallbacks: {
+    document: '/offline.html',
+  },
+
+  // Workbox: fallback navigation + options de génération SW
+  workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    cleanupOutdatedCaches: true,
+    navigateFallback: '/offline.html',
+    navigateFallbackDenylist: [/^\/api\//, /^\/_next\//],
+    runtimeCaching,
+  },
 });
 
 const nextConfig = {

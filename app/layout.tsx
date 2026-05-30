@@ -8,7 +8,8 @@ import { Toaster } from 'react-hot-toast';
 export const metadata: Metadata = {
   title: 'Ladini — Marché Agricole du Burkina Faso',
   description: 'Plateforme de commerce agricole connectant producteurs et consommateurs au Burkina Faso.',
-  manifest: '/manifest.json',
+  // App Router manifest route (app/manifest.ts)
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent', // Meilleur look sur iPhone
