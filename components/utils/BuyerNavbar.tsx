@@ -8,7 +8,7 @@ import { LogOut, Bot, ClipboardList, LayoutDashboard, Store, User, Sprout } from
 
 const BUYER_LINKS = [
   { name: 'Marché', href: '/catalogue', icon: Store },
-  { name: 'Précommandes', href: '/buyer/preorders', icon: Sprout },
+  { name: 'Précommandes', href: '/preorders', icon: Sprout },
   { name: 'Dashboard', href: '/buyer-dashboard', icon: LayoutDashboard },
   { name: 'Commandes', href: '/orders', icon: ClipboardList },
   //{ name: 'Suivi Agent', href: '/conversations', icon: Bot },
