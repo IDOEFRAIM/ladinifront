@@ -4,296 +4,148 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useGeoLocation } from '@/hooks/useGeoLocalisation';
-import { Sprout, Loader2, User, Mail, Lock, ShieldAlert, ShoppingCart, Leaf, Truck, Building2, MapPin } from 'lucide-react';
-import { fetchBuyerTypes } from '@/app/actions/buyerTypes.server';
+import { Sprout, Loader2, User, Mail, Lock, Phone, MapPin } from 'lucide-react';
 
 const C = {
-  forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
+  forest: '#064E3B', emerald: '#10B981', sand: '#F9FBF8',
   glass: 'rgba(255, 255, 255, 0.72)', border: 'rgba(6, 78, 59, 0.07)', muted: '#64748B',
 };
 
 const signupSchema = z.object({
-  name: z.string().min(2, "Le nom doit contenir au moins 2 caracteres"),
-  email: z.string().email("Email invalide"),
-  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caracteres"),
-  role: z.enum(['USER', 'ADMIN', 'PRODUCER', 'BUYER', 'AGENT']),
-  adminSecret: z.string().optional(),
-  // buyer B2B onboarding
-  buyerTypeId: z.string().optional(),
-  establishmentName: z.string().optional(),
-  defaultDeliveryAddress: z.string().optional(),
-  // optional org request fields for producers
-  wantsOrganization: z.boolean().optional(),
-  orgName: z.string().min(2).optional(),
-  orgType: z.enum(['GOVERNMENT_REGIONAL', 'COOPERATIVE', 'NGO', 'PRIVATE_TRADER', 'RESELLER']).optional(),
-  orgTaxId: z.string().optional().nullable(),
-  orgDescription: z.string().optional().nullable(),
+  name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
+  email: z.string().email('Email invalide'),
+  password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
   phone: z.string().optional(),
-  cnibNumber: z.string().optional().nullable(),
-  whatsappEnabled: z.boolean().optional().default(true),
-  dailyAdviceTime: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-}).refine((data) => (data.role !== 'ADMIN' || !!data.adminSecret), {
-  message: "Code secret requis pour les administrateurs",
-  path: ["adminSecret"],
-}).refine((data) => {
-  if (data.wantsOrganization) return !!(data.orgName && data.orgType);
-  return true;
-}, { message: 'Champs organisation requis si demandé', path: ['orgName'] });
+});
 
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
-const ROLE_REDIRECTS: Record<string, string> = { ADMIN: '/admin', USER: '/market', BUYER: '/buyer-dashboard', PRODUCER: '/dashboard', AGENT: '/agent/deliveries' };
-
-const ROLES = [
-  { value: 'USER', label: 'Particulier', icon: ShoppingCart },
-  { value: 'BUYER', label: 'Acheteur Pro', icon: Building2 },
-  { value: 'PRODUCER', label: 'Producteur', icon: Leaf },
-  { value: 'AGENT', label: 'Livreur', icon: Truck },
-  { value: 'ADMIN', label: 'Staff', icon: ShieldAlert },
-];
-
 function SignupPageContent() {
-  const { register: registerUser, isAuthenticated, isLoading, userRole } = useAuth();
+  const { register: registerUser, isAuthenticated, isLoading, onboardingCompleted } = useAuth();
   const router = useRouter();
-  const [buyerTypes, setBuyerTypes] = React.useState<{id:string;name:string;description?:string|null}[]>([]);
 
-  React.useEffect(() => {
-    fetchBuyerTypes().then(setBuyerTypes).catch(() => {});
-  }, []);
-
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
-    // zodResolver typing is strict; cast to any to avoid inferred optional mismatch
-    resolver: zodResolver(signupSchema) as any,
-    defaultValues: { role: 'USER', name: '', email: '', password: '', adminSecret: '', phone: '', cnibNumber: null, whatsappEnabled: true, dailyAdviceTime: '' } as any
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { name: '', email: '', password: '', phone: '' },
   });
 
-  // extra org fields
-  const wantsOrg = watch('wantsOrganization');
-  const orgName = watch('orgName');
-  const orgType = watch('orgType');
-
-  const selectedRole = watch('role');
+  const { location, isLoading: geoLoading, getLocation } = useGeoLocation();
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated) return;
-    router.replace(ROLE_REDIRECTS[userRole?.toUpperCase() || 'USER']);
-  }, [isAuthenticated, isLoading, userRole, router]);
-
-  const onSubmit = async (data: SignupFormInputs) => {
-    const payload: any = { ...data, role: data.role as SystemRole };
-    if (data.role === 'PRODUCER') payload.isProducer = true;
-    // Buyer B2B fields
-    if (data.role === 'BUYER') {
-      payload.buyerTypeId = (data as any).buyerTypeId || undefined;
-      payload.establishmentName = (data as any).establishmentName || undefined;
-      payload.defaultDeliveryAddress = (data as any).defaultDeliveryAddress || undefined;
+    if (isLoading) return;
+    if (isAuthenticated && !onboardingCompleted) {
+      router.replace('/onboarding');
+    } else if (isAuthenticated && onboardingCompleted) {
+      router.replace('/market');
     }
-    // include org creation request if applicable
-    if ((data as any).wantsOrganization) {
-      payload.wantsOrganization = true;
-      payload.orgName = (data as any).orgName;
-      payload.orgType = (data as any).orgType;
-      payload.orgTaxId = (data as any).orgTaxId || null;
-      payload.orgDescription = (data as any).orgDescription || null;
-    }
-    const result = await registerUser(payload);
-    return result?.success ? toast.success("Inscription reussie !") : toast.error(result?.error || "Erreur");
-  };
+  }, [isAuthenticated, isLoading, onboardingCompleted, router]);
 
-  // Geo hook
-  const { location, error: geoError, isLoading: geoLoading, getLocation } = useGeoLocation();
-
-  // When location is obtained, write into form
-  React.useEffect(() => {
+  useEffect(() => {
     if (location) {
-      setValue('latitude' as any, location.lat);
-      setValue('longitude' as any, location.lng);
+      setValue('latitude', location.lat);
+      setValue('longitude', location.lng);
     }
   }, [location, setValue]);
 
-  const inputStyle = (hasError: boolean, isCritical = false) => ({
+  const onSubmit = async (data: SignupFormInputs) => {
+    const payload = { ...data, role: 'USER' };
+    const result = await registerUser(payload);
+    if (result?.success) {
+      toast.success('Compte créé ! Configurons votre profil.');
+    } else {
+      toast.error(result?.error || 'Erreur');
+    }
+  };
+
+  const inputStyle = (hasError: boolean) => ({
     width: '100%', paddingLeft: 42, paddingRight: 16, paddingTop: 14, paddingBottom: 14,
     borderRadius: 12, border: `1px solid ${hasError ? '#DC2626' : C.border}`,
-    background: isCritical ? 'rgba(220,38,38,0.03)' : 'rgba(255,255,255,0.6)',
-    fontFamily: "'Inter', sans-serif", fontSize: 14, color: C.forest,
+    background: 'rgba(255,255,255,0.6)',
+    fontFamily: "'Inter', sans-serif", fontSize: 15, color: C.forest,
     outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box' as const,
   });
 
-  const iconStyle = (hasError: boolean, isCritical = false) => ({
+  const iconStyle = (hasError: boolean) => ({
     position: 'absolute' as const, left: 14, top: '50%', transform: 'translateY(-50%)',
-    color: hasError ? '#DC2626' : isCritical ? '#DC2626' : C.muted, opacity: 0.6,
+    color: hasError ? '#DC2626' : C.muted, opacity: 0.6,
   });
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand, padding: 16 }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand, padding: 16 }}>
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(ellipse at 60% 20%, rgba(16,185,129,0.04) 0%, transparent 50%), radial-gradient(ellipse at 30% 80%, rgba(217,119,6,0.03) 0%, transparent 50%)' }} />
 
       <div style={{
         position: 'relative', zIndex: 1,
         background: C.glass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         borderRadius: 32, border: `1px solid ${C.border}`, padding: 36,
-        width: '100%', maxWidth: 440, boxShadow: '0 8px 40px rgba(6,78,59,0.06)',
+        width: '100%', maxWidth: 420, boxShadow: '0 8px 40px rgba(6,78,59,0.06)',
       }}>
-        {/* HEADER */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 18, background: 'rgba(16,185,129,0.08)', marginBottom: 16 }}>
             <Sprout size={28} style={{ color: C.forest }} />
           </div>
-          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em' }}>FrontAg</h1>
-          <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Systeme de gestion agricole</p>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.6rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em' }}>Créer un compte</h1>
+          <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: C.muted, marginTop: 6 }}>Rejoignez la place de marché agricole du Burkina Faso</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* ROLE SELECTOR */}
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, marginLeft: 2 }}>Choisir votre profil</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {ROLES.map((r) => {
-                const active = selectedRole === r.value;
-                return (
-                  <button key={r.value} type="button" onClick={() => setValue('role', r.value as any)} style={{
-                    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    padding: '16px 8px', borderRadius: 16, cursor: 'pointer', transition: 'all 0.3s',
-                    border: `2px solid ${active ? C.forest : C.border}`,
-                    background: active ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.5)',
-                    transform: active ? 'scale(1.03)' : 'scale(1)',
-                    boxShadow: active ? '0 4px 16px rgba(6,78,59,0.06)' : 'none',
-                  }}>
-                    <r.icon size={22} style={{ color: active ? C.forest : C.muted, marginBottom: 6, transition: 'color 0.2s' }} />
-                    <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '-0.01em', color: active ? C.forest : C.muted }}>{r.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ position: 'relative' }}>
+            <User size={16} style={iconStyle(!!errors.name)} />
+            <input {...register('name')} disabled={isSubmitting} placeholder="Nom complet" style={inputStyle(!!errors.name)} />
+            {errors.name && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.name.message}</p>}
           </div>
 
-          {/* FIELDS */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ position: 'relative' }}>
-              <User size={16} style={iconStyle(!!errors.name)} />
-              <input {...register("name")} disabled={isSubmitting} placeholder="Nom" style={inputStyle(!!errors.name)} />
-              {errors.name && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.name.message}</p>}
-            </div>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} style={iconStyle(!!errors.email)} />
-              <input {...register("email")} disabled={isSubmitting} placeholder="Email" style={inputStyle(!!errors.email)} />
-              {errors.email && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.email.message}</p>}
-            </div>
-            <div style={{ position: 'relative' }}>
-              <User size={16} style={iconStyle(!!errors.phone)} />
-              <input {...register("phone")} disabled={isSubmitting} placeholder="Téléphone" style={inputStyle(!!errors.phone)} />
-            </div>
-            <div style={{ position: 'relative' }}>
-              <User size={16} style={iconStyle(!!errors.cnibNumber)} />
-              <input {...register("cnibNumber")} disabled={isSubmitting} placeholder="Numéro CNIB (optionnel)" style={inputStyle(!!errors.cnibNumber)} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" {...register('whatsappEnabled' as any)} defaultChecked /> Recevoir les notifications WhatsApp
-              </label>
-              <div style={{ marginLeft: 'auto' }}>
-                <button type="button" onClick={() => getLocation()} disabled={geoLoading} style={{ padding: '8px 12px', borderRadius: 8, background: C.forest, color: '#fff' }}>{geoLoading ? '...' : 'Obtenir ma position'}</button>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input type="time" {...register('dailyAdviceTime' as any)} placeholder="Heure conseillée" style={{ ...inputStyle(false), flex: 1 }} />
-              <input {...register('latitude' as any)} placeholder="Latitude" style={{ ...inputStyle(false), width: 140 }} readOnly />
-              <input {...register('longitude' as any)} placeholder="Longitude" style={{ ...inputStyle(false), width: 140 }} readOnly />
-            </div>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} style={iconStyle(!!errors.password)} />
-              <input type="password" {...register("password")} disabled={isSubmitting} placeholder="Mot de passe" style={inputStyle(!!errors.password)} />
-              {errors.password && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.password.message}</p>}
-            </div>
-            {selectedRole === 'ADMIN' && (
-              <div style={{ position: 'relative' }}>
-                <ShieldAlert size={16} style={iconStyle(!!errors.adminSecret, true)} />
-                <input type="password" {...register("adminSecret")} disabled={isSubmitting} placeholder="Cle Admin" style={inputStyle(!!errors.adminSecret, true)} />
-                {errors.adminSecret && <p style={{ color: '#DC2626', fontSize: 10, fontWeight: 700, marginTop: 3, textTransform: 'uppercase' }}>{errors.adminSecret.message}</p>}
-              </div>
-            )}
-
-            {selectedRole === 'BUYER' && (
-              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(16,185,129,0.03)', padding: 16, borderRadius: 16, border: `1px solid ${C.border}` }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Type d'établissement</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {buyerTypes.length > 0 ? buyerTypes.map(bt => {
-                    const isActive = watch('buyerTypeId' as any) === bt.id;
-                    return (
-                      <button key={bt.id} type="button" onClick={() => setValue('buyerTypeId' as any, bt.id)}
-                        style={{
-                          padding: '10px 18px', borderRadius: 100, cursor: 'pointer', transition: 'all 0.2s',
-                          border: `2px solid ${isActive ? C.forest : C.border}`,
-                          background: isActive ? 'rgba(16,185,129,0.08)' : '#fff',
-                          fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 700,
-                          color: isActive ? C.forest : C.muted,
-                        }}>
-                        {bt.name}
-                      </button>
-                    );
-                  }) : (
-                    <span style={{ fontSize: 12, color: C.muted }}>Chargement des types...</span>
-                  )}
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <Building2 size={16} style={iconStyle(false)} />
-                  <input {...register('establishmentName' as any)} placeholder="Nom de l'établissement (ex: Hôtel Splendid)" style={inputStyle(false)} />
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <MapPin size={16} style={iconStyle(false)} />
-                  <input {...register('defaultDeliveryAddress' as any)} placeholder="Adresse de livraison par défaut" style={inputStyle(false)} />
-                </div>
-              </div>
-            )}
-
-            {selectedRole === 'PRODUCER' && (
-              <div style={{ marginTop: 6 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" {...register('wantsOrganization' as any)} />
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>Je représente une organisation (créer une organisation)</span>
-                </label>
-
-                {wantsOrg && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input {...register('orgName' as any)} placeholder="Nom de l'organisation" style={inputStyle(!!(errors as any).orgName)} />
-                    <select {...register('orgType' as any)} style={inputStyle(!!(errors as any).orgType)}>
-                      <option value="COOPERATIVE">Coopérative</option>
-                      <option value="GOVERNMENT_REGIONAL">Gouvernement régional</option>
-                      <option value="NGO">ONG</option>
-                      <option value="PRIVATE_TRADER">Commerçant privé</option>
-                      <option value="RESELLER">Revendeur</option>
-                    </select>
-                    <input {...register('orgTaxId' as any)} placeholder="Identifiant fiscal (optionnel)" style={inputStyle(false)} />
-                    <textarea {...register('orgDescription' as any)} placeholder="Description (optionnelle)" style={{ ...inputStyle(false), minHeight: 80 }} />
-                  </div>
-                )}
-              </div>
-            )}
+          <div style={{ position: 'relative' }}>
+            <Mail size={16} style={iconStyle(!!errors.email)} />
+            <input {...register('email')} disabled={isSubmitting} placeholder="Email" type="email" style={inputStyle(!!errors.email)} />
+            {errors.email && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.email.message}</p>}
           </div>
+
+          <div style={{ position: 'relative' }}>
+            <Phone size={16} style={iconStyle(false)} />
+            <input {...register('phone')} disabled={isSubmitting} placeholder="Téléphone (optionnel)" style={inputStyle(false)} />
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            <Lock size={16} style={iconStyle(!!errors.password)} />
+            <input type="password" {...register('password')} disabled={isSubmitting} placeholder="Mot de passe (min. 6 car.)" style={inputStyle(!!errors.password)} />
+            {errors.password && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.password.message}</p>}
+          </div>
+
+          <button type="button" onClick={() => getLocation()} disabled={geoLoading} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 16px', borderRadius: 12, border: `1px solid ${C.border}`,
+            background: location ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.5)',
+            cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600,
+            color: location ? C.forest : C.muted, transition: 'all 0.2s',
+          }}>
+            <MapPin size={16} />
+            {geoLoading ? 'Localisation...' : location ? 'Position obtenue ✓' : 'Obtenir ma position'}
+          </button>
 
           <button type="submit" disabled={isSubmitting} style={{
-            width: '100%', padding: '14px 24px', borderRadius: 100, border: 'none', cursor: 'pointer',
-            background: selectedRole === 'ADMIN' ? '#DC2626' : C.forest, color: '#fff',
-            fontFamily: "'Inter', sans-serif", fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em',
+            width: '100%', padding: '15px 24px', borderRadius: 100, border: 'none', cursor: 'pointer',
+            background: C.forest, color: '#fff',
+            fontFamily: "'Inter', sans-serif", fontWeight: 700, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.05em',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            boxShadow: selectedRole === 'ADMIN' ? '0 4px 16px rgba(220,38,38,0.15)' : '0 4px 16px rgba(6,78,59,0.15)',
-            transition: 'all 0.2s', opacity: isSubmitting ? 0.6 : 1, marginTop: 8,
+            boxShadow: '0 4px 16px rgba(6,78,59,0.15)',
+            transition: 'all 0.2s', opacity: isSubmitting ? 0.6 : 1, marginTop: 4,
+            minHeight: 48,
           }}>
-            {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : selectedRole === 'ADMIN' ? 'Etablir acces Staff' : 'Creer mon acces'}
+            {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : 'Créer mon compte'}
           </button>
         </form>
 
         <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.border}`, textAlign: 'center' }}>
-          <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: C.muted }}>
-            Deja membre ? <Link href="/login" style={{ color: C.forest, fontWeight: 700, textDecoration: 'none' }}>Connectez-vous</Link>
+          <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: C.muted }}>
+            Déjà membre ? <Link href="/login" style={{ color: C.forest, fontWeight: 700, textDecoration: 'none' }}>Connectez-vous</Link>
           </p>
         </div>
       </div>
@@ -304,9 +156,9 @@ function SignupPageContent() {
 export default function SignupPage() {
   const { isLoading } = useAuth();
   if (isLoading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: C.sand }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: C.sand }}>
       <Loader2 size={36} style={{ color: C.emerald, animation: 'spin 1s linear infinite' }} />
-      <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 16 }}>Initialisation du flux...</p>
+      <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 16 }}>Chargement...</p>
     </div>
   );
   return <SignupPageContent />;

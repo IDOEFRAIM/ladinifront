@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import {
   BarChart3, Bot, Warehouse, Package, ShoppingCart, Settings,
-  PlusCircle, Users, LogOut, X, ChevronLeft, ChevronRight, Circle
+  PlusCircle, Users, LogOut, X, ChevronLeft, ChevronRight, Circle, Sprout
 } from 'lucide-react';
 
 // Centralisation propre des couleurs réutilisables dans les styles dynamiques si nécessaire
@@ -28,9 +28,10 @@ export default function ProductorSidebar({ isOpen, onClose }: ProductorSidebarPr
 
   // Optimisation : Mémoisation des liens pour éviter de recréer le tableau à chaque rendu
   const sidebarLinks = useMemo(() => [
-    //{ name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
+    { name: 'Tableau de bord', href: '/dashboard', icon: BarChart3 },
     { name: 'Mon Stock', href: '/inventory', icon: Warehouse },
     { name: 'Catalogue', href: '/products', icon: Package },
+    { name: 'Production', href: '/production', icon: Sprout },
     { name: 'Ventes', href: '/sales', icon: ShoppingCart },
     { name: 'Nouveau Produit', href: '/products/add', icon: PlusCircle },
     { name: 'Mes Clients', href: '/clients', icon: Users },

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, ShoppingBasket, LayoutDashboard, ClipboardList, Bot,
-  Truck, Zap, History,
+  Truck, Zap, History, Sprout,
 } from 'lucide-react';
 
 interface TabItem {
@@ -54,10 +54,10 @@ function TabBar({ items }: { items: TabItem[] }) {
 // ─── Buyer Mobile TabBar ────────────────────────────────────────────────────
 const BUYER_TABS: TabItem[] = [
   { href: '/catalogue', label: 'Marché', icon: Home },
-  { href: '/buyer-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/preorders', label: 'Précom.', icon: Sprout },
   { href: '/orders', label: 'Commandes', icon: ClipboardList },
   { href: '/cart', label: 'Panier', icon: ShoppingBasket },
-  { href: '/conversations', label: 'Agent', icon: Bot },
+  { href: '/buyer-dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ];
 
 export function BuyerMobileTabBar() {

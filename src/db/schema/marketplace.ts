@@ -7,7 +7,7 @@ import {
   timestamp,
   jsonb,
   uniqueIndex,
-  index,
+  index,varchar,real
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
@@ -27,7 +27,9 @@ import {
   escrowStatusEnum,
 } from './_config';
 import { type InferModel } from 'drizzle-orm';
-import { zones } from './governance'; // Importe la table zone (schéma governance)
+import { zones,organizations } from './governance'; // Importe la table zone (schéma governance)
+//XCF9ZAOZsaF9rPCW  $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npx drizzle-kit migrate 
+//DATABASE_URL="postgresql://postgres.zcnkjlvhegyykoeuckwv:XCF9ZAOZsaF9rPCW@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 export const warehouses = marketplaceSchema.table('warehouses', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -53,6 +55,11 @@ export const producers = marketplaceSchema.table('producers', {
   region: text('region'),
   province: text('province'),
   commune: text('commune'),
+  logoUrl:text('logo_url'),
+  phoneNumber:text('phone_number'),
+  rating:integer('rating'),
+  reviewsCount:integer('reviews_count').default(0).notNull(),
+  companyRegistrationNumber:text('company_registration_number'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
@@ -88,7 +95,6 @@ export const buyerTypes = marketplaceSchema.table('buyer_types', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 });
-
 export const buyerProfiles = marketplaceSchema.table('buyer_profiles', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').unique().notNull(),
@@ -97,6 +103,12 @@ export const buyerProfiles = marketplaceSchema.table('buyer_profiles', {
   defaultDeliveryAddress: text('default_delivery_address'),
   isVerified: boolean('is_verified').default(false).notNull(),
   trustBadge: text('trust_badge'),
+  
+  // Champs manquants ajoutés pour correspondre à SQLAlchemy
+  rating: doublePrecision('rating'),
+  reviewsCount: integer('reviews_count').default(0).notNull(),
+  companyRegistrationNumber: text('company_registration_number'),
+
   verifiedAt: timestamp('verified_at'),
   verifiedById: uuid('verified_by_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -189,11 +201,32 @@ export const cropCycles = marketplaceSchema.table('crop_cycles', {
   farmingMethod: text('farming_method').default('conventional'),
   soilType: text('soil_type'),
   lastInterventionDate: timestamp('last_intervention_date'),
+
+  subCategoryId: uuid('sub_category_id'),
+  growthStage: text('growth_stage'),
+  isPublic: boolean('is_public').default(false).notNull(),
+  preorderEnabled: boolean('preorder_enabled').default(false).notNull(),
+  estimatedAvailableAt: timestamp('estimated_available_at'),
+  availableQuantity: doublePrecision('available_quantity').default(0).notNull(),
+  reservedQuantity: doublePrecision('reserved_quantity').default(0).notNull(),
+  pricePerUnit: doublePrecision('price_per_unit'),
+  unit: unitEnum('unit').default('KG').notNull(),
+  productionType: text('production_type').default('CROP').notNull(),
+  species: text('species'),
+  breed: text('breed'),
+  initialStock: doublePrecision('initial_stock').default(0).notNull(),
+  currentStock: doublePrecision('current_stock').default(0).notNull(),
+  hatchDate: timestamp('hatch_date'),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('crop_cycles_farm_idx').on(t.farmId),
   index('crop_cycles_status_idx').on(t.status),
+  index('crop_cycles_subcategory_idx').on(t.subCategoryId),
+  index('crop_cycles_public_idx').on(t.isPublic),
+  index('crop_cycles_preorder_idx').on(t.preorderEnabled),
+  index('crop_cycles_available_at_idx').on(t.estimatedAvailableAt),
 ]);
 
 // ── AgTech: Carnet de champ ──────────────────────────────────────────────
@@ -398,6 +431,14 @@ export const products = marketplaceSchema.table('products', {
   quantityForSale: doublePrecision('quantity_for_sale').default(0).notNull(),
   images: text('images').array().notNull().default(sql`'{}'::text[]`),
   audioUrl: text('audio_url'),
+  
+  // Nouveaux champs synchronisés
+  qualityClass: text('quality_class'),
+  minOrderQuality: text('min_order_quality'),
+  packagingType: text('packaging_type'),
+  harvestDate: timestamp('harvest_date'),
+  isAvailable: boolean('is_available').default(true).notNull(),
+
   producerId: uuid('producer_id').notNull(),
   verifiedAt: timestamp('verified_at'),
   verifiedById: uuid('verified_by_id'),
@@ -412,71 +453,142 @@ export const products = marketplaceSchema.table('products', {
   index('products_verifier_idx').on(t.verifiedById),
 ]);
 
-export const orders = marketplaceSchema.table('orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  buyerId: uuid('buyer_id'),
-  organizationId: uuid('organization_id'),
-  customerName: text('customer_name'),
-  customerPhone: text('customer_phone'),
-  zoneId: uuid('zone_id'),
-  paymentMethod: paymentMethodEnum('payment_method').default('CASH').notNull(),
-  paymentStatus: paymentStatusEnum('payment_status').default('PENDING').notNull(),
-  city: text('city'),
-  gpsLat: doublePrecision('gps_lat'),
-  gpsLng: doublePrecision('gps_lng'),
-  deliveryDesc: text('delivery_desc'),
-  audioUrl: text('audio_url'),
-  status: orderStatusEnum('status').default('PENDING').notNull(),
-  deliveryStatus: deliveryStatusEnum('delivery_status').default('PENDING').notNull(),
-  source: orderSourceEnum('source').default('APP').notNull(),
-  whatsappId: text('whatsapp_id'),
-  totalAmount: doublePrecision('total_amount').notNull(),
-  isAgentOrder: boolean('is_agent_order').default(false).notNull(),
-  clientId: uuid('client_id'),
-  auctionId: uuid('auction_id'),
-  winningBidId: uuid('winning_bid_id'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
-}, (t) => [
-  index('orders_buyer_idx').on(t.buyerId),
-  index('orders_org_idx').on(t.organizationId),
-  index('orders_status_idx').on(t.status),
-  index('orders_delivery_status_idx').on(t.deliveryStatus),
-  index('orders_zone_idx').on(t.zoneId),
-  index('orders_created_idx').on(t.createdAt),
-  index('orders_phone_idx').on(t.customerPhone),
-  uniqueIndex('orders_auction_unique').on(t.auctionId),
-  index('orders_winning_bid_idx').on(t.winningBidId),
-]);
 
+
+// ── 3. ORDERS ─────────────────────────────────────────────────────────────
+export const orders = marketplaceSchema.table('orders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  buyerId: uuid('buyer_id').references(() => buyerProfiles.id),
+  clientId: uuid('client_id').references(() => clients.id),
+  organizationId: uuid('organization_id').references(() => organizations.id),
+  zoneId: uuid('zone_id').references(() => zones.id),
+  
+  customerName: varchar('customer_name'),
+  customerPhone: varchar('customer_phone'),
+  paymentMethod: varchar('payment_method').default('CASH').notNull(),
+  paymentStatus: varchar('payment_status').default('PENDING').notNull(),
+  city: varchar('city'),
+  gpsLat: real('gps_lat'),
+  gpsLng: real('gps_lng'),
+  deliveryDesc: text('delivery_desc'),
+  audioUrl: varchar('audio_url'),
+  status: varchar('status').default('PENDING').notNull(),
+  deliveryStatus: varchar('delivery_status').default('PENDING').notNull(),
+  source: varchar('source').default('APP').notNull(),
+  whatsappId: varchar('whatsapp_id'),
+  totalAmount: real('total_amount').notNull(),
+  isAgentOrder: boolean('is_agent_order').default(false).notNull(),
+  
+  // Nouveaux champs financiers et enchères synchronisés avec Drizzle Web
+  deliveryDate: timestamp('delivery_date'),
+  subtotal: real('subtotal').default(0.0).notNull(),
+  taxAmount: real('tax_amount').default(0.0).notNull(),
+  currency: varchar('currency').default('XOF').notNull(),
+  deliveryFee: real('delivery_fee').default(0.0).notNull(),
+  cancellationRole: varchar('cancellation_role'),
+  escrowWalletId: uuid('escrow_wallet_id'),
+  
+  auctionId: uuid('auction_id').references(() => auctions.id),
+  winningBidId: uuid('winning_bid_id').references(() => bids.id),
+
+  orderType: varchar('order_type').default('STANDARD').notNull(),
+  cropCycleId: uuid('crop_cycle_id').references(() => cropCycles.id),
+  expectedFulfillmentDate: timestamp('expected_fulfillment_date'),
+  preorderConvertedAt: timestamp('preorder_converted_at'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => {
+  return {
+    ordersBuyerIdx: index('orders_buyer_idx').on(table.buyerId),
+    ordersOrgIdx: index('orders_org_idx').on(table.organizationId),
+    ordersStatusIdx: index('orders_status_idx').on(table.status),
+    ordersDeliveryStatusIdx: index('orders_delivery_status_idx').on(table.deliveryStatus),
+    ordersZoneIdx: index('orders_zone_idx').on(table.zoneId),
+    ordersCreatedIdx: index('orders_created_idx').on(table.createdAt),
+    ordersPhoneIdx: index('orders_phone_idx').on(table.customerPhone),
+    ordersAuctionUnique: uniqueIndex('orders_auction_unique').on(table.auctionId),
+    ordersWinningBidIdx: index('orders_winning_bid_idx').on(table.winningBidId),
+    ordersTypeIdx: index('orders_type_idx').on(table.orderType),
+    ordersCropCycleIdx: index('orders_crop_cycle_idx').on(table.cropCycleId),
+  };
+});
+
+
+// ── 4. ORDER ITEMS ────────────────────────────────────────────────────────
 export const orderItems = marketplaceSchema.table('order_items', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orderId: uuid('order_id').notNull(),
-  productId: uuid('product_id').notNull(),
-  quantity: doublePrecision('quantity').notNull(),
-  priceAtSale: doublePrecision('price_at_sale').notNull(),
-}, (t) => [
-  index('order_items_order_idx').on(t.orderId),
-  index('order_items_product_idx').on(t.productId),
-]);
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: uuid('order_id').references(() => orders.id).notNull(),
+  productId: uuid('product_id').references(() => products.id).notNull(),
+  
+  quantity: real('quantity').notNull(),
+  priceAtSale: real('price_at_sale').notNull(),
+}, (table) => {
+  return {
+    orderItemsOrderIdx: index('order_items_order_idx').on(table.orderId),
+    orderItemsProductIdx: index('order_items_product_idx').on(table.productId),
+  };
+});
+
+
+// ── 5. ORDER DISPUTES ─────────────────────────────────────────────────────
+export const orderDisputes = marketplaceSchema.table('order_disputes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: uuid('order_id').references(() => orders.id).notNull(),
+  escrowWalletId: uuid('escrow_wallet_id'),
+  raisedById: uuid('raised_by_id').notNull(), 
+  reasonCategory: varchar('reason_category').notNull(),
+  description: text('description').notNull(),
+  // Gestion du tableau natif PG avec valeur par défaut '{}'::text[] via SQL brut
+  evidenceImages: text('evidence_images').array().notNull().default(sql`'{}'::text[]`),
+  requestedSolution: varchar('requested_solution').notNull(),
+  disputedAmount: real('disputed_amount').default(0.0).notNull(),
+  escrowPayoutStatus: varchar('escrow_payout_status').default('HELD').notNull(),
+  status: varchar('status').default('PENDING').notNull(),
+  resolutionNotes: text('resolution_notes'),
+  
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
+}, (table) => {
+  return {
+    orderDisputesOrderIdx: index('order_disputes_order_idx').on(table.orderId),
+    orderDisputesStatusIdx: index('order_disputes_status_idx').on(table.status),
+    orderDisputesRaisedByIdx: index('order_disputes_raised_by_idx').on(table.raisedById),
+    orderDisputesEscrowIdx: index('order_disputes_escrow_idx').on(table.escrowWalletId),
+  };
+});
+
+
+
+
+
 
 export const auctions = marketplaceSchema.table('auctions', {
   id: uuid('id').primaryKey().defaultRandom(),
   buyerId: uuid('buyer_id').notNull(),
   subCategoryId: uuid('sub_category_id').notNull(),
-  description: text('description'), // Ce que l'acheteur recherche (qualité, calibre, etc.)
+  description: text('description'),
   quantity: doublePrecision('quantity').notNull(),
   unit: unitEnum('unit').default('TONNE').notNull(),
   maxPricePerUnit: doublePrecision('max_price_per_unit').notNull(),
+  
+  // Métriques Logistique & Qualité ajoutées
+  incoterm: text('incoterm').default('DDP').notNull(),
+  deliveryLocation: text('delivery_location').notNull(),
+  deliveryDeadline: timestamp('delivery_deadline').notNull(),
+  qualityGrading: text('quality_grading'),
+  requiredCertifications: text('required_certifications').array().notNull().default(sql`'{}'::text[]`),
+  preferredPackaging: text('preferred_packaging'),
+  
   deadline: timestamp('deadline').notNull(),
   autoExtend: boolean('auto_extend').default(true).notNull(),
   escrowStatus: escrowStatusEnum('escrow_status').default('NONE').notNull(),
-  status: auctionStatusEnum('status').default('OPEN').notNull(), // OPEN, CLOSED, AWARDED, CANCELLED, EXPIRED
-  winnerBidId: uuid('winner_bid_id'), // FK ajoutée après bids (circular) — relation Drizzle seulement
+  status: auctionStatusEnum('status').default('OPEN').notNull(),
+  winnerBidId: uuid('winner_bid_id'),
+  escrowWalletId: uuid('escrow_wallet_id'),
+
   awardedAt: timestamp('awarded_at'),
-  incoterm: text('incoterm'),
-  deliveryLocation: text('delivery_location'),
-  deliveryDeadline: timestamp('delivery_deadline'),
   cancelledAt: timestamp('cancelled_at'),
   cancellationReason: text('cancellation_reason'),
   targetZoneId: uuid('target_zone_id'),
@@ -490,6 +602,8 @@ export const auctions = marketplaceSchema.table('auctions', {
   index('auctions_zone_idx').on(t.targetZoneId),
   index('auctions_deadline_idx').on(t.deadline),
 ]);
+
+
 
 export const bids = marketplaceSchema.table('bids', {
   id: uuid('id').primaryKey().defaultRandom(),

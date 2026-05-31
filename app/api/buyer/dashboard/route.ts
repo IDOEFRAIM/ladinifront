@@ -5,10 +5,12 @@ import {
   getBuyerActiveOrders,
   getBuyerOrderHistory,
   getBuyerAuctionHistory,
+  getBuyerBillingSummary,
 } from '@/services/buyer.service';
+import { getBuyerPreorders, type BuyerPreorder } from '@/services/preorder.service';
 import { suggestedProducts } from '@/services/crossSelling.service';
 
-const ALLOWED_SECTIONS = new Set(['all', 'profile', 'orders', 'auctions', 'suggestions']);
+const ALLOWED_SECTIONS = new Set(['all', 'profile', 'orders', 'auctions', 'billing', 'preorders', 'suggestions']);
 
 export async function GET(req: NextRequest) {
   const { ctx, error } = await getAccessContext(['BUYER', 'ADMIN', 'SUPERADMIN']);
@@ -25,6 +27,8 @@ export async function GET(req: NextRequest) {
       activeOrders: [] as Awaited<ReturnType<typeof getBuyerActiveOrders>>,
       orderHistory: [] as Awaited<ReturnType<typeof getBuyerOrderHistory>>,
       auctions: { active: [], won: [], lost: [] } as Awaited<ReturnType<typeof getBuyerAuctionHistory>>,
+      billingSummary: null as Awaited<ReturnType<typeof getBuyerBillingSummary>> | null,
+      preorders: [] as BuyerPreorder[],
       suggestedProducts: [] as Awaited<ReturnType<typeof suggestedProducts>>,
     };
 
@@ -39,6 +43,14 @@ export async function GET(req: NextRequest) {
     }
     if (section === 'all' || section === 'auctions') {
       promises.push(getBuyerAuctionHistory(userId).then((res) => { data.auctions = res; }));
+    }
+    if (section === 'all' || section === 'billing') {
+      promises.push(getBuyerBillingSummary(userId).then((res) => { data.billingSummary = res; }));
+    }
+    if (section === 'all' || section === 'preorders') {
+      promises.push(getBuyerPreorders(userId).then((res) => {
+        data.preorders = res.success && Array.isArray(res.data) ? res.data : [];
+      }));
     }
     if (section === 'all' || section === 'suggestions') {
       promises.push(suggestedProducts(userId).then((res) => { data.suggestedProducts = res; }));

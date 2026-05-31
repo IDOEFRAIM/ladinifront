@@ -8,6 +8,7 @@ export const COOKIE_NAMES = {
   ACTIVE_ORG_ID: 'active-org-id',
   PERMISSION_VERSION: 'permission-version',
   SESSION_READY: 'session-ready',
+  ONBOARDING_COMPLETED: 'onboarding-completed',
 };
 
 export const DEFAULT_COOKIE_OPTS = {

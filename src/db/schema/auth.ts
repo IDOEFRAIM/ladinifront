@@ -18,6 +18,7 @@ export const users = authSchema.table('users', {
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),
   zoneId: uuid('zone_id'),
+  onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   deletedAt: timestamp('deleted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),

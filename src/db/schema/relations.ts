@@ -247,9 +247,14 @@ export const cropCyclesRelations = relations(cropCycles, ({ one, many }) => ({
     fields: [cropCycles.farmId],
     references: [farms.id],
   }),
+  subCategory: one(subCategories, {
+    fields: [cropCycles.subCategoryId],
+    references: [subCategories.id],
+  }),
   interventions: many(fieldInterventions),
   growthLogs: many(cropGrowthLogs),
   recommendations: many(aiRecommendations),
+  preorders: many(orders),
 }));
 
 export const stocksRelations = relations(stocks, ({ one, many }) => ({
@@ -312,6 +317,10 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   winningBid: one(bids, {
     fields: [orders.winningBidId],
     references: [bids.id],
+  }),
+  cropCycle: one(cropCycles, {
+    fields: [orders.cropCycleId],
+    references: [cropCycles.id],
   }),
   delivery: one(deliveries, {
     fields: [orders.id],

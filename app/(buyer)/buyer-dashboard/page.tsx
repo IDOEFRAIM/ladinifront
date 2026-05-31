@@ -46,6 +46,15 @@ function Card({ children, style, hoverable = false }: { children: React.ReactNod
   );
 }
 
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.forest }}>
+      <span style={{ color: C.muted }}>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function ActionButton({ label, icon: Icon, onClick, variant = 'primary' }: any) {
   const isPrimary = variant === 'primary';
   return (
@@ -93,7 +102,18 @@ export default function BuyerDashboardPage() {
     </div>
   );
 
-  const { profile, activeOrders = [], orderHistory = [], auctions, suggestedProducts = [] } = data || {};
+  const {
+    profile,
+    activeOrders = [],
+    orderHistory = [],
+    auctions,
+    billingSummary,
+    preorders = [],
+    suggestedProducts = [],
+  } = data || {};
+
+  const formatXof = (value?: number) =>
+    Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0 }) + ' XOF';
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 80px' }}>
@@ -117,34 +137,45 @@ export default function BuyerDashboardPage() {
       </header>
 
       {/* Stats Clés : Focus sur l'Urgence */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 40 }}>
         <Card style={{ borderLeft: `4px solid ${C.amber}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>En cours de route</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: C.forest, marginTop: 4 }}>{activeOrders.filter((o: any) => o.delivery?.status === 'IN_TRANSIT').length}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Livraisons en transit</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: C.forest, marginTop: 4 }}>
+                {activeOrders.filter((o: any) => o.delivery?.status === 'IN_TRANSIT').length}
+              </div>
             </div>
             <Truck size={24} color={C.amber} />
           </div>
         </Card>
         <Card style={{ borderLeft: `4px solid ${C.emerald}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Enchères à suivre</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: C.forest, marginTop: 4 }}>{auctions?.active?.length || 0}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Enchères actives</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: C.forest, marginTop: 4 }}>{auctions?.active?.length || 0}</div>
             </div>
             <Gavel size={24} color={C.emerald} />
           </div>
         </Card>
         <Card style={{ borderLeft: `4px solid #7C3AED` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Total Dépenses (Mois)</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: C.forest, marginTop: 4 }}>
-                {activeOrders.reduce((acc: number, curr: any) => acc + Number(curr.totalAmount), 0).toLocaleString()} <span style={{ fontSize: 12 }}>CFA</span>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Factures du mois</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: C.forest, marginTop: 4 }}>
+                {formatXof(billingSummary?.monthTotal)}
               </div>
             </div>
             <TrendingUp size={24} color="#7C3AED" />
+          </div>
+        </Card>
+        <Card style={{ borderLeft: `4px solid ${C.red}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Précommandes</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: C.forest, marginTop: 4 }}>{preorders.length}</div>
+            </div>
+            <Clock size={24} color={C.red} />
           </div>
         </Card>
       </div>
@@ -207,6 +238,40 @@ export default function BuyerDashboardPage() {
             </div>
           )}
 
+          {/* Précommandes */}
+          <div style={{ marginTop: 40 }}>
+            <h2 style={{ fontFamily: F.heading, fontSize: '1.25rem', fontWeight: 800, color: C.forest, marginBottom: 16 }}>Mes précommandes</h2>
+            {preorders.length === 0 ? (
+              <Card style={{ borderStyle: 'dashed', textAlign: 'center', padding: '36px 20px' }}>
+                <Clock size={32} color={C.muted} style={{ opacity: 0.4, marginBottom: 10 }} />
+                <p style={{ color: C.muted }}>Aucune précommande pour le moment.</p>
+                <Link href="/preorders" style={{ color: C.emerald, fontWeight: 700 }}>Découvrir les futures récoltes</Link>
+              </Card>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {preorders.map((po: any) => (
+                  <Card key={po.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <StatusBadge status={po.status} type="order" />
+                          <span style={{ fontSize: 11, color: C.muted }}>#{po.id.slice(-6).toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: C.forest, marginTop: 6 }}>{formatXof(po.totalAmount)}</div>
+                        {po.cropCycle && (
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                            {po.cropCycle.cropType} • Disponibilité estimée {po.cropCycle.estimatedAvailableAt ? new Date(po.cropCycle.estimatedAvailableAt).toLocaleDateString() : 'à confirmer'}
+                          </div>
+                        )}
+                      </div>
+                      <ActionButton label="Détails" icon={Eye} onClick={() => router.push(`/preorders`)} variant="outline" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Enchères Section */}
           <div style={{ marginTop: 40 }}>
             <h2 style={{ fontFamily: F.heading, fontSize: '1.25rem', fontWeight: 800, color: C.forest, marginBottom: 16 }}>Vos Enchères Actives</h2>
@@ -261,6 +326,19 @@ export default function BuyerDashboardPage() {
               </div>
             </div>
           </B2BOnly>
+
+          <div>
+            <h3 style={{ fontFamily: F.heading, fontSize: '1rem', fontWeight: 800, color: C.forest, marginBottom: 12 }}>Facturation XOF</h3>
+            <Card>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <SummaryItem label="Factures du mois" value={formatXof(billingSummary?.monthTotal)} />
+                <SummaryItem label="En attente de paiement" value={formatXof(billingSummary?.pendingTotal)} />
+                <SummaryItem label="Déjà réglé" value={formatXof(billingSummary?.paidTotal)} />
+                <SummaryItem label="Nombre de factures" value={String(billingSummary?.invoiceCount || 0)} />
+                <ActionButton label="Voir mes factures" icon={FileText} onClick={() => router.push('/billing')} />
+              </div>
+            </Card>
+          </div>
 
           <div>
             <h3 style={{ fontFamily: F.heading, fontSize: '1rem', fontWeight: 800, color: C.forest, marginBottom: 12 }}>Suggestions</h3>

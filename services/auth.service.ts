@@ -37,7 +37,7 @@ async function loadUserContext(userId: string) {
 // ─── Helper : Écriture des cookies sécurisés ───
 
 async function setSessionCookies(
-    user: { id: string; role: string; name: string | null; updatedAt?: Date; }, 
+    user: { id: string; role: string; name: string | null; updatedAt?: Date; onboardingCompleted?: boolean }, 
     location: { id: string; name: string } | null, 
     permissions: string[], 
     orgs: { organizationId: string; role: string }[]
@@ -54,7 +54,8 @@ async function setSessionCookies(
             userId: user.id, 
             role: roleValue, 
             permissionVersion: pv, 
-            activeOrgId: primaryOrg?.organizationId 
+            activeOrgId: primaryOrg?.organizationId,
+            onboardingCompleted: !!user.onboardingCompleted,
         });
         cookieStore.set(COOKIE_NAMES.SESSION_TOKEN, token, httpOnlyOpts());
     } catch (err) {
@@ -69,7 +70,8 @@ async function setSessionCookies(
         [COOKIE_NAMES.USER_NAME]: user.name || '',
         [COOKIE_NAMES.PERMISSION_VERSION]: pv,
         [COOKIE_NAMES.ACTIVE_ORG_ID]: primaryOrg?.organizationId || '',
-        [COOKIE_NAMES.SESSION_READY]: '1'
+        [COOKIE_NAMES.SESSION_READY]: '1',
+        [COOKIE_NAMES.ONBOARDING_COMPLETED]: user.onboardingCompleted ? '1' : '0',
     };
 
     // On itère pour définir les cookies publics
@@ -272,7 +274,7 @@ export async function registerUser(data: {
 
         const ctx = await loadUserContext(newUser.id);
         await setSessionCookies(
-            { id: newUser.id, role: newUser.role, name: newUser.name, updatedAt: newUser.updatedAt },
+            { id: newUser.id, role: newUser.role, name: newUser.name, updatedAt: newUser.updatedAt, onboardingCompleted: false },
             userLocation,
             ctx.permissions,
             ctx.orgs
@@ -291,7 +293,8 @@ export async function registerUser(data: {
             pendingOrgCreated: !!createdOrg,
             user: {
                 id: newUser.id, role: newUser.role, name: newUser.name,
-                location: userLocation, permissions: ctx.permissions, orgs: ctx.orgs
+                location: userLocation, permissions: ctx.permissions, orgs: ctx.orgs,
+                onboardingCompleted: false
             }
         };
 
@@ -319,6 +322,10 @@ export async function loginUser(credentials: { email: string; password: string }
 
         const user = await db.query.users.findFirst({
             where: eq(schema.users.email, email),
+            columns: {
+                id: true, name: true, email: true, password: true, role: true,
+                updatedAt: true, onboardingCompleted: true,
+            },
             with: {
                 producer: { columns: { id: true, status: true } },
             }
@@ -348,7 +355,7 @@ export async function loginUser(credentials: { email: string; password: string }
 
         const ctx = await loadUserContext(user.id);
         await setSessionCookies(
-            { id: user.id, role: user.role, name: user.name, updatedAt: user.updatedAt },
+            { id: user.id, role: user.role, name: user.name, updatedAt: user.updatedAt, onboardingCompleted: user.onboardingCompleted },
             userLocation,
             ctx.permissions,
             ctx.orgs
@@ -373,6 +380,7 @@ export async function loginUser(credentials: { email: string; password: string }
                     location: userLocation || null,
                     permissions: ctx.permissions,
                     orgs: ctx.orgs,
+                    onboardingCompleted: user.onboardingCompleted,
                 }
         };
 
@@ -401,6 +409,7 @@ export async function logoutUser() {
         cookieStore.delete(COOKIE_NAMES.USER_ZONE);
         cookieStore.delete(COOKIE_NAMES.USER_PERMISSIONS);
         cookieStore.delete(COOKIE_NAMES.USER_ORG);
+        cookieStore.delete(COOKIE_NAMES.ONBOARDING_COMPLETED);
         // Legacy cleanup: removed legacy `user-id` cookie handling
         return { success: true };
     } catch (error) {

@@ -17,6 +17,7 @@ async function fetchMeFallback(userId: string): Promise<MePayload | null> {
       email: true,
       role: true,
       updatedAt: true,
+      onboardingCompleted: true,
     },
     with: {
       userOrganizations: {
@@ -55,6 +56,7 @@ async function fetchMeFallback(userId: string): Promise<MePayload | null> {
     })),
     permissions: [],
     permissionVersion: user.updatedAt?.getTime() || Date.now(),
+    onboardingCompleted: user.onboardingCompleted,
   };
 }
 

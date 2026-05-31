@@ -19,6 +19,7 @@ interface AuthState {
   permissions: string[];
   activeOrg: { id: string; name: string; role: string } | null;
   organizations: Array<{ organizationId: string; role: string; name?: string }>;
+  onboardingCompleted: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     permissions: [],
     activeOrg: null,
     organizations: [],
+    onboardingCompleted: false,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
       organizations: orgs,
       activeOrg: orgs.length > 0 ? { id: orgs[0].organizationId, name: orgs[0].name || '', role: orgs[0].role } : null,
+      onboardingCompleted: !!userData.onboardingCompleted,
     });
   }, []);
 
@@ -154,6 +157,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [hydrateSession]);
 
   const handleRedirect = (userData: any) => {
+    if (!userData.onboardingCompleted) {
+      if (typeof window !== 'undefined') window.location.href = '/onboarding';
+      return;
+    }
     const role = (userData.role || '').toString().toUpperCase();
     const redirectMap: Record<string, string> = {
       SUPERADMIN: '/admin',
@@ -227,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions: [],
       activeOrg: null,
       organizations: [],
+      onboardingCompleted: false,
     });
 
     window.location.href = '/login';

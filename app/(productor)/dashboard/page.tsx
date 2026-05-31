@@ -1,8 +1,9 @@
 ﻿import React from 'react';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
 import { Leaf, Plus, Loader2 } from 'lucide-react';
-import { SessionPayload } from '@/lib/session'; // Assurez-vous que le chemin est correct
+import { SessionPayload } from '@/lib/session';
 
 // Extension du type Session pour inclure nos champs spécifiques
 interface ExtendedSessionPayload extends SessionPayload {
@@ -80,8 +81,9 @@ export default async function DashboardPage() {
 
   try {
     const sessionMod = await import('@/lib/session');
-    const session = await sessionMod.getSessionFromRequest(null as any).catch(() => null);
-    
+    const cookieStore = await cookies();
+    const session = await sessionMod.getSessionFromRequest({ cookies: cookieStore } as any).catch(() => null);
+
     // Application de notre extension de type
     const typedSession = session as ExtendedSessionPayload | null;
     

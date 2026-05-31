@@ -30,7 +30,11 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema)
   });
 
-  const redirectUserByRole = (role: string) => {
+  const redirectUserByRole = (role: string, onboarded?: boolean) => {
+    if (onboarded === false) {
+      router.push('/onboarding');
+      return;
+    }
     const n = role?.toUpperCase();
     const map: Record<string, string> = {
       SUPERADMIN: '/admin',
@@ -51,7 +55,7 @@ export default function LoginPage() {
     const result = await login(data.email, data.password);
     if (result?.success) {
       toast.success("Connexion reussie !");
-      if (result.user?.role) redirectUserByRole(result.user.role);
+      if (result.user?.role) redirectUserByRole(result.user.role, result.user.onboardingCompleted);
     } else {
       toast.error(result?.error || "Echec de la connexion");
     }

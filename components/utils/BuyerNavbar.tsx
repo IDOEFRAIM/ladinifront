@@ -4,13 +4,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { LogOut, Bot, ClipboardList, LayoutDashboard, Store, User } from 'lucide-react';
+import { LogOut, Bot, ClipboardList, LayoutDashboard, Store, User, Sprout } from 'lucide-react';
 
 const BUYER_LINKS = [
   { name: 'Marché', href: '/catalogue', icon: Store },
+  { name: 'Précommandes', href: '/buyer/preorders', icon: Sprout },
   { name: 'Dashboard', href: '/buyer-dashboard', icon: LayoutDashboard },
   { name: 'Commandes', href: '/orders', icon: ClipboardList },
-  { name: 'Suivi Agent', href: '/conversations', icon: Bot },
+  //{ name: 'Suivi Agent', href: '/conversations', icon: Bot },
 ];
 
 export default function BuyerNavbar() {

@@ -13,6 +13,7 @@ export type MePayload = {
   organizations: Array<{ organizationId: string; role: string; name: string }>;
   permissions: string[];
   permissionVersion: number;
+  onboardingCompleted: boolean;
 };
 
 export async function fetchMeServer(userId: string): Promise<ApiResult<MePayload>> {
@@ -22,7 +23,7 @@ export async function fetchMeServer(userId: string): Promise<ApiResult<MePayload
 
   const userProfile = await db.query.users.findFirst({
     where: eq(schema.users.id, userId),
-    columns: { name: true, email: true },
+    columns: { name: true, email: true, onboardingCompleted: true },
   });
 
   if (!userProfile) return fail('USER_NOT_FOUND');
@@ -51,6 +52,7 @@ export async function fetchMeServer(userId: string): Promise<ApiResult<MePayload
     })),
     permissions: Array.from(ctx.permissions || []),
     permissionVersion: ctx.permissionVersion,
+    onboardingCompleted: userProfile.onboardingCompleted,
   };
 
   return ok(payload);

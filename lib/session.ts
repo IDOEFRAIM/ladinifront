@@ -10,6 +10,7 @@ export type SessionPayload = {
   role?: string;
   permissionVersion?: string;
   activeOrgId?: string;
+  onboardingCompleted?: boolean;
   iat?: number;
   exp?: number;
 };

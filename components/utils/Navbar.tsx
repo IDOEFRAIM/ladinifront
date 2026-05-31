@@ -60,7 +60,7 @@ export default function Navbar() {
       case 'AGENT':
         return '/agent/deliveries';
       default:
-        return '/market';
+        return '/catalogue';
     }
   }, [userRole]);
 
