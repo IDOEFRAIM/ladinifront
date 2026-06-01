@@ -1,25 +1,26 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
-// On définit les cultures possibles (ceci viendra sûrement d'une API plus tard)
-const CROP_UNITS = [
-    { id: 'global', label: 'Vue Globale', color: 'bg-green-600' },
-    { id: 'mais', label: 'Maïs Local', color: 'bg-amber-400' },
-    { id: 'tomate', label: 'Tomates', color: 'bg-red-500' },
-    { id: 'elevage', label: 'Volaille', color: 'bg-slate-400' },
-];
+const COLOR_PALETTE = ['bg-green-600', 'bg-amber-400', 'bg-red-500', 'bg-slate-400', 'bg-emerald-500', 'bg-cyan-500'];
 
 interface HeaderProps {
     activeUnit: string;
     onUnitChange: (id: string) => void;
+    units?: { id: string; label: string }[];
 }
 
-export default function DashboardHeader({ activeUnit, onUnitChange }: HeaderProps) {
-    // On trouve la culture active pour le titre dynamique
-    const currentUnit = CROP_UNITS.find(u => u.id === activeUnit);
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (isDev) console.log("DashboardHeader rendered with activeUnit:", activeUnit);
+export default function DashboardHeader({ activeUnit, onUnitChange, units }: HeaderProps) {
+    const availableUnits = useMemo(() => {
+        const base = [{ id: 'global', label: 'Vue Globale' }, ...(units || [])];
+        const unique = base.filter((unit, index) => base.findIndex(u => u.id === unit.id) === index);
+        return unique.map((unit, index) => ({
+            ...unit,
+            color: COLOR_PALETTE[index % COLOR_PALETTE.length],
+        }));
+    }, [units]);
+
+    const currentUnit = availableUnits.find(u => u.id === activeUnit) || availableUnits[0];
     return (
         <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-8">
             
@@ -39,7 +40,7 @@ export default function DashboardHeader({ activeUnit, onUnitChange }: HeaderProp
 
             {/* SÉLECTEUR DE CULTURE (TACTIQUE) */}
             <div className="flex flex-wrap gap-2 p-1.5 bg-white rounded-2xl border border-[#e0e0d1] shadow-sm">
-                {CROP_UNITS.map((unit) => {
+                {availableUnits.map((unit) => {
                     const isActive = activeUnit === unit.id;
                     return (
                         <button

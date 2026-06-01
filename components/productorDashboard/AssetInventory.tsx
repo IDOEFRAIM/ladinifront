@@ -1,30 +1,25 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { FaWarehouse, FaPlus, FaClock } from 'react-icons/fa';
+import type { InventoryAsset } from '@/hooks/useInventory';
 
 interface AssetInventoryProps {
-    activeUnit: string;
+    assets: InventoryAsset[];
 }
 
-// Simulation de données filtrées par culture
-const STOCK_DATA: Record<string, any[]> = {
-    global: [
-        { id: 1, name: 'Maïs Grain', qty: '12.5', unit: 'Tones', value: 2500000, quality: 'Excellente', days: 12 },
-        { id: 2, name: 'Tomates', qty: '850', unit: 'Kg', value: 680000, quality: 'Fragile', days: 2 },
-        { id: 3, name: 'Oignons', qty: '3.2', unit: 'Tones', value: 1120000, quality: 'Stable', days: 45 },
-    ],
-    mais: [
-        { id: 1, name: 'Maïs Grain Jaune', qty: '8.5', unit: 'Tones', value: 1700000, quality: 'Excellente', days: 10 },
-        { id: 4, name: 'Maïs Semence', qty: '4.0', unit: 'Tones', value: 800000, quality: 'Premium', days: 15 },
-    ],
-    tomate: [
-        { id: 2, name: 'Tomates Roma', qty: '850', unit: 'Kg', value: 680000, quality: 'Fragile', days: 2 },
-    ]
-};
-
-export default function AssetInventory({ activeUnit }: AssetInventoryProps) {
-    const assets = STOCK_DATA[activeUnit] || STOCK_DATA['global'];
+export default function AssetInventory({ assets }: AssetInventoryProps) {
+    if (!assets.length) {
+        return (
+            <section className="bg-white p-8 rounded-3xl shadow-sm border border-[#e0e0d1] text-center">
+                <p className="text-sm text-[#7c795d]">Aucun stock actif sur cette unité. Ajoutez un produit pour commencer à suivre vos volumes.</p>
+                <Link href="/products/add" className="inline-flex items-center gap-2 bg-[#497a3a] text-white px-5 py-2.5 rounded-xl font-bold text-xs mt-4">
+                    <FaPlus size={10} /> Ajouter un produit
+                </Link>
+            </section>
+        );
+    }
 
     return (
         <section className="bg-white p-8 rounded-3xl shadow-sm border border-[#e0e0d1]">
@@ -41,27 +36,27 @@ export default function AssetInventory({ activeUnit }: AssetInventoryProps) {
                     </div>
                 </div>
                 
-                <button className="flex items-center gap-2 bg-[#497a3a] hover:bg-[#3d6630] text-white px-4 py-2.5 rounded-xl transition-colors">
+                <Link href="/products/add" className="flex items-center gap-2 bg-[#497a3a] hover:bg-[#3d6630] text-white px-4 py-2.5 rounded-xl transition-colors">
                     <span className="text-xs font-bold uppercase tracking-wider">Ajouter</span>
                     <FaPlus size={10} />
-                </button>
+                </Link>
             </div>
 
             {/* GRILLE D'INVENTAIRE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {assets.map((item) => (
+                {assets.slice(0, 6).map((item) => (
                     <div key={item.id} className="p-6 bg-[#f8faf7] rounded-2xl border border-[#e0e0d1] hover:shadow-md transition-shadow duration-300">
                         
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wider mb-1">{item.name}</p>
                                 <h3 className="text-3xl font-black text-[#2d3436] tracking-tight">
-                                    {item.qty} <span className="text-sm font-bold text-[#7c795d]">{item.unit}</span>
+                                    {item.quantity.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} <span className="text-sm font-bold text-[#7c795d]">{item.unit}</span>
                                 </h3>
                             </div>
                             <div className="text-right">
                                 <p className="text-xs font-bold text-[#497a3a] bg-[#e6f4ea] px-3 py-1.5 rounded-lg">
-                                    {item.value.toLocaleString()} F
+                                    {(item.quantity * item.marketPrice).toLocaleString('fr-FR')} F CFA
                                 </p>
                             </div>
                         </div>
@@ -72,18 +67,23 @@ export default function AssetInventory({ activeUnit }: AssetInventoryProps) {
                                 <FaClock className="text-[#a4a291]" size={14} />
                                 <div>
                                     <p className="text-[10px] font-bold text-[#a4a291] uppercase">Stocké depuis</p>
-                                    <p className="text-xs font-bold text-[#5b4636]">{item.days} Jours</p>
+                                    <p className="text-xs font-bold text-[#5b4636]">{Math.round(item.ageInDays)} jours</p>
                                 </div>
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-[#a4a291] uppercase">Qualité</p>
-                                <p className={`text-xs font-bold ${item.quality === 'Fragile' ? 'text-red-500' : 'text-[#497a3a]'}`}>
-                                    {item.quality}
+                                <p className={`text-xs font-bold ${item.riskLevel === 'CRITIQUE' ? 'text-red-500' : item.riskLevel === 'ALERTE' ? 'text-amber-600' : 'text-[#497a3a]'}`}>
+                                    {item.riskLevel === 'STABLE' ? 'Stable' : item.riskLevel}
                                 </p>
                             </div>
                         </div>
                     </div>
                 ))}
+                {assets.length > 6 && (
+                    <div className="text-sm text-[#7c795d] font-semibold">
+                        +{assets.length - 6} lots supplémentaires suivis…
+                    </div>
+                )}
             </div>
         </section>
     );

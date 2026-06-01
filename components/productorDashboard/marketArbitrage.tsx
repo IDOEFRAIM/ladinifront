@@ -2,21 +2,23 @@
 
 import React from 'react';
 import { FaArrowUp, FaArrowDown, FaBalanceScale } from 'react-icons/fa';
+import type { InventoryAsset } from '@/hooks/useInventory';
 
 interface ArbitrageProps {
-    activeUnit: string;
+    assets: InventoryAsset[];
 }
 
-// Données simulées : Comparaison Marché vs Interne
-const MARKET_DATA: Record<string, any> = {
-    global: { marketName: "Moyenne Nationale", diff: "+12%", advice: "Vendre Maïs, Stocker Oignons" },
-    mais: { marketName: "Marché de Gros Dakar", internal: 550, market: 620, trend: 'up', advice: "Opportunité de profit : +70F/kg" },
-    tomate: { marketName: "Marché Local", internal: 800, market: 750, trend: 'down', advice: "Prix en baisse : Vendre immédiatement" },
-    elevage: { marketName: "Prix Régional Volaille", internal: 2500, market: 2650, trend: 'stable', advice: "Prix stable : Vendre selon besoin cash" },
-};
+export default function MarketArbitrage({ assets }: ArbitrageProps) {
+    if (!assets.length) {
+        return (
+            <section className="bg-white p-6 rounded-3xl shadow-sm border border-[#e0e0d1] text-center">
+                <p className="text-sm text-[#7c795d]">Aucune donnée marché disponible : ajoutez des produits pour activer les comparatifs de prix.</p>
+            </section>
+        );
+    }
 
-export default function MarketArbitrage({ activeUnit }: ArbitrageProps) {
-    const data = MARKET_DATA[activeUnit] || MARKET_DATA['global'];
+    const summary = computeSummary(assets);
+    const { diffPct, trendLabel, bestAsset } = summary;
 
     return (
         <section className="bg-white p-6 rounded-3xl shadow-sm border border-[#e0e0d1]">
@@ -34,52 +36,73 @@ export default function MarketArbitrage({ activeUnit }: ArbitrageProps) {
                 </div>
             </div>
 
-            {activeUnit === 'global' ? (
-                /* VUE GLOBALE - TRENDS */
-                <div className="space-y-4">
-                    <div className="p-6 bg-[#f7f5ee] rounded-2xl border border-[#e0e0d1]">
-                        <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wider mb-2">Tendance Générale</p>
-                        <div className="flex items-center gap-3">
-                            <span className="text-3xl font-black text-[#497a3a]">{data.diff}</span>
-                            <FaArrowUp className="text-[#497a3a]" size={20} />
-                        </div>
-                        <p className="mt-3 text-sm font-medium text-[#5b4636]">
-                            {data.advice}
-                        </p>
+            <div className="space-y-4">
+                <div className="p-6 bg-[#f7f5ee] rounded-2xl border border-[#e0e0d1]">
+                    <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wider mb-2">Tendance globale du portefeuille</p>
+                    <div className="flex items-center gap-3">
+                        <span className={`text-3xl font-black ${diffPct >= 0 ? 'text-[#497a3a]' : 'text-red-500'}`}>
+                            {diffPct >= 0 ? '+' : ''}{diffPct.toFixed(1)}%
+                        </span>
+                        {diffPct >= 0 ? <FaArrowUp className="text-[#497a3a]" size={20} /> : <FaArrowDown className="text-red-500" size={20} />}
                     </div>
+                    <p className="mt-3 text-sm font-medium text-[#5b4636]">
+                        {trendLabel}
+                    </p>
                 </div>
-            ) : (
-                /* VUE SPÉCIFIQUE (Maïs, Tomate...) */
-                <div className="space-y-4">
-                    
-                    {/* Carte Principale de Prix */}
+
+                {bestAsset && (
                     <div className="p-5 bg-white rounded-2xl border border-[#e0e0d1] shadow-sm">
                         <div className="flex justify-between items-end mb-2">
-                            <p className="text-xs text-[#7c795d]">Prix marché actuel</p>
-                            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${data.trend === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {data.trend === 'up' ? '▲ Hausse' : '▼ Baisse'}
+                            <p className="text-xs text-[#7c795d]">Produit le plus rentable</p>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${bestAsset.margin >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {bestAsset.margin >= 0 ? '▲ Marge positive' : '▼ Sous le coût'}
                             </span>
                         </div>
                         <p className="text-3xl font-black text-[#5b4636]">
-                            {data.market} <span className="text-sm font-normal text-[#7c795d]">F/kg</span>
+                            {bestAsset.asset.marketPrice.toLocaleString('fr-FR')} <span className="text-sm font-normal text-[#7c795d]">F/kg</span>
                         </p>
                         <div className="mt-4 pt-4 border-t border-dashed border-[#e0e0d1] flex justify-between items-center text-xs">
-                            <span className="text-[#7c795d]">Votre seuil rentabilité:</span>
-                            <span className="font-bold text-[#5b4636]">{data.internal} F/kg</span>
+                            <span className="text-[#7c795d]">Seuil rentabilité:</span>
+                            <span className="font-bold text-[#5b4636]">{bestAsset.asset.purchasePrice.toLocaleString('fr-FR')} F/kg</span>
                         </div>
+                        <p className="text-xs text-[#7c795d] mt-3">{bestAsset.asset.name} ({bestAsset.asset.unitId})</p>
                     </div>
+                )}
 
-                    {/* Conseil Tactique */}
-                    <div className="flex items-start gap-3 p-4 bg-[#e65100]/10 rounded-xl border border-[#e65100]/20">
-                        <div className="mt-0.5 text-[#e65100]">
-                            <FaArrowUp size={14} />
-                        </div>
-                        <p className="text-xs font-medium text-[#e65100] leading-snug">
-                            {data.advice}
-                        </p>
+                <div className="flex items-start gap-3 p-4 bg-[#e65100]/10 rounded-xl border border-[#e65100]/20">
+                    <div className="mt-0.5 text-[#e65100]">
+                        {diffPct >= 0 ? <FaArrowUp size={14} /> : <FaArrowDown size={14} />}
                     </div>
+                    <p className="text-xs font-medium text-[#e65100] leading-snug">
+                        {bestAsset ? `Protégez votre marge sur ${bestAsset.asset.name}: ${(bestAsset.margin).toLocaleString('fr-FR')} F/kg d'écart.` : 'Aucune alerte de marge pour le moment.'}
+                    </p>
                 </div>
-            )}
+            </div>
         </section>
     );
+}
+
+type TrendSummary = {
+    diffPct: number;
+    trendLabel: string;
+    bestAsset: { asset: InventoryAsset; margin: number } | null;
+};
+
+function computeSummary(assets: InventoryAsset[]): TrendSummary {
+    const avgMarket = assets.reduce((acc, item) => acc + item.marketPrice, 0) / assets.length;
+    const avgPurchase = assets.reduce((acc, item) => acc + item.purchasePrice, 0) / assets.length;
+    const diffPct = avgPurchase === 0 ? 0 : ((avgMarket - avgPurchase) / avgPurchase) * 100;
+    const trendLabel = diffPct >= 0
+        ? 'Le marché reste favorable : profitez-en pour liquider les stocks mûrs.'
+        : "Les prix descendent : sécurisez vos marges et différer les ventes sensibles.";
+
+    let bestAsset: { asset: InventoryAsset; margin: number } | null = null;
+    assets.forEach((asset) => {
+        const margin = asset.marketPrice - asset.purchasePrice;
+        if (!bestAsset || margin > bestAsset.margin) {
+            bestAsset = { asset, margin };
+        }
+    });
+
+    return { diffPct, trendLabel, bestAsset };
 }

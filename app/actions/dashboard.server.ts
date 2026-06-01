@@ -1,17 +1,54 @@
 import { db } from '@/src/db';
-import * as schema from '@/src/db/schema';
+import type { AgrobusinessAsset } from '@/types/dashboard.index';
 
-export async function fetchDashboardInventoryServer(userId?: string) {
-  // If userId provided, filter by producer or user relation; otherwise return empty
+export async function fetchDashboardInventoryServer(userId?: string): Promise<AgrobusinessAsset[]> {
   if (!userId) return [];
 
-  // Simple inventory query: products for this producer (assuming producer.userId relation)
+  const producer = await db.query.producers.findFirst({
+    where: (p, { eq }) => eq(p.userId, userId),
+    columns: { id: true },
+  });
+  if (!producer) return [];
+
   const products = await db.query.products.findMany({
-    where: (p, { eq }) => eq(p.producerId, userId),
-    orderBy: (t, { desc: d }) => [d(t.createdAt)],
+    where: (p, { eq }) => eq(p.producerId, producer.id),
+    orderBy: (t, { desc: d }) => [d(t.updatedAt)],
   });
 
-  return products.map((p: any) => ({ id: p.id, name: p.name, quantity: p.quantityForSale || 0, unit: p.unit || 'KG', price: p.price || 0 }));
+  const now = new Date().toISOString();
+  return products.map((p) => ({
+    id: p.id,
+    unitId: normalizeCategory(p.categoryLabel ?? ''),
+    nature: 'CROP',
+    lifecycle: 'DORMANT',
+    name: p.name,
+    quantity: Number(p.quantityForSale ?? 0),
+    unit: mapUnit(p.unit),
+    purchasePrice: Number(p.price ?? 0) * 0.7,
+    marketPrice: Number(p.price ?? 0),
+    entryDate: (p.updatedAt ?? p.createdAt ?? new Date()).toISOString(),
+    isPerishable: isPerishableCategory(p.categoryLabel),
+    storage: 'VENTILÉ',
+  }));
+}
+
+function mapUnit(unit?: string) {
+  const allowed = ['SAC_100', 'SAC_50', 'TONNE', 'KG', 'UNITÉ', 'LITRE'] as const;
+  if (unit && allowed.includes(unit as any)) return unit as AgrobusinessAsset['unit'];
+  return 'KG';
+}
+
+function normalizeCategory(label?: string | null) {
+  const lower = (label || '').toLowerCase();
+  if (lower.includes('maïs') || lower.includes('mais')) return 'mais';
+  if (lower.includes('tomate')) return 'tomate';
+  if (lower.includes('volaille') || lower.includes('poussin') || lower.includes('poulet')) return 'elevage';
+  return 'global';
+}
+
+function isPerishableCategory(label?: string | null) {
+  const lower = (label || '').toLowerCase();
+  return ['tomate', 'légume', 'legume', 'fruit', 'volaille', 'poussin'].some((token) => lower.includes(token));
 }
 
 export default { fetchDashboardInventoryServer };

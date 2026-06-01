@@ -1,13 +1,25 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { FaBolt, FaExclamationTriangle, FaArrowRight, FaPercentage, FaTruck, FaLeaf } from 'react-icons/fa';
+import type { InventoryAsset } from '@/hooks/useInventory';
 
 interface TriggerProps {
-    activeUnit: string;
+    assets: InventoryAsset[];
 }
 
-export default function OperationalTriggers({ activeUnit }: TriggerProps) {
+function pickTop<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
+    return items.filter(predicate).sort((a: any, b: any) => (b.quantity || 0) - (a.quantity || 0))[0];
+}
+
+export default function OperationalTriggers({ assets }: TriggerProps) {
+    const criticalAsset = pickTop(assets, (item) => item.riskLevel === 'CRITIQUE' && item.isPerishable);
+    const harvestReady = pickTop(assets, (item) => !!item.expectedHarvestDate && new Date(item.expectedHarvestDate) <= new Date());
+    const largestLot = pickTop(assets, () => true);
+
+    if (!assets.length) return null;
+
     return (
         <section className="bg-white p-6 rounded-3xl shadow-sm border border-[#e0e0d1]">
             
@@ -25,40 +37,40 @@ export default function OperationalTriggers({ activeUnit }: TriggerProps) {
             <div className="space-y-4">
 
                 {/* DÉCISION 1 : URGENCE PÉRISSABLE */}
-                {(activeUnit === 'global' || activeUnit === 'tomate') && (
+                {criticalAsset && (
                     <div className="group bg-red-50 p-5 rounded-2xl border border-red-100">
                         <div className="flex items-start gap-2 mb-3">
                             <FaExclamationTriangle className="text-red-600 mt-0.5" size={14} />
                             <div>
                                 <p className="text-xs font-bold text-red-700 uppercase tracking-wide">Risque de perte</p>
                                 <p className="text-sm font-bold text-[#5b4636] mt-1 leading-snug">
-                                    850kg de Tomates Roma : Fraîcheur critique.
+                                    {criticalAsset.quantity.toLocaleString('fr-FR')} {criticalAsset.unit.toLowerCase()} de {criticalAsset.name} dépassent la fenêtre de fraîcheur.
                                 </p>
                             </div>
                         </div>
-                        <button className="w-full bg-white text-red-600 border border-red-200 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 transition-colors text-xs font-bold uppercase tracking-wide">
+                        <Link href="/products" className="w-full inline-flex items-center justify-center gap-2 bg-white text-red-600 border border-red-200 py-3 rounded-xl hover:bg-red-50 transition-colors text-xs font-bold uppercase tracking-wide">
                             <FaPercentage />
-                            Activer Promo (-20%)
-                        </button>
+                            Ajuster les prix
+                        </Link>
                     </div>
                 )}
 
                 {/* DÉCISION 2 : RÉCOLTE IMMINENTE */}
-                {(activeUnit === 'global' || activeUnit === 'mais') && (
+                {harvestReady && (
                     <div className="group bg-[#497a3a] p-5 rounded-2xl text-white">
                         <div className="flex items-start gap-2 mb-3">
                             <FaLeaf className="text-green-200 mt-0.5" size={14} />
                             <div>
                                 <p className="text-xs font-bold text-green-100 uppercase tracking-wide">Maturité Optimale</p>
                                 <p className="text-sm font-bold text-white mt-1 leading-snug">
-                                    Maïs Parcelle Nord : Prêt pour récolte.
+                                    {harvestReady.name} arrive à maturité ({new Date(harvestReady.expectedHarvestDate as string).toLocaleDateString('fr-FR')}).
                                 </p>
                             </div>
                         </div>
-                        <button className="w-full bg-white text-[#497a3a] py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-green-50 transition-colors text-xs font-bold uppercase tracking-wide">
-                            Lancer Récolte
+                        <Link href="/production" className="w-full inline-flex items-center justify-center gap-2 bg-white text-[#497a3a] py-3 rounded-xl hover:bg-green-50 transition-colors text-xs font-bold uppercase tracking-wide">
+                            Lancer la récolte
                             <FaArrowRight size={10} />
-                        </button>
+                        </Link>
                     </div>
                 )}
 
@@ -67,10 +79,16 @@ export default function OperationalTriggers({ activeUnit }: TriggerProps) {
                     <div className="flex items-start gap-2 mb-3">
                         <FaTruck className="text-[#7c795d] mt-0.5" size={14} />
                         <div>
-                            <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wide">Opportunité B2B</p>
-                            <p className="text-sm font-bold text-[#5b4636] mt-1 leading-snug">
-                                Grossiste Dakar cherche 5T de Maïs.
-                            </p>
+                            <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wide">Lot prioritaire</p>
+                            {largestLot ? (
+                                <p className="text-sm font-bold text-[#5b4636] mt-1 leading-snug">
+                                    {largestLot.quantity.toLocaleString('fr-FR')} {largestLot.unit.toLowerCase()} de {largestLot.name} disponibles.
+                                </p>
+                            ) : (
+                                <p className="text-sm font-medium text-[#5b4636] mt-1 leading-snug">
+                                    Aucun lot prioritaire détecté.
+                                </p>
+                            )}
                         </div>
                     </div>
                     <div className="flex gap-2">

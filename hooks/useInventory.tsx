@@ -1,9 +1,27 @@
 'use client';
 
 import { useMemo } from 'react';
-import { AgrobusinessAsset } from '@/types/dashboard.index'; // Import du type unique
+import { AgrobusinessAsset } from '@/types/dashboard.index';
 
-export const useInventory = (items: AgrobusinessAsset[], activeUnit: string, currentTemp: number = 35) => {
+export type InventoryAsset = AgrobusinessAsset & {
+  ageInDays: number;
+  riskLevel: 'CRITIQUE' | 'ALERTE' | 'STABLE';
+};
+
+export type InventorySnapshot = {
+  filteredItems: InventoryAsset[];
+  totalValue: number;
+  volumeInSacs: number;
+  criticalCount: number;
+  marketStrategy: string;
+  healthScore: number;
+};
+
+export const useInventory = (
+  items: AgrobusinessAsset[],
+  activeUnit: string,
+  currentTemp: number = 35,
+): InventorySnapshot => {
     
     const inventoryLogic = useMemo(() => {
         const filteredItems = activeUnit === 'global' 
@@ -20,17 +38,19 @@ export const useInventory = (items: AgrobusinessAsset[], activeUnit: string, cur
         const totalValue = filteredItems.reduce((acc, item) => acc + (item.quantity * item.marketPrice), 0);
 
         // 3. INDEX DE RISQUE SAHÉLIEN
-        const itemsAtRisk = filteredItems.map(item => {
+        const itemsAtRisk: InventoryAsset[] = filteredItems.map(item => {
             const ageInDays = (new Date().getTime() - new Date(item.entryDate).getTime()) / (1000 * 3600 * 24);
-            
-            // On vérifie si storage existe (car optionnel dans le type)
             let heatFactor = (currentTemp > 38 && item.storage === 'PLEIN_AIR') ? 2 : 1;
             const riskThreshold = item.isPerishable ? (5 / heatFactor) : (120 / heatFactor);
-            
+            const riskLevel: InventoryAsset['riskLevel'] = ageInDays > riskThreshold
+                ? 'CRITIQUE'
+                : ageInDays > (riskThreshold * 0.7)
+                  ? 'ALERTE'
+                  : 'STABLE';
             return {
                 ...item,
                 ageInDays,
-                riskLevel: ageInDays > riskThreshold ? 'CRITIQUE' : ageInDays > (riskThreshold * 0.7) ? 'ALERTE' : 'STABLE'
+                riskLevel,
             };
         });
 
