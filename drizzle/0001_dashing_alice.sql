@@ -1,1 +1,0 @@
-ALTER TABLE "marketplace"."bids" ADD COLUMN "estimated_delivery_date" timestamp;

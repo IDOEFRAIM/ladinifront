@@ -231,7 +231,6 @@ export const farmsRelations = relations(farms, ({ one, many }) => ({
     fields: [farms.zoneId],
     references: [zones.id],
   }),
-
   inventory: many(stocks),
   cropCycles: many(cropCycles),
   expenses: many(expenses),
@@ -240,7 +239,12 @@ export const farmsRelations = relations(farms, ({ one, many }) => ({
   cycles: many(cropCycles),
   telemetryHistory: many(sensorTelemetryHistory),
   sensorSummaries: many(sensorDataSummary),
+  aiRecommendations: many(aiRecommendations),
+  weatherLogs: many(weatherDataLogs),
+  contextMemories: many(agentContextMemory),
+  anomalies: many(anomalies),
 }));
+
 
 export const cropCyclesRelations = relations(cropCycles, ({ one, many }) => ({
   farm: one(farms, {
@@ -253,8 +257,9 @@ export const cropCyclesRelations = relations(cropCycles, ({ one, many }) => ({
   }),
   interventions: many(fieldInterventions),
   growthLogs: many(cropGrowthLogs),
-  recommendations: many(aiRecommendations),
+  recommendations: many(aiRecommendations), // Valide : la contrepartie existe maintenant ci-dessous !
   preorders: many(orders),
+  contextMemories: many(agentContextMemory),
 }));
 
 export const stocksRelations = relations(stocks, ({ one, many }) => ({
@@ -498,8 +503,11 @@ export const conversationsRelations = relations(conversations, ({ one }) => ({
     fields: [conversations.zoneId],
     references: [zones.id],
   }),
+  anomaly: one(anomalies, {
+    fields: [conversations.anomalyId],
+    references: [anomalies.id],
+  }),
 }));
-
 export const trustScoresRelations = relations(trustScores, ({ one, many }) => ({
   user: one(users, {
     fields: [trustScores.userId],
@@ -515,11 +523,16 @@ export const aiRatingReasoningsRelations = relations(aiRatingReasonings, ({ one 
   }),
 }));
 
-export const anomaliesRelations = relations(anomalies, ({ one }) => ({
+export const anomaliesRelations = relations(anomalies, ({ one, many }) => ({
   zone: one(zones, {
     fields: [anomalies.zoneId],
     references: [zones.id],
   }),
+  farm: one(farms, {
+    fields: [anomalies.farmId],
+    references: [farms.id],
+  }),
+  conversations: many(conversations),
 }));
 
 export const territoryEventsRelations = relations(territoryEvents, ({ one }) => ({
@@ -577,6 +590,14 @@ export const aiRecommendationsRelations = relations(aiRecommendations, ({ one })
     fields: [aiRecommendations.userId],
     references: [users.id],
   }),
+  cropCycle: one(cropCycles, {
+    fields: [aiRecommendations.cropCycleId],
+    references: [cropCycles.id],
+  }),
+  farm: one(farms, {
+    fields: [aiRecommendations.farmId],
+    references: [farms.id],
+  }),
 }));
 
 export const weatherDataLogsRelations = relations(weatherDataLogs, ({ one }) => ({
@@ -584,11 +605,23 @@ export const weatherDataLogsRelations = relations(weatherDataLogs, ({ one }) => 
     fields: [weatherDataLogs.zoneId],
     references: [zones.id],
   }),
+  farm: one(farms, {
+    fields: [weatherDataLogs.farmId],
+    references: [farms.id],
+  }),
 }));
 
 export const agentContextMemoryRelations = relations(agentContextMemory, ({ one }) => ({
   user: one(users, {
     fields: [agentContextMemory.userId],
     references: [users.id],
+  }),
+  farm: one(farms, {
+    fields: [agentContextMemory.farmId],
+    references: [farms.id],
+  }),
+  cropCycle: one(cropCycles, {
+    fields: [agentContextMemory.cropCycleId],
+    references: [cropCycles.id],
   }),
 }));

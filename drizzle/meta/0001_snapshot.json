@@ -1,6 +1,6 @@
 {
-  "id": "ff3c5b81-517f-47ee-90a5-c1fbe90d7440",
-  "prevId": "b63e1685-bb05-4da0-b599-4ed31fbf39a9",
+  "id": "d82467dd-e398-4fb8-9aec-f011c8b92c7c",
+  "prevId": "3e26a871-c321-48e8-b5b4-ce2876553dbb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -436,6 +436,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "onboarding_completed": {
+          "name": "onboarding_completed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "deleted_at": {
           "name": "deleted_at",
@@ -1753,6 +1760,44 @@
           "primaryKey": false,
           "notNull": true
         },
+        "incoterm": {
+          "name": "incoterm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DDP'"
+        },
+        "delivery_location": {
+          "name": "delivery_location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivery_deadline": {
+          "name": "delivery_deadline",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quality_grading": {
+          "name": "quality_grading",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "required_certifications": {
+          "name": "required_certifications",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "preferred_packaging": {
+          "name": "preferred_packaging",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "deadline": {
           "name": "deadline",
           "type": "timestamp",
@@ -1782,6 +1827,12 @@
         },
         "winner_bid_id": {
           "name": "winner_bid_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escrow_wallet_id": {
+          "name": "escrow_wallet_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -2239,6 +2290,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rating": {
+          "name": "rating",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviews_count": {
+          "name": "reviews_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "company_registration_number": {
+          "name": "company_registration_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "verified_at": {
           "name": "verified_at",
           "type": "timestamp",
@@ -2596,6 +2666,104 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sub_category_id": {
+          "name": "sub_category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "growth_stage": {
+          "name": "growth_stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_public": {
+          "name": "is_public",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "preorder_enabled": {
+          "name": "preorder_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "estimated_available_at": {
+          "name": "estimated_available_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "available_quantity": {
+          "name": "available_quantity",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reserved_quantity": {
+          "name": "reserved_quantity",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "price_per_unit": {
+          "name": "price_per_unit",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'KG'"
+        },
+        "production_type": {
+          "name": "production_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'CROP'"
+        },
+        "species": {
+          "name": "species",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "breed": {
+          "name": "breed",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "initial_stock": {
+          "name": "initial_stock",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "current_stock": {
+          "name": "current_stock",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "hatch_date": {
+          "name": "hatch_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2632,6 +2800,66 @@
           "columns": [
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crop_cycles_subcategory_idx": {
+          "name": "crop_cycles_subcategory_idx",
+          "columns": [
+            {
+              "expression": "sub_category_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crop_cycles_public_idx": {
+          "name": "crop_cycles_public_idx",
+          "columns": [
+            {
+              "expression": "is_public",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crop_cycles_preorder_idx": {
+          "name": "crop_cycles_preorder_idx",
+          "columns": [
+            {
+              "expression": "preorder_enabled",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "crop_cycles_available_at_idx": {
+          "name": "crop_cycles_available_at_idx",
+          "columns": [
+            {
+              "expression": "estimated_available_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3534,6 +3762,192 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "marketplace.order_disputes": {
+      "name": "order_disputes",
+      "schema": "marketplace",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "escrow_wallet_id": {
+          "name": "escrow_wallet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raised_by_id": {
+          "name": "raised_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason_category": {
+          "name": "reason_category",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_images": {
+          "name": "evidence_images",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "requested_solution": {
+          "name": "requested_solution",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disputed_amount": {
+          "name": "disputed_amount",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "escrow_payout_status": {
+          "name": "escrow_payout_status",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'HELD'"
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "resolution_notes": {
+          "name": "resolution_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "order_disputes_order_idx": {
+          "name": "order_disputes_order_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "order_disputes_status_idx": {
+          "name": "order_disputes_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "order_disputes_raised_by_idx": {
+          "name": "order_disputes_raised_by_idx",
+          "columns": [
+            {
+              "expression": "raised_by_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "order_disputes_escrow_idx": {
+          "name": "order_disputes_escrow_idx",
+          "columns": [
+            {
+              "expression": "escrow_wallet_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "order_disputes_order_id_orders_id_fk": {
+          "name": "order_disputes_order_id_orders_id_fk",
+          "tableFrom": "order_disputes",
+          "tableTo": "orders",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "marketplace.order_items": {
       "name": "order_items",
       "schema": "marketplace",
@@ -3559,13 +3973,13 @@
         },
         "quantity": {
           "name": "quantity",
-          "type": "double precision",
+          "type": "real",
           "primaryKey": false,
           "notNull": true
         },
         "price_at_sale": {
           "name": "price_at_sale",
-          "type": "double precision",
+          "type": "real",
           "primaryKey": false,
           "notNull": true
         }
@@ -3602,7 +4016,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "order_items_order_id_orders_id_fk": {
+          "name": "order_items_order_id_orders_id_fk",
+          "tableFrom": "order_items",
+          "tableTo": "orders",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "order_items_product_id_products_id_fk": {
+          "name": "order_items_product_id_products_id_fk",
+          "tableFrom": "order_items",
+          "tableTo": "products",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -3626,21 +4069,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "organization_id": {
-          "name": "organization_id",
+        "client_id": {
+          "name": "client_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
-        "customer_name": {
-          "name": "customer_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "customer_phone": {
-          "name": "customer_phone",
-          "type": "text",
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -3650,35 +4087,47 @@
           "primaryKey": false,
           "notNull": false
         },
+        "customer_name": {
+          "name": "customer_name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customer_phone": {
+          "name": "customer_phone",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "payment_method": {
           "name": "payment_method",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true,
           "default": "'CASH'"
         },
         "payment_status": {
           "name": "payment_status",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "city": {
           "name": "city",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
         "gps_lat": {
           "name": "gps_lat",
-          "type": "double precision",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
         "gps_lng": {
           "name": "gps_lng",
-          "type": "double precision",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
@@ -3690,40 +4139,40 @@
         },
         "audio_url": {
           "name": "audio_url",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
         "status": {
           "name": "status",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "delivery_status": {
           "name": "delivery_status",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "source": {
           "name": "source",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true,
           "default": "'APP'"
         },
         "whatsapp_id": {
           "name": "whatsapp_id",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
         "total_amount": {
           "name": "total_amount",
-          "type": "double precision",
+          "type": "real",
           "primaryKey": false,
           "notNull": true
         },
@@ -3734,8 +4183,48 @@
           "notNull": true,
           "default": false
         },
-        "client_id": {
-          "name": "client_id",
+        "delivery_date": {
+          "name": "delivery_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subtotal": {
+          "name": "subtotal",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "tax_amount": {
+          "name": "tax_amount",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'XOF'"
+        },
+        "delivery_fee": {
+          "name": "delivery_fee",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cancellation_role": {
+          "name": "cancellation_role",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escrow_wallet_id": {
+          "name": "escrow_wallet_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -3749,6 +4238,31 @@
         "winning_bid_id": {
           "name": "winning_bid_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "order_type": {
+          "name": "order_type",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'STANDARD'"
+        },
+        "crop_cycle_id": {
+          "name": "crop_cycle_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_fulfillment_date": {
+          "name": "expected_fulfillment_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preorder_converted_at": {
+          "name": "preorder_converted_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -3902,9 +4416,138 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "orders_type_idx": {
+          "name": "orders_type_idx",
+          "columns": [
+            {
+              "expression": "order_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_crop_cycle_idx": {
+          "name": "orders_crop_cycle_idx",
+          "columns": [
+            {
+              "expression": "crop_cycle_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "orders_buyer_id_buyer_profiles_id_fk": {
+          "name": "orders_buyer_id_buyer_profiles_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "buyer_profiles",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "buyer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_client_id_clients_id_fk": {
+          "name": "orders_client_id_clients_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "clients",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_organization_id_organizations_id_fk": {
+          "name": "orders_organization_id_organizations_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_zone_id_zones_id_fk": {
+          "name": "orders_zone_id_zones_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_auction_id_auctions_id_fk": {
+          "name": "orders_auction_id_auctions_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "auctions",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "auction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_winning_bid_id_bids_id_fk": {
+          "name": "orders_winning_bid_id_bids_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "bids",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "winning_bid_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "orders_crop_cycle_id_crop_cycles_id_fk": {
+          "name": "orders_crop_cycle_id_crop_cycles_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "crop_cycles",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "crop_cycle_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4090,6 +4733,37 @@
           "primaryKey": false,
           "notNull": false
         },
+        "logo_url": {
+          "name": "logo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_number": {
+          "name": "phone_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviews_count": {
+          "name": "reviews_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "company_registration_number": {
+          "name": "company_registration_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -4247,6 +4921,37 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "quality_class": {
+          "name": "quality_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_order_quality": {
+          "name": "min_order_quality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "packaging_type": {
+          "name": "packaging_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "harvest_date": {
+          "name": "harvest_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_available": {
+          "name": "is_available",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
         },
         "producer_id": {
           "name": "producer_id",
@@ -5380,6 +6085,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "device_info": {
+          "name": "device_info",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -5547,6 +6258,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "actionable_steps": {
+          "name": "actionable_steps",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'::jsonb"
+        },
         "confidence_score": {
           "name": "confidence_score",
           "type": "double precision",
@@ -5709,6 +6427,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "farm_id": {
+          "name": "farm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "source": {
           "name": "source",
           "type": "text",
@@ -5779,6 +6503,21 @@
           "columns": [
             {
               "expression": "zone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "anomalies_farm_idx": {
+          "name": "anomalies_farm_idx",
+          "columns": [
+            {
+              "expression": "farm_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5929,6 +6668,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "farm_id": {
+          "name": "farm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "query": {
           "name": "query",
           "type": "text",
@@ -5997,6 +6742,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "user_intent": {
+          "name": "user_intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "needs_follow_up": {
+          "name": "needs_follow_up",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "total_tokens_used": {
           "name": "total_tokens_used",
           "type": "integer",
@@ -6053,6 +6811,21 @@
           "method": "btree",
           "with": {}
         },
+        "conversations_farm_idx": {
+          "name": "conversations_farm_idx",
+          "columns": [
+            {
+              "expression": "farm_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "conversations_agent_idx": {
           "name": "conversations_agent_idx",
           "columns": [
@@ -6083,6 +6856,21 @@
           "method": "btree",
           "with": {}
         },
+        "conversations_followup_idx": {
+          "name": "conversations_followup_idx",
+          "columns": [
+            {
+              "expression": "needs_follow_up",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "conversations_audit_unique": {
           "name": "conversations_audit_unique",
           "columns": [
@@ -6102,6 +6890,443 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "intelligence.crop_fertilizer_steps": {
+      "name": "crop_fertilizer_steps",
+      "schema": "intelligence",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "crop_profile_id": {
+          "name": "crop_profile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_order": {
+          "name": "step_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stage": {
+          "name": "stage",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bbch_scale_id": {
+          "name": "bbch_scale_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bbch_scale_code": {
+          "name": "bbch_scale_code",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "days_after_sowing": {
+          "name": "days_after_sowing",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "product_type": {
+          "name": "product_type",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nutrient_target": {
+          "name": "nutrient_target",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{\"N\":0,\"P2O5\":0,\"K2O\":0,\"CaO\":0,\"MgO\":0}'::jsonb"
+        },
+        "dose_kg_ha": {
+          "name": "dose_kg_ha",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "application_mode": {
+          "name": "application_mode",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "efficiency_factor": {
+          "name": "efficiency_factor",
+          "type": "numeric(3, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'1.00'"
+        },
+        "is_mandatory": {
+          "name": "is_mandatory",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_crop_fertilizer_steps_profile": {
+          "name": "idx_crop_fertilizer_steps_profile",
+          "columns": [
+            {
+              "expression": "crop_profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_crop_fertilizer_steps_timing": {
+          "name": "idx_crop_fertilizer_steps_timing",
+          "columns": [
+            {
+              "expression": "days_after_sowing",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "crop_fertilizer_steps_crop_profile_id_crop_profiles_id_fk": {
+          "name": "crop_fertilizer_steps_crop_profile_id_crop_profiles_id_fk",
+          "tableFrom": "crop_fertilizer_steps",
+          "tableTo": "crop_profiles",
+          "schemaTo": "intelligence",
+          "columnsFrom": [
+            "crop_profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "crop_fertilizer_steps_unique_order": {
+          "name": "crop_fertilizer_steps_unique_order",
+          "nullsNotDistinct": false,
+          "columns": [
+            "crop_profile_id",
+            "step_order"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "intelligence.crop_profiles": {
+      "name": "crop_profiles",
+      "schema": "intelligence",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "crop_name": {
+          "name": "crop_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "zone_category": {
+          "name": "zone_category",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variety": {
+          "name": "variety",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scientific_name": {
+          "name": "scientific_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cycle_days": {
+          "name": "cycle_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_temperature_c": {
+          "name": "base_temperature_c",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_temperature_c": {
+          "name": "max_temperature_c",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_gdd": {
+          "name": "expected_gdd",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depth_cm": {
+          "name": "depth_cm",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ph_min": {
+          "name": "ph_min",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ph_max": {
+          "name": "ph_max",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organic_matter_min_tha": {
+          "name": "organic_matter_min_tha",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "water_strategy": {
+          "name": "water_strategy",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "water_needs_mm_per_cycle": {
+          "name": "water_needs_mm_per_cycle",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kc_stages": {
+          "name": "kc_stages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "critical_stops_drought": {
+          "name": "critical_stops_drought",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "nutrient_requirements_per_ton": {
+          "name": "nutrient_requirements_per_ton",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"N\":0,\"P2O5\":0,\"K2O\":0,\"CaO\":0,\"MgO\":0}'::jsonb"
+        },
+        "salinity_tolerance_ec": {
+          "name": "salinity_tolerance_ec",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inter_row_cm": {
+          "name": "inter_row_cm",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inter_plant_cm": {
+          "name": "inter_plant_cm",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seeds_pocket": {
+          "name": "seeds_pocket",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "yield_min_t_ha": {
+          "name": "yield_min_t_ha",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "yield_max_t_ha": {
+          "name": "yield_max_t_ha",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "phenological_stages": {
+          "name": "phenological_stages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "key_pests": {
+          "name": "key_pests",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "key_diseases": {
+          "name": "key_diseases",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "pre_flight_checks": {
+          "name": "pre_flight_checks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_crop_profiles_lookup": {
+          "name": "idx_crop_profiles_lookup",
+          "columns": [
+            {
+              "expression": "crop_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "zone_category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_crop_profiles_active": {
+          "name": "idx_crop_profiles_active",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "crop_profiles_slug_unique": {
+          "name": "crop_profiles_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        },
+        "crop_profiles_unique_triplet": {
+          "name": "crop_profiles_unique_triplet",
+          "nullsNotDistinct": false,
+          "columns": [
+            "crop_name",
+            "zone_category",
+            "variety"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -6147,6 +7372,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "crop_profile_id": {
+          "name": "crop_profile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_vectorized": {
           "name": "is_vectorized",
           "type": "boolean",
@@ -6160,6 +7391,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "embedding_version": {
+          "name": "embedding_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -6168,7 +7405,244 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "ext_context_zone_idx": {
+          "name": "ext_context_zone_idx",
+          "columns": [
+            {
+              "expression": "zone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ext_context_category_idx": {
+          "name": "ext_context_category_idx",
+          "columns": [
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "intelligence.soil_analyses": {
+      "name": "soil_analyses",
+      "schema": "intelligence",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "farm_id": {
+          "name": "farm_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "zone_id": {
+          "name": "zone_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sample_date": {
+          "name": "sample_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ph": {
+          "name": "ph",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salinity_ec": {
+          "name": "salinity_ec",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cation_exchange_capacity": {
+          "name": "cation_exchange_capacity",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carbon_nitrogen_ratio": {
+          "name": "carbon_nitrogen_ratio",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organic_matter_percent": {
+          "name": "organic_matter_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nitrogen_ppm": {
+          "name": "nitrogen_ppm",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phosphorus_ppm": {
+          "name": "phosphorus_ppm",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "potassium_ppm": {
+          "name": "potassium_ppm",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "calcium_ppm": {
+          "name": "calcium_ppm",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "magnesium_ppm": {
+          "name": "magnesium_ppm",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "texture": {
+          "name": "texture",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "clay_percent": {
+          "name": "clay_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sand_percent": {
+          "name": "sand_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "silt_percent": {
+          "name": "silt_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bulk_density": {
+          "name": "bulk_density",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wilting_point_percent": {
+          "name": "wilting_point_percent",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "field_capacity_percent": {
+          "name": "field_capacity_percent",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_lab_results": {
+          "name": "raw_lab_results",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_soil_analyses_farm": {
+          "name": "idx_soil_analyses_farm",
+          "columns": [
+            {
+              "expression": "farm_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_soil_analyses_zone": {
+          "name": "idx_soil_analyses_zone",
+          "columns": [
+            {
+              "expression": "zone_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_soil_analyses_date": {
+          "name": "idx_soil_analyses_date",
+          "columns": [
+            {
+              "expression": "sample_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -6210,6 +7684,13 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'INFO'"
         },
         "status": {
           "name": "status",
@@ -6259,6 +7740,21 @@
           "columns": [
             {
               "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "territory_events_status_idx": {
+          "name": "territory_events_status_idx",
+          "columns": [
+            {
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6419,14 +7915,38 @@
           "primaryKey": false,
           "notNull": false
         },
+        "temp_dew_point": {
+          "name": "temp_dew_point",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
         "precipitation_mm": {
           "name": "precipitation_mm",
           "type": "double precision",
           "primaryKey": false,
           "notNull": false
         },
+        "precipitation_probability": {
+          "name": "precipitation_probability",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "humidity_percent": {
           "name": "humidity_percent",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "humidity_min": {
+          "name": "humidity_min",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "humidity_max": {
+          "name": "humidity_max",
           "type": "double precision",
           "primaryKey": false,
           "notNull": false
@@ -6437,8 +7957,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "wind_direction_degrees": {
+          "name": "wind_direction_degrees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wind_gusts_kmh": {
+          "name": "wind_gusts_kmh",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
         "solar_radiation": {
           "name": "solar_radiation",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uv_index": {
+          "name": "uv_index",
           "type": "double precision",
           "primaryKey": false,
           "notNull": false
@@ -6454,6 +7992,55 @@
           "type": "double precision",
           "primaryKey": false,
           "notNull": false
+        },
+        "leaf_wetness_duration_minutes": {
+          "name": "leaf_wetness_duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "soil_temperature_depth_0cm": {
+          "name": "soil_temperature_depth_0cm",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "soil_temperature_depth_10cm": {
+          "name": "soil_temperature_depth_10cm",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "soil_moisture_volumetric_percent": {
+          "name": "soil_moisture_volumetric_percent",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disease_risk_index": {
+          "name": "disease_risk_index",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_triggers": {
+          "name": "alert_triggers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "whatsapp_pushed_alerts": {
+          "name": "whatsapp_pushed_alerts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "forecast_horizon_days": {
+          "name": "forecast_horizon_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "source": {
           "name": "source",
@@ -6522,8 +8109,23 @@
           "method": "btree",
           "with": {}
         },
-        "wdl_farm_date_source_unique": {
-          "name": "wdl_farm_date_source_unique",
+        "wdl_horizon_idx": {
+          "name": "wdl_horizon_idx",
+          "columns": [
+            {
+              "expression": "forecast_horizon_days",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "wdl_farm_date_source_horizon_unique": {
+          "name": "wdl_farm_date_source_horizon_unique",
           "columns": [
             {
               "expression": "farm_id",
@@ -6539,6 +8141,12 @@
             },
             {
               "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "forecast_horizon_days",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

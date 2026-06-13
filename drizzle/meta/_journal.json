@@ -5,64 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779865271949,
-      "tag": "0000_certain_silver_surfer",
+      "when": 1780838099669,
+      "tag": "0000_stormy_scalphunter",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1780121964355,
-      "tag": "0001_dashing_alice",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1780122904919,
-      "tag": "0002_dear_champions",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780130825695,
-      "tag": "0003_unusual_kid_colt",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1780131144863,
-      "tag": "0004_acoustic_zuras",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1780131310113,
-      "tag": "0005_premium_ozymandias",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1780135088289,
-      "tag": "0006_absent_medusa",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1780217398491,
-      "tag": "0007_new_shape",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1780240513538,
-      "tag": "0008_cloudy_monster_badoon",
+      "when": 1780955842672,
+      "tag": "0001_nostalgic_machine_man",
       "breakpoints": true
     }
   ]
