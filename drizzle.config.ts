@@ -58,7 +58,7 @@ export default defineConfig({
   },
   
   // 💡 MIS À JOUR : Ajout de 'auth' et inclusion automatique de tous tes schémas métiers
-  schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence', 'inventory'],
+  schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence'],
   
   verbose: true,
   strict: true,

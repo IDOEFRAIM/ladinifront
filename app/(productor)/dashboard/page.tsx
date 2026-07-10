@@ -46,7 +46,7 @@ function EmptyView({ activeOrg }: { activeOrg?: any }) {
         {activeOrg ? (
           <div className="mb-5">
             <p className="font-sans text-xs text-[#64748B] mb-1.5 font-semibold uppercase tracking-wider">
-              Organisation active :
+              Vos organisations actives :
             </p>
             <h3 className="font-sans text-lg font-bold text-[#064E3B] mb-4">
               {orgName || "Organisation"}

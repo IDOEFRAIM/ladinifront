@@ -1,20 +1,15 @@
 /**
- * DRIZZLE RELATIONS — AgriConnect v3
+ * DRIZZLE RELATIONS — AgriConnect Marketplace
  * ══════════════════════════════════════════════════════════════════════════
- * All relations are defined centrally here to:
- *   1. Avoid circular import issues between schema files
- *   2. Enable `db.query.X.findMany({ with: { ... } })` across the codebase
- *   3. Provide a single source of truth for relation metadata
- *
- * Every `with:` used in services/API routes MUST have a corresponding
- * relation defined here, otherwise Drizzle will throw:
- *   "Cannot read properties of undefined (reading 'referencedTable')"
+ * Toutes les relations « conseil » (crop cycles agronomiques, capteurs, météo,
+ * recommandations, anomalies, territoire, semences) ont été supprimées.
+ * `crop_cycles` → `market_offers`.
  */
 
 import { relations } from 'drizzle-orm';
 
 // ── Auth tables ──
-import { users, accounts, sessions } from './auth';
+import { users } from './auth';
 
 // ── Governance tables ──
 import {
@@ -24,7 +19,6 @@ import {
   climaticRegions,
   zones,
   workZones,
-  zoneMetrics,
   categories,
   subCategories,
   standardPrices,
@@ -40,12 +34,7 @@ import {
   deliveryAgents,
   deliveries,
   farms,
-  cropCycles,
-  fieldInterventions,
-  sensorDataSummary,
-  soilProfiles,
-  sensorTelemetryHistory,
-  cropGrowthLogs,
+  marketOffers,
   stocks,
   stockMovements,
   batches,
@@ -53,29 +42,21 @@ import {
   products,
   orders,
   orderItems,
+  payments,
+  orderStatusHistory,
+  orderReminders,
+  orderDisputes,
   auctions,
   bids,
+  marketplaceRatings,
 } from './marketplace';
-
-// Inventory / distribution tables
-import {
-  seedAllocations,
-  seedDistributions,
-  seedDistributionAttempts,
-} from './inventory';
 
 // ── Intelligence tables ──
 import {
-  auditLogs,
   agentActions,
-  agentTelemetry,
   conversations,
-  anomalies,
   trustScores,
   aiRatingReasonings,
-  territoryEvents,
-  aiRecommendations,
-  weatherDataLogs,
   agentContextMemory,
 } from './intelligence';
 
@@ -180,6 +161,7 @@ export const subCategoriesRelations = relations(subCategories, ({ one, many }) =
     references: [categories.id],
   }),
   standardPrices: many(standardPrices),
+  marketOffers: many(marketOffers),
 }));
 
 export const standardPricesRelations = relations(standardPrices, ({ one }) => ({
@@ -213,6 +195,7 @@ export const producersRelations = relations(producers, ({ one, many }) => ({
   farms: many(farms),
   products: many(products),
   clients: many(clients),
+  marketOffers: many(marketOffers),
 }));
 
 export const clientsRelations = relations(clients, ({ one }) => ({
@@ -232,34 +215,24 @@ export const farmsRelations = relations(farms, ({ one, many }) => ({
     references: [zones.id],
   }),
   inventory: many(stocks),
-  cropCycles: many(cropCycles),
+  marketOffers: many(marketOffers),
   expenses: many(expenses),
-  soilProfiles: many(soilProfiles),
-  sensorTelemetry: many(sensorTelemetryHistory),
-  cycles: many(cropCycles),
-  telemetryHistory: many(sensorTelemetryHistory),
-  sensorSummaries: many(sensorDataSummary),
-  aiRecommendations: many(aiRecommendations),
-  weatherLogs: many(weatherDataLogs),
-  contextMemories: many(agentContextMemory),
-  anomalies: many(anomalies),
 }));
 
-
-export const cropCyclesRelations = relations(cropCycles, ({ one, many }) => ({
+export const marketOffersRelations = relations(marketOffers, ({ one, many }) => ({
+  producer: one(producers, {
+    fields: [marketOffers.producerId],
+    references: [producers.id],
+  }),
   farm: one(farms, {
-    fields: [cropCycles.farmId],
+    fields: [marketOffers.farmId],
     references: [farms.id],
   }),
   subCategory: one(subCategories, {
-    fields: [cropCycles.subCategoryId],
+    fields: [marketOffers.subCategoryId],
     references: [subCategories.id],
   }),
-  interventions: many(fieldInterventions),
-  growthLogs: many(cropGrowthLogs),
-  recommendations: many(aiRecommendations), // Valide : la contrepartie existe maintenant ci-dessous !
   preorders: many(orders),
-  contextMemories: many(agentContextMemory),
 }));
 
 export const stocksRelations = relations(stocks, ({ one, many }) => ({
@@ -295,11 +268,16 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
   }),
 }));
 
-export const productsRelations = relations(products, ({ one }) => ({
+export const productsRelations = relations(products, ({ one, many }) => ({
   producer: one(producers, {
     fields: [products.producerId],
     references: [producers.id],
   }),
+  subCategory: one(subCategories, {
+    fields: [products.subCategoryId],
+    references: [subCategories.id],
+  }),
+  orderItems: many(orderItems),
 }));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -323,15 +301,20 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     fields: [orders.winningBidId],
     references: [bids.id],
   }),
-  cropCycle: one(cropCycles, {
-    fields: [orders.cropCycleId],
-    references: [cropCycles.id],
+  marketOffer: one(marketOffers, {
+    fields: [orders.marketOfferId],
+    references: [marketOffers.id],
   }),
   delivery: one(deliveries, {
     fields: [orders.id],
     references: [deliveries.orderId],
   }),
   items: many(orderItems),
+  payments: many(payments),
+  statusHistory: many(orderStatusHistory),
+  reminders: many(orderReminders),
+  disputes: many(orderDisputes),
+  ratings: many(marketplaceRatings),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -342,6 +325,41 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   product: one(products, {
     fields: [orderItems.productId],
     references: [products.id],
+  }),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  order: one(orders, {
+    fields: [payments.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderStatusHistory.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const orderRemindersRelations = relations(orderReminders, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderReminders.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const orderDisputesRelations = relations(orderDisputes, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderDisputes.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const marketplaceRatingsRelations = relations(marketplaceRatings, ({ one }) => ({
+  order: one(orders, {
+    fields: [marketplaceRatings.orderId],
+    references: [orders.id],
   }),
 }));
 
@@ -428,59 +446,8 @@ export const warehousesRelations = relations(warehouses, ({ one, many }) => ({
   stocks: many(stocks),
 }));
 
-export const seedAllocationsRelations = relations(seedAllocations, ({ one, many }) => ({
-  organization: one(organizations, {
-    fields: [seedAllocations.organizationId],
-    references: [organizations.id],
-  }),
-  zone: one(zones, {
-    fields: [seedAllocations.zoneId],
-    references: [zones.id],
-  }),
-  allocatedBy: one(users, {
-    fields: [seedAllocations.allocatedById],
-    references: [users.id],
-  }),
-  distributions: many(seedDistributions),
-}));
-
-export const seedDistributionsRelations = relations(seedDistributions, ({ one, many }) => ({
-  allocation: one(seedAllocations, {
-    fields: [seedDistributions.allocationId],
-    references: [seedAllocations.id],
-  }),
-  producer: one(producers, {
-    fields: [seedDistributions.producerId],
-    references: [producers.id],
-  }),
-  agent: one(users, {
-    fields: [seedDistributions.agentId],
-    references: [users.id],
-  }),
-  organization: one(organizations, {
-    fields: [seedDistributions.organizationId],
-    references: [organizations.id],
-  }),
-  zone: one(zones, {
-    fields: [seedDistributions.zoneId],
-    references: [zones.id],
-  }),
-  attempts: many(seedDistributionAttempts),
-}));
-
-export const seedDistributionAttemptsRelations = relations(seedDistributionAttempts, ({ one }) => ({
-  distribution: one(seedDistributions, {
-    fields: [seedDistributionAttempts.distributionId],
-    references: [seedDistributions.id],
-  }),
-  actor: one(users, {
-    fields: [seedDistributionAttempts.actorId],
-    references: [users.id],
-  }),
-}));
-
 // ╔══════════════════════════════════════════════╗
-// ║  INTELLIGENCE RELATIONS                       ║
+// ║  INTELLIGENCE RELATIONS (agent persistence)   ║
 // ╚══════════════════════════════════════════════╝
 
 export const agentActionsRelations = relations(agentActions, ({ one }) => ({
@@ -503,11 +470,8 @@ export const conversationsRelations = relations(conversations, ({ one }) => ({
     fields: [conversations.zoneId],
     references: [zones.id],
   }),
-  anomaly: one(anomalies, {
-    fields: [conversations.anomalyId],
-    references: [anomalies.id],
-  }),
 }));
+
 export const trustScoresRelations = relations(trustScores, ({ one, many }) => ({
   user: one(users, {
     fields: [trustScores.userId],
@@ -523,105 +487,13 @@ export const aiRatingReasoningsRelations = relations(aiRatingReasonings, ({ one 
   }),
 }));
 
-export const anomaliesRelations = relations(anomalies, ({ one, many }) => ({
-  zone: one(zones, {
-    fields: [anomalies.zoneId],
-    references: [zones.id],
-  }),
-  farm: one(farms, {
-    fields: [anomalies.farmId],
-    references: [farms.id],
-  }),
-  conversations: many(conversations),
-}));
-
-export const territoryEventsRelations = relations(territoryEvents, ({ one }) => ({
-  zone: one(zones, {
-    fields: [territoryEvents.zoneId],
-    references: [zones.id],
-  }),
-}));
-
-// ══════════════════════════════════════════════
-//   AGTECH RELATIONS
-// ══════════════════════════════════════════════
-
-export const fieldInterventionsRelations = relations(fieldInterventions, ({ one }) => ({
-  cropCycle: one(cropCycles, {
-    fields: [fieldInterventions.cropCycleId],
-    references: [cropCycles.id],
-  }),
-}));
-
-export const cropGrowthLogsRelations = relations(cropGrowthLogs, ({ one }) => ({
-  cropCycle: one(cropCycles, {
-    fields: [cropGrowthLogs.cropCycleId],
-    references: [cropCycles.id],
-  }),
-}));
-
-export const soilProfilesRelations = relations(soilProfiles, ({ one }) => ({
-  farm: one(farms, {
-    fields: [soilProfiles.farmId],
-    references: [farms.id],
-  }),
-}));
-
-export const sensorTelemetryHistoryRelations = relations(sensorTelemetryHistory, ({ one }) => ({
-  farm: one(farms, {
-    fields: [sensorTelemetryHistory.farmId],
-    references: [farms.id],
-  }),
-}));
-
-export const sensorDataSummaryRelations = relations(sensorDataSummary, ({ one }) => ({
-  farm: one(farms, {
-    fields: [sensorDataSummary.farmId],
-    references: [farms.id],
-  }),
-}));
-
-// ══════════════════════════════════════════════
-//   AI BRAIN RELATIONS
-// ══════════════════════════════════════════════
-
-export const aiRecommendationsRelations = relations(aiRecommendations, ({ one }) => ({
-  user: one(users, {
-    fields: [aiRecommendations.userId],
-    references: [users.id],
-  }),
-  cropCycle: one(cropCycles, {
-    fields: [aiRecommendations.cropCycleId],
-    references: [cropCycles.id],
-  }),
-  farm: one(farms, {
-    fields: [aiRecommendations.farmId],
-    references: [farms.id],
-  }),
-}));
-
-export const weatherDataLogsRelations = relations(weatherDataLogs, ({ one }) => ({
-  zone: one(zones, {
-    fields: [weatherDataLogs.zoneId],
-    references: [zones.id],
-  }),
-  farm: one(farms, {
-    fields: [weatherDataLogs.farmId],
-    references: [farms.id],
-  }),
-}));
-
 export const agentContextMemoryRelations = relations(agentContextMemory, ({ one }) => ({
   user: one(users, {
     fields: [agentContextMemory.userId],
     references: [users.id],
   }),
-  farm: one(farms, {
-    fields: [agentContextMemory.farmId],
-    references: [farms.id],
-  }),
-  cropCycle: one(cropCycles, {
-    fields: [agentContextMemory.cropCycleId],
-    references: [cropCycles.id],
+  marketOffer: one(marketOffers, {
+    fields: [agentContextMemory.marketOfferId],
+    references: [marketOffers.id],
   }),
 }));

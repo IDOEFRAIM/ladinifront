@@ -9,7 +9,7 @@ export async function updateStockAction(actorId: string, stockId: string, newQua
   if (!stockId) throw new Error('NO_STOCK_ID');
 
   const result = await db.transaction(async (tx) => {
-    const [stock] = await tx.update(schema.stocks).set({ quantity: newQuantity }).where(eq(schema.stocks.id, stockId)).returning();
+    const [stock] = await tx.update(schema.stocks).set({ quantity: String(newQuantity) }).where(eq(schema.stocks.id, stockId)).returning();
 
     await tx.insert(schema.auditLogs).values({
       actorId,

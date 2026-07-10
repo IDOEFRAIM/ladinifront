@@ -15,7 +15,7 @@ export default function OfflinePage() {
             </div>
             <h1 style={{ fontSize:'2rem', color:C.text, marginBottom:10, fontFamily:F.heading, fontWeight:800, letterSpacing:'-0.02em' }}>Réseau Coupé</h1>
             <p style={{ fontSize:'1.05rem', color:C.muted, maxWidth:400, marginBottom:40, lineHeight:1.6 }}>
-                Vous êtes dans une zone sans internet. Cette page n'est pas encore enregistrée sur votre téléphone.
+                Vous êtes dans une zone sans internet. Cette page n'est pas encore enregistrée sur votre téléphone.Veuillez patientez quelques minutes et réessayer.
             </p>
             <div style={{ background:C.glass, backdropFilter:'blur(20px)', padding:24, borderRadius:24, border:`1px solid ${C.border}`, marginBottom:30 }}>
                 <h3 style={{ margin:'0 0 16px', fontSize:'1rem', fontWeight:800, color:C.text, fontFamily:F.heading }}>Que pouvez-vous faire ?</h3>
@@ -32,7 +32,7 @@ export default function OfflinePage() {
                 </div>
             </div>
             <Link href="/" style={{ display:'inline-flex', alignItems:'center', gap:8, background:C.forest, color:'white', textDecoration:'none', padding:'16px 32px', borderRadius:100, fontWeight:800, boxShadow:'0 4px 16px rgba(6,78,59,0.2)', fontFamily:F.body }}>
-                <ArrowLeft size={18}/> RETOURNER AU MARCHÉ
+                <ArrowLeft size={18}/> RETOURNER AU CATALOGUE
             </Link>
         </div>
     );

@@ -53,6 +53,7 @@ const client: PostgresClient =
     prepare: false, // Requis pour les architectures Serverless / PgBouncer
     idle_timeout: 20,
     connect_timeout: 10,
+    timeout: 30,
     max_lifetime: isVercel ? 60 : 300,
     ...sslOptions,
   });

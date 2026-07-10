@@ -122,7 +122,7 @@ export async function getEligibleProducers(input: {
           with: { trustScore: true },
         },
         products: subCatId ? {
-          where: and(eq(schema.products.subCategoryId, subCatId), gt(schema.products.quantityForSale, 0)),
+          where: and(eq(schema.products.subCategoryId, subCatId), gt(schema.products.quantityForSale, '0')),
           limit: 1,
         } : undefined,
       },
@@ -214,9 +214,9 @@ export async function createAuction(input: {
     const [created] = await db.insert(schema.auctions).values({
       buyerId: userId,
       subCategoryId: input.subCategoryId,
-      quantity: input.quantity,
+      quantity: String(input.quantity),
       unit: input.unit ?? 'TONNE',
-      maxPricePerUnit: input.maxPricePerUnit,
+      maxPricePerUnit: String(input.maxPricePerUnit),
       incoterm,
       deliveryLocation: String(input.deliveryLocation).trim(),
       deliveryDeadline,
@@ -285,7 +285,7 @@ export async function submitBid(input: {
       return { success: false, error: 'Le prix doit être supérieur à 0' };
     }
 
-    if (input.offeredPrice > auction.maxPricePerUnit) {
+    if (input.offeredPrice > Number(auction.maxPricePerUnit)) {
       return { success: false, error: `Le prix ne peut dépasser le plafond de ${auction.maxPricePerUnit}` };
     }
 
@@ -320,7 +320,7 @@ export async function submitBid(input: {
         .values({
           auctionId: input.auctionId,
           producerId: producer.id,
-          offeredPrice: input.offeredPrice,
+          offeredPrice: String(input.offeredPrice),
           linkedStockId,
           message: input?.message ?? null,
           estimatedDeliveryDate: est,
@@ -328,7 +328,7 @@ export async function submitBid(input: {
         .onConflictDoUpdate({
           target: [schema.bids.auctionId, schema.bids.producerId],
           set: {
-            offeredPrice: input.offeredPrice,
+            offeredPrice: String(input.offeredPrice),
             linkedStockId,
             message: input?.message ?? null,
             estimatedDeliveryDate: est,
@@ -468,7 +468,7 @@ export async function awardAuction(input: {
           buyerId: buyerProfile?.id ?? null,
           customerName: buyerUser?.name ?? null,
           customerPhone: buyerUser?.phone ?? null,
-          totalAmount,
+          totalAmount: String(totalAmount),
           source: 'AUCTION',
           status: 'PENDING',
           deliveryStatus: 'PENDING',
@@ -483,14 +483,14 @@ export async function awardAuction(input: {
             where: eq(schema.stocks.id, winnerBid.linkedStockId),
             columns: { id: true, quantity: true },
           });
-          if (stock && stock.quantity >= auction.quantity) {
+          if (stock && Number(stock.quantity) >= Number(auction.quantity)) {
             await tx.update(schema.stocks)
               .set({ quantity: sql`${schema.stocks.quantity} - ${auction.quantity}` })
               .where(eq(schema.stocks.id, winnerBid.linkedStockId));
             await tx.insert(schema.stockMovements).values({
               stockId: winnerBid.linkedStockId,
               type: 'SALE',
-              quantity: -auction.quantity,
+              quantity: String(-Number(auction.quantity)),
               reason: `Enchère #${auction.id.slice(0, 8)} — Attribution manuelle`,
             });
           }

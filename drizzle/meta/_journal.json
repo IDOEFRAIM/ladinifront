@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1780838099669,
-      "tag": "0000_stormy_scalphunter",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1780955842672,
-      "tag": "0001_nostalgic_machine_man",
+      "when": 1783641619149,
+      "tag": "0000_giant_gateway",
       "breakpoints": true
     }
   ]

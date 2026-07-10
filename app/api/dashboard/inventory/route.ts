@@ -18,17 +18,17 @@ export async function GET(req: NextRequest) {
     const assets: AgrobusinessAsset[] = [];
 
     producer.products.forEach(p => {
-      if (p.quantityForSale > 0) {
+      if (Number(p.quantityForSale) > 0) {
         assets.push({
           id: `prod-${p.id}`,
           unitId: normalizeCategory(p.categoryLabel),
           nature: 'CROP',
           lifecycle: 'DORMANT',
           name: p.name,
-          quantity: p.quantityForSale,
+          quantity: Number(p.quantityForSale),
           unit: p.unit as any,
-          purchasePrice: p.price * 0.7,
-          marketPrice: p.price,
+          purchasePrice: Number(p.price) * 0.7,
+          marketPrice: Number(p.price),
           entryDate: p.updatedAt.toISOString(),
           isPerishable: ['tomate', 'légume', 'fruit'].some(k =>
             p.categoryLabel.toLowerCase().includes(k)
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           nature: stock.type === 'HARVEST' ? 'CROP' : 'LIVESTOCK',
           lifecycle: 'DORMANT',
           name: stock.itemName,
-          quantity: stock.quantity,
+          quantity: Number(stock.quantity),
           unit: stock.unit as any,
           purchasePrice: 0,
           marketPrice: 0,

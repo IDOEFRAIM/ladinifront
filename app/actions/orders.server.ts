@@ -36,12 +36,12 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
     const p = products.find((x: any) => x.id === it.id);
     
     // Vérifier l'existence et le stock
-    if (!p || (p.quantityForSale ?? 0) < it.qty) {
+    if (!p || Number(p.quantityForSale ?? 0) < it.qty) {
       throw new Error('PRODUCT_UNAVAILABLE');
     }
 
     // Vérifier les valeurs aberrantes
-    if (it.qty <= 0 || p.price <= 0) {
+    if (it.qty <= 0 || Number(p.price) <= 0) {
       throw new Error('INVALID_VALUES_ABERRANT');
     }
 
@@ -90,7 +90,7 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
     const [order] = await tx.insert(schema.orders).values({
       customerName: payload.customer.name,
       customerPhone: payload.customer.phone,
-      totalAmount: calculatedTotal, // On utilise le total calculé sécurisé
+      totalAmount: String(calculatedTotal), // On utilise le total calculé sécurisé
       city: payload.delivery?.city ?? null,
       gpsLat: payload.delivery?.lat?.toString() ?? null,
       gpsLng: payload.delivery?.lng?.toString() ?? null,
@@ -107,7 +107,7 @@ export async function createOrderFromForm(formData: FormData, buyerId?: string) 
         orderId: order.id,
         productId: item.id,
         quantity: item.qty,
-        priceAtSale: product?.price ?? 0, // Prix figé au moment de la vente
+        priceAtSale: product?.price ?? '0', // Prix figé au moment de la vente
       };
     });
 
@@ -171,11 +171,11 @@ export async function fetchProducerOrders(userId?: string) {
     const order = ordersMap.get(item.orderId)!;
     order.items.push({
       name: item.product.name,
-      quantity: item.quantity,
+      quantity: Number(item.quantity),
       unit: item.product.unit,
-      price: item.priceAtSale,
+      price: Number(item.priceAtSale),
     });
-    order.total += Number(item.priceAtSale) * item.quantity;
+    order.total += Number(item.priceAtSale) * Number(item.quantity);
   }
 
   return Array.from(ordersMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -214,9 +214,9 @@ export async function fetchOrderDetailsForProducer(orderId: string, userId?: str
 
   let producerSubtotal = 0;
   const formattedItems = filteredItems.map(item => {
-    const price = item.priceAtSale;
-    producerSubtotal += item.quantity * price;
-    return { id: item.id, name: item.product.name, quantity: item.quantity, unit: item.product.unit, price };
+    const price = Number(item.priceAtSale);
+    producerSubtotal += Number(item.quantity) * price;
+    return { id: item.id, name: item.product.name, quantity: Number(item.quantity), unit: item.product.unit, price };
   });
 
   return {

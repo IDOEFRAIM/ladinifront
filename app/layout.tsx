@@ -5,9 +5,10 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/context/CartContext';
 import { Toaster } from 'react-hot-toast';
 
+
 export const metadata: Metadata = {
   title: 'Ladini — Marché Agricole du Burkina Faso',
-  description: 'Plateforme de commerce agricole connectant producteurs et consommateurs au Burkina Faso.',
+  description: 'Plateforme connectant producteurs et consommateurs au Burkina Faso.',
   // App Router manifest route (app/manifest.ts)
   manifest: '/manifest.webmanifest',
   appleWebApp: {
@@ -24,6 +25,7 @@ export const viewport: Viewport = {
   maximumScale: 1, // Évite le zoom auto sur les inputs en mobile
   viewportFit: 'cover', // Utilise tout l'écran (encoches incluses)
 };
+
 
 export default function RootLayout({
   children,
@@ -43,7 +45,7 @@ export default function RootLayout({
                 duration: 4000,
               }} 
             />
-            
+    
             {/* Conteneur principal avec padding adaptatif */}
             <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-safe">
               {children}

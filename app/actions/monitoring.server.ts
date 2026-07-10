@@ -476,12 +476,7 @@ export async function fetchConversations(opts: {
 
   if (filters.search) {
     const term = `%${filters.search}%`;
-    conditions.push(
-      or(
-        ilike(schema.conversations.crop, term),
-        ilike(schema.conversations.agentType, term),
-      ),
-    );
+    conditions.push(ilike(schema.conversations.agentType, term));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

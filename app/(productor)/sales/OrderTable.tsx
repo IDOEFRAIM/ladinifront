@@ -84,7 +84,7 @@ export default function OrdersTabs({ initialOrders }: { initialOrders: any[] }) 
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions  */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                     <Link href={`/sales/${order.id}`} style={{ flex: 1, background: 'rgba(6,78,59,0.04)', color: C.forest, fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 2, padding: '16px 0', borderRadius: 14, textAlign: 'center' as const, textDecoration: 'none', border: `1px solid ${C.border}`, transition: 'all 0.2s' }}>
                       Inspecter la commande

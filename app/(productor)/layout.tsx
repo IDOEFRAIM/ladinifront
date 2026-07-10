@@ -32,8 +32,8 @@ export default function ProductorLayout({ children }: { children: React.ReactNod
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9FBF8] p-6 text-center">
         <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
-        <h2 className="text-slate-800 font-semibold text-lg">Vérification de vos accès</h2>
-        <p className="text-slate-500 text-sm max-w-xs">Nous préparons votre espace de gestion agricole...</p>
+        <h2 className="text-slate-800 font-semibold text-lg">Nous vérifions vos accès</h2>
+        <p className="text-slate-500 text-sm max-w-xs">Nous préparons votre espace de gestion agricole</p>
         {showContinueBtn && (
           <button
             onClick={() => router.replace('/login')}

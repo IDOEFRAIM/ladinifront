@@ -333,9 +333,9 @@ export async function getAdminProducts() {
       shortCode: string | null;
       name: string;
       categoryLabel: string;
-      price: number;
+      price: string;
       unit: string;
-      quantityForSale: number;
+      quantityForSale: string;
       createdAt: Date;
       updatedAt: Date;
       producer: {
@@ -391,9 +391,9 @@ export async function getAdminProducts() {
       shortCode: p.shortCode || '',
       name: p.name,
       categoryLabel: p.categoryLabel,
-      price: p.price,
+      price: Number(p.price),
       unit: p.unit,
-      quantityForSale: p.quantityForSale,
+      quantityForSale: Number(p.quantityForSale),
       producerName: p.producer?.businessName || 'Inconnu',
       location: p.producer?.zone?.name || 'Non assigné',
       totalOrders: orderItemCountMap.get(p.id) ?? 0,
