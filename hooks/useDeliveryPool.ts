@@ -128,9 +128,18 @@ export function useDeliveryPool() {
   }, [refreshPool, refreshActive]);
 
   // ── Helpers pour les appels API (réduction de la duplication) ──────────
-  const performAction = async (
-    url: string, 
-    body: object, 
+  // Incident réel (2026-08-27) : ces fonctions n'étaient PAS mémoïsées —
+  // une nouvelle référence était créée à CHAQUE rendu du hook (donc à chaque
+  // changement de `state`, y compris depuis le polling). Le useEffect
+  // d'initialisation de app/agent/deliveries/page.tsx dépend de
+  // `[toggleOnline, refreshPool]` : appeler `toggleOnline` déclenche un
+  // setState (via `performAction`) → re-rendu → nouvelle référence de
+  // `toggleOnline` → l'effet se redéclenche → rappelle `toggleOnline` →
+  // boucle infinie, spam de `POST /api/delivery/status`. `useCallback` avec
+  // des dépendances stables (refs, setState) casse la boucle.
+  const performAction = useCallback(async (
+    url: string,
+    body: object,
     loadingKey: string,
     setLoading: (val: string | null) => void
   ) => {
@@ -148,13 +157,13 @@ export function useDeliveryPool() {
     } finally {
       if (mountedRef.current) setLoading(null);
     }
-  };
+  }, []);
 
   // ── Actions ───────────────────────────────────────────────────────────
 
-  const acceptDelivery = async (deliveryId: string) => {
+  const acceptDelivery = useCallback(async (deliveryId: string) => {
     const { ok, data } = await performAction('/api/delivery/claim', { deliveryId }, deliveryId, setClaiming);
-    
+
     if (ok && data.success) {
       // Mise à jour optimiste du pool
       setState(prev => ({
@@ -165,43 +174,43 @@ export function useDeliveryPool() {
       return { success: true };
     }
     return { success: false, error: data.error || 'Déjà prise ou indisponible' };
-  };
+  }, [performAction, refreshActive]);
 
-  const confirmPickup = async (deliveryId: string) => {
+  const confirmPickup = useCallback(async (deliveryId: string) => {
     const { ok, data } = await performAction('/api/delivery/status', { action: 'PICKUP', deliveryId }, `${deliveryId}-PICKUP`, setActionLoading);
     if (ok && data.success) {
       await refreshActive();
       return { success: true };
     }
     return { success: false, error: data.error };
-  };
+  }, [performAction, refreshActive]);
 
-  const confirmDelivery = async (deliveryId: string, otpCode: string) => {
+  const confirmDelivery = useCallback(async (deliveryId: string, otpCode: string) => {
     const { ok, data } = await performAction('/api/delivery/confirm', { deliveryId, otpCode }, `${deliveryId}-CONFIRM`, setActionLoading);
     if (ok && data.success) {
       await Promise.all([refreshActive(), refreshPool()]);
       return { success: true };
     }
     return { success: false, error: data.error };
-  };
+  }, [performAction, refreshActive, refreshPool]);
 
-  const markFailed = async (deliveryId: string, reason?: string) => {
+  const markFailed = useCallback(async (deliveryId: string, reason?: string) => {
     const { ok, data } = await performAction('/api/delivery/status', { action: 'FAILED', deliveryId, reason }, `${deliveryId}-FAILED`, setActionLoading);
     if (ok && data.success) {
       await refreshActive();
       return { success: true };
     }
     return { success: false, error: data.error };
-  };
+  }, [performAction, refreshActive]);
 
-  const toggleOnline = async (goOnline: boolean): Promise<boolean> => {
+  const toggleOnline = useCallback(async (goOnline: boolean): Promise<boolean> => {
     const { ok } = await performAction('/api/delivery/status', { action: goOnline ? 'GO_ONLINE' : 'GO_OFFLINE' }, 'TOGGLE', setActionLoading);
     if (ok) {
       if (goOnline) refreshPool();
       return true;
     }
     return false;
-  };
+  }, [performAction, refreshPool]);
 
   return {
     ...state,

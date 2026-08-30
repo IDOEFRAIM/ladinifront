@@ -1115,8 +1115,8 @@ export async function createOrgAllocation(data: {
       organizationId: ctx.orgId,
       zoneId,
       seedType,
-      totalQuantity,
-      remainingQuantity: totalQuantity,
+      totalQuantity: String(totalQuantity),
+      remainingQuantity: String(totalQuantity),
       unit: unit ?? 'KG',
       allocatedById: ctx.userId,
     }).returning();
@@ -1175,11 +1175,11 @@ export async function updateOrgAllocation(allocationId: string, data: {
     }
     if (validation.data.totalQuantity !== undefined) {
       const newTotal = validation.data.totalQuantity;
-      const diff = newTotal - (existing.totalQuantity ?? 0);
-      const newRemaining = (existing.remainingQuantity ?? 0) + diff;
+      const diff = newTotal - Number(existing.totalQuantity ?? 0);
+      const newRemaining = Number(existing.remainingQuantity ?? 0) + diff;
       if (newRemaining < 0) return { success: false, error: 'Le stock restant ne peut pas etre negatif.' };
-      updates.totalQuantity = newTotal;
-      updates.remainingQuantity = newRemaining;
+      updates.totalQuantity = String(newTotal);
+      updates.remainingQuantity = String(newRemaining);
     }
 
     await db.update(schema.seedAllocations)

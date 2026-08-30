@@ -10,7 +10,7 @@ declare global {
   // eslint-disable-next-line no-var
   var __frontag_postgres_client__: PostgresClient | undefined;
 }
-
+//dfgh 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error('DATABASE_URL is not set');

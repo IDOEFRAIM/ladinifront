@@ -49,6 +49,9 @@ import {
   auctions,
   bids,
   marketplaceRatings,
+  seedAllocations,
+  seedDistributions,
+  seedDistributionAttempts,
 } from './marketplace';
 
 // ── Intelligence tables ──
@@ -495,5 +498,49 @@ export const agentContextMemoryRelations = relations(agentContextMemory, ({ one 
   marketOffer: one(marketOffers, {
     fields: [agentContextMemory.marketOfferId],
     references: [marketOffers.id],
+  }),
+}));
+
+// ── Seed allocations / distributions (restauré 2026-08-27, voir marketplace.ts) ──
+export const seedAllocationsRelations = relations(seedAllocations, ({ one, many }) => ({
+  zone: one(zones, {
+    fields: [seedAllocations.zoneId],
+    references: [zones.id],
+  }),
+  organization: one(organizations, {
+    fields: [seedAllocations.organizationId],
+    references: [organizations.id],
+  }),
+  allocatedBy: one(users, {
+    fields: [seedAllocations.allocatedById],
+    references: [users.id],
+  }),
+  distributions: many(seedDistributions),
+}));
+
+export const seedDistributionsRelations = relations(seedDistributions, ({ one, many }) => ({
+  allocation: one(seedAllocations, {
+    fields: [seedDistributions.allocationId],
+    references: [seedAllocations.id],
+  }),
+  producer: one(producers, {
+    fields: [seedDistributions.producerId],
+    references: [producers.id],
+  }),
+  agent: one(users, {
+    fields: [seedDistributions.agentId],
+    references: [users.id],
+  }),
+  zone: one(zones, {
+    fields: [seedDistributions.zoneId],
+    references: [zones.id],
+  }),
+  attempts: many(seedDistributionAttempts),
+}));
+
+export const seedDistributionAttemptsRelations = relations(seedDistributionAttempts, ({ one }) => ({
+  distribution: one(seedDistributions, {
+    fields: [seedDistributionAttempts.distributionId],
+    references: [seedDistributions.id],
   }),
 }));

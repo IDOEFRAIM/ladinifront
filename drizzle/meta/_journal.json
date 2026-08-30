@@ -5,8 +5,29 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1783641619149,
-      "tag": "0000_giant_gateway",
+      "when": 1783792488229,
+      "tag": "0000_wakeful_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783808677162,
+      "tag": "0001_clammy_arclight",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787965257248,
+      "tag": "0002_strange_silhouette",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787970195398,
+      "tag": "0003_crazy_domino",
       "breakpoints": true
     }
   ]

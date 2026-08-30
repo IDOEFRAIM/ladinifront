@@ -37,6 +37,9 @@ CREATE TABLE "auth"."users" (
 	"identity_verified" boolean DEFAULT false,
 	"zone_id" uuid,
 	"onboarding_completed" boolean DEFAULT false NOT NULL,
+	"account_status" text DEFAULT 'ACTIVE' NOT NULL,
+	"blocked_reason" text,
+	"blocked_at" timestamp,
 	"deleted_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
@@ -84,6 +87,16 @@ CREATE TABLE "governance"."overlay_layers" (
 	"settings" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "governance"."prohibited_terms" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"term" text NOT NULL,
+	"category" text DEFAULT 'ILLICIT' NOT NULL,
+	"severity" text DEFAULT 'HIGH' NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "prohibited_terms_term_unique" UNIQUE("term")
 );
 --> statement-breakpoint
 CREATE TABLE "governance"."role_definitions" (
@@ -629,6 +642,30 @@ CREATE TABLE "intelligence"."conversations" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "intelligence"."demand_signals" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"normalized_term" text NOT NULL,
+	"raw_query" text NOT NULL,
+	"phone" text,
+	"user_id" uuid,
+	"zone_id" uuid,
+	"occurrences" integer DEFAULT 1 NOT NULL,
+	"resolved" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "intelligence"."moderation_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid,
+	"phone" text NOT NULL,
+	"kind" text NOT NULL,
+	"matched_term" text,
+	"excerpt" text,
+	"action_taken" text,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "intelligence"."trust_scores" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -667,8 +704,10 @@ CREATE INDEX "sessions_user_idx" ON "auth"."sessions" USING btree ("user_id");--
 CREATE INDEX "users_role_idx" ON "auth"."users" USING btree ("role");--> statement-breakpoint
 CREATE INDEX "users_zone_idx" ON "auth"."users" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "users_created_idx" ON "auth"."users" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "users_account_status_idx" ON "auth"."users" USING btree ("account_status");--> statement-breakpoint
 CREATE UNIQUE INDEX "overlay_layers_zone_key_unique" ON "governance"."overlay_layers" USING btree ("zone_id","key");--> statement-breakpoint
 CREATE INDEX "overlay_layers_zone_idx" ON "governance"."overlay_layers" USING btree ("zone_id");--> statement-breakpoint
+CREATE INDEX "prohibited_terms_active_idx" ON "governance"."prohibited_terms" USING btree ("is_active");--> statement-breakpoint
 CREATE UNIQUE INDEX "standard_prices_sub_zone_unique" ON "governance"."standard_prices" USING btree ("sub_category_id","zone_id");--> statement-breakpoint
 CREATE INDEX "standard_prices_zone_idx" ON "governance"."standard_prices" USING btree ("zone_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "sub_categories_cat_name_unique" ON "governance"."sub_categories" USING btree ("category_id","name");--> statement-breakpoint
@@ -786,4 +825,9 @@ CREATE INDEX "conversations_user_idx" ON "intelligence"."conversations" USING bt
 CREATE INDEX "conversations_agent_idx" ON "intelligence"."conversations" USING btree ("agent_type");--> statement-breakpoint
 CREATE INDEX "conversations_created_idx" ON "intelligence"."conversations" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "conversations_followup_idx" ON "intelligence"."conversations" USING btree ("needs_follow_up");--> statement-breakpoint
-CREATE UNIQUE INDEX "conversations_audit_unique" ON "intelligence"."conversations" USING btree ("audit_trail_id");
+CREATE UNIQUE INDEX "conversations_audit_unique" ON "intelligence"."conversations" USING btree ("audit_trail_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "demand_signals_term_unique" ON "intelligence"."demand_signals" USING btree ("normalized_term");--> statement-breakpoint
+CREATE INDEX "demand_signals_occurrences_idx" ON "intelligence"."demand_signals" USING btree ("occurrences");--> statement-breakpoint
+CREATE INDEX "moderation_events_phone_idx" ON "intelligence"."moderation_events" USING btree ("phone");--> statement-breakpoint
+CREATE INDEX "moderation_events_user_idx" ON "intelligence"."moderation_events" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "moderation_events_kind_idx" ON "intelligence"."moderation_events" USING btree ("kind");

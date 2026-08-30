@@ -43,6 +43,7 @@ import {
 } from './_config';
 import { type InferModel } from 'drizzle-orm';
 import { zones, organizations } from './governance';
+import { users } from './auth';
 
 // ── WAREHOUSES ─────────────────────────────────────────────────────────────
 export const warehouses = marketplaceSchema.table('warehouses', {
@@ -306,6 +307,13 @@ export const products = marketplaceSchema.table('products', {
   price: numeric('price', { precision: 12, scale: 2 }).notNull(),
   unit: unitEnum('unit').default('KG').notNull(),
   quantityForSale: numeric('quantity_for_sale', { precision: 14, scale: 3 }).default('0').notNull(),
+  // Déclinaisons de prix/conditionnement pour un MÊME produit (2026-08-27,
+  // ex: "500f le demi-litre en sachet et 600f le bidon") — miroir exact de
+  // `Product.pricing_tiers` côté backend (domain/catalog/models.py) : liste
+  // de {quantity, unit, price, packaging}. `unit` y est TOUJOURS littéral,
+  // jamais normalisé. NULL = produit à tarif unique (comportement
+  // historique, colonnes price/unit/quantityForSale ci-dessus).
+  pricingTiers: jsonb('pricing_tiers'),
   images: text('images').array().notNull().default(sql`'{}'::text[]`),
   audioUrl: text('audio_url'),
   qualityClass: text('quality_class'),
@@ -566,6 +574,72 @@ export const marketplaceRatings = marketplaceSchema.table('marketplace_ratings',
   uniqueIndex('mr_order_author_unique').on(t.orderId, t.authorId),
 ]);
 
+// ── SEED ALLOCATIONS (stock d'intrants alloué à une organisation/zone) ─────
+// Restauré (2026-08-27) : présent dans la base réelle et activement utilisé
+// par services/seedDistribution.service.ts + services/org-manager.service.ts
+// (distribution d'intrants agricoles aux producteurs, avec vérification OTP
+// par l'agent terrain/livreur) — jamais porté ici lors du nettoyage initial
+// du schéma modulaire, ce qui cassait la compilation de ces deux services.
+export const seedAllocations = marketplaceSchema.table('seed_allocations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  zoneId: uuid('zone_id').notNull().references(() => zones.id),
+  seedType: text('seed_type').notNull(),
+  totalQuantity: numeric('total_quantity', { precision: 14, scale: 3 }).notNull(),
+  remainingQuantity: numeric('remaining_quantity', { precision: 14, scale: 3 }).notNull(),
+  unit: unitEnum('unit').default('KG').notNull(),
+  allocatedById: uuid('allocated_by_id').notNull().references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('seed_allocations_org_idx').on(t.organizationId),
+  index('seed_allocations_zone_idx').on(t.zoneId),
+]);
+
+// ── SEED DISTRIBUTIONS (remise d'intrants à un producteur, vérifiée OTP) ───
+export const seedDistributions = marketplaceSchema.table('seed_distributions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  allocationId: uuid('allocation_id').notNull().references(() => seedAllocations.id),
+  producerId: uuid('producer_id').notNull().references(() => producers.id),
+  agentId: uuid('agent_id').notNull().references(() => users.id),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  zoneId: uuid('zone_id').notNull().references(() => zones.id),
+  quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
+  cnibProvided: text('cnib_provided'),
+  verificationCodeHash: text('verification_code_hash'),
+  verificationCodeExpiresAt: timestamp('verification_code_expires_at'),
+  verificationChannel: text('verification_channel').default('IN_APP').notNull(),
+  attemptsCount: integer('attempts_count').default(0).notNull(),
+  // PENDING → COMPLETED | FAILED | CANCELLED — voir lib/distributionStateMachine.ts
+  // (source unique de vérité des transitions, pas une pg-enum ici : cohérent
+  // avec le reste du schéma marketplace, ex. orders.status/deliveries.status).
+  status: text('status').default('PENDING').notNull(),
+  metadata: jsonb('metadata'), // { salt, cnibUrl? }
+  receiptAt: timestamp('receipt_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('seed_distributions_allocation_idx').on(t.allocationId),
+  index('seed_distributions_producer_idx').on(t.producerId),
+  index('seed_distributions_agent_idx').on(t.agentId),
+  index('seed_distributions_org_idx').on(t.organizationId),
+  index('seed_distributions_status_idx').on(t.status),
+]);
+
+// ── SEED DISTRIBUTION ATTEMPTS (journal des tentatives de code OTP) ────────
+export const seedDistributionAttempts = marketplaceSchema.table('seed_distribution_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  distributionId: uuid('distribution_id').notNull().references(() => seedDistributions.id),
+  actorId: uuid('actor_id').notNull(),
+  attemptType: text('attempt_type').notNull(),
+  success: boolean('success').notNull(),
+  ipAddress: text('ip_address'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('seed_dist_attempts_distribution_idx').on(t.distributionId),
+]);
+
 export default {
   warehouses,
   producers,
@@ -590,6 +664,9 @@ export default {
   auctions,
   bids,
   marketplaceRatings,
+  seedAllocations,
+  seedDistributions,
+  seedDistributionAttempts,
 };
 
 // Types
@@ -611,3 +688,6 @@ export type Warehouse = InferModel<typeof warehouses>;
 export type MarketOffer = InferModel<typeof marketOffers>;
 export type MarketplaceRating = InferModel<typeof marketplaceRatings>;
 export type Stock = InferModel<typeof stocks>;
+export type SeedAllocation = InferModel<typeof seedAllocations>;
+export type SeedDistribution = InferModel<typeof seedDistributions>;
+export type SeedDistributionAttempt = InferModel<typeof seedDistributionAttempts>;

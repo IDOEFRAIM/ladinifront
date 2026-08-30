@@ -18,6 +18,10 @@ export const users = authSchema.table('users', {
   identityVerified: boolean('identity_verified').default(false),
   zoneId: uuid('zone_id'),
   onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
+  // Modération / abus : blocage (annulations répétées) & bannissement (produits interdits).
+  accountStatus: text('account_status').default('ACTIVE').notNull(), // ACTIVE | BLOCKED | BANNED
+  blockedReason: text('blocked_reason'),
+  blockedAt: timestamp('blocked_at'),
   deletedAt: timestamp('deleted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
@@ -25,6 +29,7 @@ export const users = authSchema.table('users', {
   index('users_role_idx').on(t.role),
   index('users_zone_idx').on(t.zoneId),
   index('users_created_idx').on(t.createdAt),
+  index('users_account_status_idx').on(t.accountStatus),
 ]);
 
 export const accounts = authSchema.table('accounts', {

@@ -56,10 +56,17 @@ export default defineConfig({
     url: dbUrl || process.env.DATABASE_URL!,
     ...(ssl ? { ssl } : {}),
   },
-  
+
   // 💡 MIS À JOUR : Ajout de 'auth' et inclusion automatique de tous tes schémas métiers
   schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence'],
-  
+
+  // Journal des migrations en public (pas de schema 'drizzle' interne) pour rester
+  // cohérent avec la base existante et les scripts baseline/run-migrations.
+  migrations: {
+    table: '__drizzle_migrations',
+    schema: 'public',
+  },
+
   verbose: true,
   strict: true,
 });

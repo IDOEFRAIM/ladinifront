@@ -1,0 +1,1 @@
+ALTER TABLE "marketplace"."products" ADD COLUMN "pricing_tiers" jsonb;

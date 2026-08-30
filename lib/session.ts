@@ -5,6 +5,14 @@ const SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'dev-sess
 const encoder = new TextEncoder();
 const secretKey = encoder.encode(SECRET);
 
+// Journalisation de diagnostic (2026-08-27) : auparavant systématique dès que
+// `NODE_ENV !== 'production'`, donc sur CHAQUE requête authentifiée en dev —
+// une ligne `[session] verified ...` par appel de `getAccessContext`
+// (middleware + chaque route API), noyant les vrais signaux (ex: la boucle
+// POST /api/delivery/status) dans du bruit. Devient opt-in via
+// `DEBUG_SESSION=true` ; silencieux par défaut, y compris en dev.
+const SESSION_DEBUG = process.env.DEBUG_SESSION === 'true';
+
 export type SessionPayload = {
   userId: string;
   role?: string;
@@ -28,9 +36,9 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     const { payload } = await jwtVerify(token, secretKey as Uint8Array);
     return payload as unknown as SessionPayload;
   } catch (err) {
-    // In development log the verification error to help diagnose expired tokens,
-    // signature mismatches, malformed tokens, etc. Do not log token contents.
-    if (process.env.NODE_ENV !== 'production') {
+    // Diagnostic optionnel (DEBUG_SESSION=true) pour les jetons expirés,
+    // signatures invalides, jetons malformés... Ne logue jamais le contenu.
+    if (SESSION_DEBUG) {
       try {
         // err may be a JOSE error with message
         // eslint-disable-next-line no-console
@@ -46,7 +54,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
 type SessionRequest = Request | { cookies?: { get(name: string): { value: string } | undefined } } | { headers?: { get(name: string): string | null } };
 
 export async function getSessionFromRequest(request: SessionRequest) {
-  const isDev = process.env.NODE_ENV !== 'production';
+  const isDev = SESSION_DEBUG;
   let token: string | undefined;
   try {
     if ('cookies' in request && request.cookies && typeof request.cookies.get === 'function') {

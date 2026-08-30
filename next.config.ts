@@ -2,6 +2,16 @@
 const path = require('path');
 
 const runtimeCaching = [
+  // Espace livreur : jamais de cache SW — statuts/positions temps réel, et le
+  // catch-all NetworkFirst ci-dessous interceptait ces routes par défaut
+  // (2026-08-27, enquête boucle POST /api/delivery/status). NetworkOnly avec
+  // un nom de cache dédié pour rester diagnosticable, mais aucune entrée
+  // stockée n'est jamais servie.
+  {
+    urlPattern: /\/api\/delivery\//i,
+    handler: 'NetworkOnly',
+    options: { cacheName: 'no-cache-delivery' },
+  },
   // API produits: Stale-While-Revalidate pour navigation fluide offline-first
   {
     urlPattern: /\/api\/(products|publicProduct)(\/|$)/i,
@@ -39,6 +49,15 @@ const runtimeCaching = [
       cacheName: 'google-fonts',
       expiration: { maxEntries: 4, maxAgeSeconds: 365 * 24 * 60 * 60 },
     },
+  },
+  // Filet de sécurité générique : toute route /api/* non listée explicitement
+  // ci-dessus ne doit JAMAIS être interceptée par le catch-all NetworkFirst
+  // plus bas (même risque que /api/delivery/* — statuts/mutations qui ne
+  // doivent jamais être servis depuis un cache SW périmé).
+  {
+    urlPattern: /\/api\//i,
+    handler: 'NetworkOnly',
+    options: { cacheName: 'no-cache-api' },
   },
   {
     urlPattern: /.*/i,

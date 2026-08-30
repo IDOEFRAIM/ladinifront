@@ -162,6 +162,45 @@ export async function createDeliveryForConfirmedOrder(orderId: string) {
 }
 
 /**
+ * Rattrape les commandes livrables (CONFIRMED/PROCESSING/PAID/SHIPPED) qui
+ * n'ont AUCUNE ligne `deliveries` correspondante.
+ *
+ * Incident réel (2026-08-28) : `createDeliveryForConfirmedOrder` n'est
+ * déclenché QUE par le code Next.js lui-même (`app/actions/orders.server.ts`,
+ * `services/order.hooks.ts`) au moment du changement de statut d'une
+ * commande — jamais par l'agent WhatsApp Python, qui écrit directement en
+ * base via son propre service layer et ignore totalement ces hooks.
+ * Résultat : `marketplace.deliveries` restait VIDE alors que des dizaines de
+ * commandes `source=WHATSAPP` étaient déjà CONFIRMED — le livreur voyait
+ * "Rien pour l'instant" malgré des commandes bien réelles en attente.
+ * `createDeliveryInternal` est déjà idempotent (vérifie l'existence avant
+ * d'insérer) : ce rattrapage peut tourner à CHAQUE appel de
+ * `getAvailableDeliveries` sans risque de doublon — après le premier passage
+ * qui comble le retard, les appels suivants ne trouvent plus rien à créer.
+ */
+async function reconcileMissingDeliveries(): Promise<void> {
+  const orphanOrders = await db
+    .select({ id: schema.orders.id })
+    .from(schema.orders)
+    .leftJoin(schema.deliveries, eq(schema.deliveries.orderId, schema.orders.id))
+    .where(and(
+      isNull(schema.deliveries.id),
+      inArray(schema.orders.status, DELIVERABLE_STATUSES),
+    ))
+    .limit(100);
+
+  if (!orphanOrders.length) return;
+
+  for (const { id } of orphanOrders) {
+    try {
+      await createDeliveryForConfirmedOrder(id);
+    } catch (err) {
+      console.error('[delivery.service] reconcileMissingDeliveries failed for order', id, err);
+    }
+  }
+}
+
+/**
  * Liste les livraisons disponibles pour un transporteur (sa zone, non assignées).
  */
 export async function getAvailableDeliveries(userId: string) {
@@ -170,6 +209,8 @@ export async function getAvailableDeliveries(userId: string) {
   // Auto-create agent profile if needed
   const agent = await resolveOrCreateDeliveryAgent(userId);
   if (!agent) return [];
+
+  await reconcileMissingDeliveries();
 
   // Livraisons PENDING sans agent assigné dans la zone
   const conditions = [

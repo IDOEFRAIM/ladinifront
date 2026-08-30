@@ -62,7 +62,7 @@ export async function initializeSeedDistribution(
       }
     }
 
-    if ((allocation.remainingQuantity ?? 0) < quantity) throw new Error('Stock insuffisant sur cette allocation');
+    if (Number(allocation.remainingQuantity ?? 0) < quantity) throw new Error('Stock insuffisant sur cette allocation');
 
     // Verify producer exists (producerId references marketplace.producers.id)
     const producer = await tx.query.producers.findFirst({
@@ -84,7 +84,7 @@ export async function initializeSeedDistribution(
       agentId: agentUserId,
       organizationId: allocation.organizationId,
       zoneId: allocation.zoneId,
-      quantity,
+      quantity: String(quantity),
       cnibProvided: cnibProvided || null,
       verificationCodeHash: hash,
       verificationCodeExpiresAt: expiresAt,

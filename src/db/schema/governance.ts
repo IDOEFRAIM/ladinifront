@@ -11,7 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql, type InferModel } from 'drizzle-orm';
 import { governanceSchema, organizationTypeEnum, orgRoleEnum, orgStatusEnum, unitEnum } from './_config';
-
+//testg 
 export const organizations = governanceSchema.table('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -142,6 +142,21 @@ export const zoneSettings = governanceSchema.table('zone_settings', {
   index('zone_settings_zone_idx').on(t.zoneId),
 ]);
 
+// ── PRODUITS INTERDITS (liste noire gérée par les admins) ──────────────────
+// Modération : termes bannis de la marketplace (drogue, armes, etc.). Les admins
+// alimentent cette table sans redéploiement. Une base par défaut est appliquée
+// côté agent même si la table est vide (fail-safe).
+export const prohibitedTerms = governanceSchema.table('prohibited_terms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  term: text('term').unique().notNull(),
+  category: text('category').default('ILLICIT').notNull(), // DRUG | WEAPON | COUNTERFEIT | OTHER
+  severity: text('severity').default('HIGH').notNull(),     // LOW | MEDIUM | HIGH
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('prohibited_terms_active_idx').on(t.isActive),
+]);
+
 export const overlayLayers = governanceSchema.table('overlay_layers', {
   id: uuid('id').primaryKey().defaultRandom(),
   zoneId: uuid('zone_id').notNull(),
@@ -169,6 +184,7 @@ export default {
   standardPrices,
   zoneSettings,
   overlayLayers,
+  prohibitedTerms,
 };
 
 // Types
@@ -178,6 +194,7 @@ export type RoleDef = InferModel<typeof roleDefs>;
 export type Zone = InferModel<typeof zones>;
 export type SubCategory = InferModel<typeof subCategories>;
 export type StandardPrice = InferModel<typeof standardPrices>;
+export type ProhibitedTerm = InferModel<typeof prohibitedTerms>;
 // governance schema proxy
 
 // Relations are defined centrally in ./relations.ts
