@@ -64,6 +64,20 @@ async function assertDRChief(userId: string, zoneId: string): Promise<any> {
   return { ...user, producer };
 }
 
+/** Vérifie que l'appelant est ADMIN/SUPERADMIN — même garde que `admin.service.ts`.
+ * Utilisé pour les actions qui sont une POLICY DE PLATEFORME (jamais une
+ * donnée zonale/DR) : le seuil minimum de commande par type de produit
+ * appartient à l'admin plateforme, pas au Chef de DR (`assertDRChief`
+ * ci-dessus reste réservé aux actions zonales — verrouillage, prix standards). */
+async function assertPlatformAdmin(): Promise<string> {
+  const userId = await getUserIdFromSession();
+  if (!userId) throw new Error('Session expirée');
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { role: true } });
+  const role = String(user?.role ?? '').toUpperCase();
+  if (role !== 'ADMIN' && role !== 'SUPERADMIN') throw new Error('Accès réservé aux administrateurs');
+  return userId;
+}
+
 // ── Catégories ───────────────────────────────────────────────────────────
 
 export async function createCategory(data: { name: string; description?: string }) {
@@ -113,6 +127,72 @@ export async function createSubCategory(data: { categoryId: string; name: string
   }
 }
 
+/**
+ * Configure (ou efface) le seuil minimum de commande d'un TYPE de produit.
+ *
+ * Policy de PLATEFORME (2026-09-02, feature full-stack) — jamais une donnée
+ * commerciale du producteur. `minimumOrderQuantity: null` EFFACE le seuil
+ * (comportement historique restauré, aucune règle configurée) ; toute autre
+ * valeur doit être strictement positive — 0 et les valeurs négatives sont
+ * rejetés explicitement, jamais silencieusement coercés. `minimumOrderUnit`
+ * est OBLIGATOIRE dès qu'une quantité est fournie (un seuil sans unité ne
+ * veut rien dire) ; il est ignoré/effacé quand la quantité est `null`.
+ *
+ * Source de vérité UNIQUE (règle 10 du cahier des charges) : cette colonne
+ * (`governance.sub_categories`) est la même table, dans la même base
+ * Postgres, que celle lue par l'agent conversationnel
+ * (`domain/governance/models.py::SubCategory`, SQLAlchemy) — aucune copie
+ * indépendante côté agent, aucun cache à invalider manuellement.
+ */
+export async function updateSubCategoryMinimum(input: {
+  subCategoryId: string;
+  minimumOrderQuantity: number | null;
+  minimumOrderUnit?: 'KG' | 'TONNE' | 'LITRE' | 'BAG' | null;
+}) {
+  try {
+    const userId = await assertPlatformAdmin();
+
+    const existing = await db.query.subCategories.findFirst({
+      where: eq(schema.subCategories.id, input.subCategoryId),
+    });
+    if (!existing) return { success: false, error: 'Type de produit introuvable' };
+
+    let nextQuantity: string | null = null;
+    let nextUnit: 'KG' | 'TONNE' | 'LITRE' | 'BAG' | null = null;
+
+    if (input.minimumOrderQuantity !== null && input.minimumOrderQuantity !== undefined) {
+      const qty = Number(input.minimumOrderQuantity);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return { success: false, error: 'La quantité minimale doit être un nombre strictement positif (0 et les valeurs négatives sont interdits).' };
+      }
+      if (!input.minimumOrderUnit) {
+        return { success: false, error: 'Une unité est requise dès qu\'une quantité minimale est définie.' };
+      }
+      nextQuantity = String(qty);
+      nextUnit = input.minimumOrderUnit;
+    }
+
+    const [updated] = await db.update(schema.subCategories)
+      .set({ minimumOrderQuantity: nextQuantity, minimumOrderUnit: nextUnit })
+      .where(eq(schema.subCategories.id, input.subCategoryId))
+      .returning();
+
+    await audit({
+      action: nextQuantity === null ? 'CLEAR_SUBCATEGORY_MINIMUM' : 'SET_SUBCATEGORY_MINIMUM',
+      actorId: userId,
+      entityType: 'SubCategory',
+      entityId: updated.id,
+      oldValue: { minimumOrderQuantity: existing.minimumOrderQuantity, minimumOrderUnit: existing.minimumOrderUnit },
+      newValue: { minimumOrderQuantity: nextQuantity, minimumOrderUnit: nextUnit },
+    });
+
+    return { success: true, data: updated };
+  } catch (e: any) {
+    console.error('updateSubCategoryMinimum error:', e);
+    return { success: false, error: e.message || 'Erreur interne' };
+  }
+}
+
 export async function getCategories() {
   try {
     interface Zone {
@@ -137,6 +217,10 @@ export async function getCategories() {
         name: string;
         blockedZoneIds: string[];
         standardPrices: StandardPrice[];
+        // Policy plateforme — voir updateSubCategoryMinimum. `null` = aucune
+        // règle configurée (comportement historique).
+        minimumOrderQuantity: string | null;
+        minimumOrderUnit: string | null;
     }
 
     interface Category {
@@ -200,6 +284,8 @@ export async function getCategories() {
           name: sc.name,
           blockedZoneIds: sc.blockedZoneIds,
           standardPrices: standardPricesBySub.get(sc.id) ?? [],
+          minimumOrderQuantity: sc.minimumOrderQuantity,
+          minimumOrderUnit: sc.minimumOrderUnit,
         })),
     }));
     // Compute _count.products per subcategory

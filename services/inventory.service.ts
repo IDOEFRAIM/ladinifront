@@ -133,7 +133,7 @@ export async function createStock(farmId: string, data: {
             const [stock] = await tx.insert(schema.stocks).values({
             farmId,
             itemName: validation.data.itemName,
-            quantity: validation.data.quantity,
+            quantity: String(validation.data.quantity),
             unit: validation.data.unit as any,
             // Persist type when provided, otherwise allow DB default
             ...(validation.data.type ? { type: validation.data.type as any } : {})
@@ -142,7 +142,7 @@ export async function createStock(farmId: string, data: {
             await tx.insert(schema.stockMovements).values({
             stockId: stock.id,
             type: 'IN' as MovementType,
-            quantity: validation.data.quantity,
+            quantity: String(validation.data.quantity),
             reason: 'Inventaire initial'
             });
 

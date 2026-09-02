@@ -20,12 +20,15 @@ const PRODUCTION_TYPES = [
   { value: 'LIVESTOCK', label: 'Élevage' },
 ] as const;
 
+// (2026-09-02) `crop_cycles` -> `market_offers` (schéma dégraissé) : les
+// champs de suivi agronomique détaillé (superficie, date de semis, stock
+// initial séparé, date d'éclosion, variété, stade de croissance) n'existent
+// plus côté base — ce formulaire ne collecte donc plus que ce que
+// `marketOffers` sait réellement stocker.
 const emptyForm = {
   farmId: '',
-  cropType: '',
+  productLabel: '',
   productionType: 'CROP',
-  areaSize: '',
-  plantedAt: '',
   expectedHarvestDate: '',
   estimatedAvailableAt: '',
   availableQuantity: '',
@@ -35,9 +38,7 @@ const emptyForm = {
   preorderEnabled: true,
   species: '',
   breed: '',
-  initialStock: '',
   currentStock: '',
-  hatchDate: '',
 };
 
 export default function ProductionPage() {
@@ -51,7 +52,6 @@ export default function ProductionPage() {
     availableQuantity: '',
     pricePerUnit: '',
     estimatedAvailableAt: '',
-    growthStage: '',
     preorderEnabled: true,
   });
   const [editing, setEditing] = useState<PublicProduction | null>(null);
@@ -78,21 +78,20 @@ export default function ProductionPage() {
 
   const handleSubmit = async () => {
     if (!form.farmId) return toast.error('Sélectionnez une ferme');
-    if (!form.cropType.trim() && form.productionType === 'CROP') return toast.error('Indiquez la culture');
+    if (!form.productLabel.trim() && form.productionType === 'CROP') return toast.error('Indiquez la culture');
 
     if (form.productionType === 'CROP') {
-      if (!form.plantedAt || !form.expectedHarvestDate) return toast.error('Dates requises pour la culture');
-      if (!form.areaSize) return toast.error('Superficie requise');
+      if (!form.expectedHarvestDate) return toast.error('Date de récolte requise');
     } else {
-      if (!form.species.trim() && !form.cropType.trim()) return toast.error('Indiquez l’espèce élevage');
-      if (!form.currentStock && !form.initialStock) return toast.error('Stock initial ou actuel requis');
+      if (!form.species.trim() && !form.productLabel.trim()) return toast.error('Indiquez l’espèce élevage');
+      if (!form.currentStock) return toast.error('Stock actuel requis');
     }
 
     setSubmitting(true);
     try {
       const payload: any = {
         farmId: form.farmId,
-        cropType: (form.productionType === 'LIVESTOCK' ? (form.cropType || form.species) : form.cropType).trim(),
+        productLabel: (form.productionType === 'LIVESTOCK' ? (form.productLabel || form.species) : form.productLabel).trim(),
         productionType: form.productionType,
         estimatedAvailableAt: form.estimatedAvailableAt || undefined,
         pricePerUnit: form.pricePerUnit ? Number(form.pricePerUnit) : undefined,
@@ -102,17 +101,13 @@ export default function ProductionPage() {
       };
 
       if (form.productionType === 'CROP') {
-        payload.areaSize = Number(form.areaSize) || 0.01;
-        payload.plantedAt = form.plantedAt;
         payload.expectedHarvestDate = form.expectedHarvestDate;
         payload.availableQuantity = Number(form.availableQuantity) || 0;
       } else {
-        payload.species = form.species.trim() || form.cropType.trim();
+        payload.species = form.species.trim() || form.productLabel.trim();
         payload.breed = form.breed.trim() || undefined;
-        payload.initialStock = Number(form.initialStock) || Number(form.currentStock) || 0;
-        payload.currentStock = Number(form.currentStock) || Number(form.initialStock) || 0;
+        payload.currentStock = Number(form.currentStock) || 0;
         payload.availableQuantity = Number(form.availableQuantity) || payload.currentStock;
-        payload.hatchDate = form.hatchDate || undefined;
       }
 
       const res = await declareProductionAction(payload);
@@ -135,7 +130,6 @@ export default function ProductionPage() {
       availableQuantity: String(p.availableQuantity ?? ''),
       pricePerUnit: p.pricePerUnit ? String(p.pricePerUnit) : '',
       estimatedAvailableAt: p.estimatedAvailableAt ? new Date(p.estimatedAvailableAt).toISOString().slice(0, 10) : '',
-      growthStage: p.growthStage || '',
       preorderEnabled: p.preorderEnabled ?? true,
     });
   };
@@ -144,11 +138,10 @@ export default function ProductionPage() {
     if (!editing) return;
     setSubmitting(true);
     try {
-      const payload: any = { cropCycleId: editing.id };
+      const payload: any = { marketOfferId: editing.id };
       if (editForm.availableQuantity) payload.availableQuantity = Number(editForm.availableQuantity);
       if (editForm.pricePerUnit) payload.pricePerUnit = Number(editForm.pricePerUnit);
       if (editForm.estimatedAvailableAt) payload.estimatedAvailableAt = editForm.estimatedAvailableAt;
-      if (editForm.growthStage) payload.growthStage = editForm.growthStage.trim();
       payload.preorderEnabled = editForm.preorderEnabled;
 
       const res = await updateProductionVisibilityAction(payload);
@@ -165,7 +158,7 @@ export default function ProductionPage() {
   };
 
   const toggleVisibility = async (p: PublicProduction, field: 'isPublic' | 'preorderEnabled', value: boolean) => {
-    const res = await updateProductionVisibilityAction({ cropCycleId: p.id, [field]: value });
+    const res = await updateProductionVisibilityAction({ marketOfferId: p.id, [field]: value });
     if (!res.success) {
       toast.error(res.error);
       return;
@@ -235,7 +228,7 @@ export default function ProductionPage() {
 
             {form.productionType === 'CROP' ? (
               <Field label="Culture">
-                <input value={form.cropType} onChange={(e) => setForm({ ...form, cropType: e.target.value })} placeholder="ex: Tomate" style={inputStyle} />
+                <input value={form.productLabel} onChange={(e) => setForm({ ...form, productLabel: e.target.value })} placeholder="ex: Tomate" style={inputStyle} />
               </Field>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -249,48 +242,27 @@ export default function ProductionPage() {
             )}
 
             {form.productionType === 'CROP' ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <Field label="Superficie (ha)">
-                    <input type="number" inputMode="decimal" value={form.areaSize} onChange={(e) => setForm({ ...form, areaSize: e.target.value })} style={inputStyle} />
-                  </Field>
-                  <Field label="Unité">
-                    <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} style={inputStyle}>
-                      {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </Field>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <Field label="Date de semis">
-                    <input type="date" value={form.plantedAt} onChange={(e) => setForm({ ...form, plantedAt: e.target.value })} style={inputStyle} />
-                  </Field>
-                  <Field label="Récolte prévue">
-                    <input type="date" value={form.expectedHarvestDate} onChange={(e) => setForm({ ...form, expectedHarvestDate: e.target.value })} style={inputStyle} />
-                  </Field>
-                </div>
-              </>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Récolte prévue">
+                  <input type="date" value={form.expectedHarvestDate} onChange={(e) => setForm({ ...form, expectedHarvestDate: e.target.value })} style={inputStyle} />
+                </Field>
+                <Field label="Unité">
+                  <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} style={inputStyle}>
+                    {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </Field>
+              </div>
             ) : (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <Field label="Stock initial">
-                    <input min="0" type="number" value={form.initialStock} onChange={(e) => setForm({ ...form, initialStock: e.target.value })} style={inputStyle} />
-                  </Field>
-                  <Field label="Stock actuel">
-                    <input min="1" type="number" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} style={inputStyle} />
-                  </Field>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <Field label="Date d'éclosion / achat">
-                    <input type="date" value={form.hatchDate} onChange={(e) => setForm({ ...form, hatchDate: e.target.value })} style={inputStyle} />
-                  </Field>
-                  <Field label="Unité">
-                    <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} style={inputStyle}>
-                      {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </Field>
-                </div>
-              </>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Stock actuel">
+                  <input min="1" type="number" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} style={inputStyle} />
+                </Field>
+                <Field label="Unité">
+                  <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} style={inputStyle}>
+                    {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </Field>
+              </div>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -345,11 +317,11 @@ export default function ProductionPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontFamily: F.heading, fontWeight: 800, color: C.text, fontSize: '1.05rem' }}>
-                    {p.cropType}{p.variety ? ` · ${p.variety}` : ''}
+                    {p.productLabel}
                     {p.productionType === 'LIVESTOCK' && p.species ? ` (${p.species}${p.breed ? ` · ${p.breed}` : ''})` : ''}
                   </h3>
                   <p style={{ fontFamily: F.body, fontSize: '0.75rem', color: C.muted, marginTop: 2 }}>
-                    {p.farm.name} · {p.productionType === 'LIVESTOCK' ? 'Élevage' : 'Culture'}{p.growthStage ? ` — ${p.growthStage}` : ''}
+                    {p.farm.name} · {p.productionType === 'LIVESTOCK' ? 'Élevage' : 'Culture'}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 12, fontSize: '0.75rem', color: C.text }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -413,9 +385,6 @@ export default function ProductionPage() {
               </Field>
               <Field label="Disponible le">
                 <input type="date" value={editForm.estimatedAvailableAt} onChange={(e) => setEditForm({ ...editForm, estimatedAvailableAt: e.target.value })} style={inputStyle} />
-              </Field>
-              <Field label="Stade de croissance">
-                <input value={editForm.growthStage} onChange={(e) => setEditForm({ ...editForm, growthStage: e.target.value })} style={inputStyle} placeholder="ex: Floraison" />
               </Field>
               <Toggle label="Précommandes" checked={editForm.preorderEnabled} onChange={(v) => setEditForm({ ...editForm, preorderEnabled: v })} />
               <button

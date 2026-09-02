@@ -258,9 +258,9 @@ export default function BuyerDashboardPage() {
                           <span style={{ fontSize: 11, color: C.muted }}>#{po.id.slice(-6).toUpperCase()}</span>
                         </div>
                         <div style={{ fontSize: 16, fontWeight: 800, color: C.forest, marginTop: 6 }}>{formatXof(po.totalAmount)}</div>
-                        {po.cropCycle && (
+                        {po.marketOffer && (
                           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                            {po.cropCycle.cropType} • Disponibilité estimée {po.cropCycle.estimatedAvailableAt ? new Date(po.cropCycle.estimatedAvailableAt).toLocaleDateString() : 'à confirmer'}
+                            {po.marketOffer.productLabel} • Disponibilité estimée {po.marketOffer.estimatedAvailableAt ? new Date(po.marketOffer.estimatedAvailableAt).toLocaleDateString() : 'à confirmer'}
                           </div>
                         )}
                       </div>

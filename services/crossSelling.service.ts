@@ -57,8 +57,9 @@ export async function suggestedProducts(userId: string, limit = 20) {
       boughtProductIds.add(item.productId);
       const cat = item.product.categoryLabel;
       const subCat = item.product.subCategoryId;
-      if (cat) categoryFreq.set(cat, (categoryFreq.get(cat) || 0) + item.quantity);
-      if (subCat) subCategoryFreq.set(subCat, (subCategoryFreq.get(subCat) || 0) + item.quantity);
+      const itemQty = Number(item.quantity);
+      if (cat) categoryFreq.set(cat, (categoryFreq.get(cat) || 0) + itemQty);
+      if (subCat) subCategoryFreq.set(subCat, (subCategoryFreq.get(subCat) || 0) + itemQty);
     }
   }
 
@@ -73,31 +74,24 @@ export async function suggestedProducts(userId: string, limit = 20) {
     .slice(0, 3)
     .map(([cat]) => cat);
 
-  // 5. Chercher les crop_cycles actifs dans des catégories similaires
-  const activeCycles = await db.query.cropCycles.findMany({
+  // 5. Chercher les offres futures (market_offers, ex crop_cycles) actives
+  // dans des catégories similaires. `producerId` est directement sur
+  // `marketOffers` depuis le renommage crop_cycles -> market_offers
+  // (schéma dégraissé) — plus besoin de repasser par `farms`.
+  const activeOffers = await db.query.marketOffers.findMany({
     where: and(
-      eq(schema.cropCycles.status, 'GROWING'),
-      inArray(schema.cropCycles.cropType, topCategories)
+      eq(schema.marketOffers.status, 'PUBLISHED'),
+      inArray(schema.marketOffers.productLabel, topCategories)
     ),
-    columns: { farmId: true, cropType: true, expectedHarvestDate: true },
+    columns: { producerId: true, productLabel: true, expectedHarvestDate: true },
     limit: 50,
   });
 
-  // 6. Extraire les farmIds pour trouver les producteurs
-  const farmIds = [...new Set(activeCycles.map(c => c.farmId))];
-  let nearbyProducerIds: string[] = [];
-
-  if (farmIds.length > 0) {
-    const farms = await db.query.farms.findMany({
-      where: inArray(schema.farms.id, farmIds),
-      columns: { producerId: true },
-    });
-    nearbyProducerIds = [...new Set(farms.map(f => f.producerId))];
-  }
+  const nearbyProducerIds = [...new Set(activeOffers.map(o => o.producerId))];
 
   // 7. Chercher les produits disponibles de ces producteurs + même catégorie
   const conditions: any[] = [
-    gt(schema.products.quantityForSale, 0),
+    gt(schema.products.quantityForSale, '0'),
     inArray(schema.products.categoryLabel, topCategories),
   ];
 
@@ -130,11 +124,11 @@ export async function suggestedProducts(userId: string, limit = 20) {
     .map(p => ({
       ...p,
       relevanceScore: (categoryFreq.get(p.categoryLabel) || 0),
-      hasCropCycle: nearbyProducerIds.includes(p.producer.id),
+      hasActiveOffer: nearbyProducerIds.includes(p.producer.id),
     }))
     .sort((a, b) => {
-      // Prioriser ceux avec crop_cycle actif, puis par fréquence d'achat
-      if (a.hasCropCycle !== b.hasCropCycle) return a.hasCropCycle ? -1 : 1;
+      // Prioriser ceux avec une offre future active, puis par fréquence d'achat
+      if (a.hasActiveOffer !== b.hasActiveOffer) return a.hasActiveOffer ? -1 : 1;
       return b.relevanceScore - a.relevanceScore;
     })
     .slice(0, limit);
@@ -147,7 +141,7 @@ export async function suggestedProducts(userId: string, limit = 20) {
  */
 async function getPopularProducts(limit: number) {
   return db.query.products.findMany({
-    where: gt(schema.products.quantityForSale, 0),
+    where: gt(schema.products.quantityForSale, '0'),
     orderBy: [desc(schema.products.createdAt)],
     columns: {
       id: true,

@@ -370,6 +370,17 @@ export const orders = marketplaceSchema.table('orders', {
   cancellationRole: varchar('cancellation_role'),
   escrowWalletId: uuid('escrow_wallet_id'),
 
+  // --- Escrow Paydunya --- `paymentStatus` (ci-dessus) porte aussi ESCROWED
+  // (payé, fonds bloqués) / PAID_OUT (livraison confirmée par OTP, fonds
+  // débloqués) / REFUNDED. Colonnes ajoutées côté ORM Python
+  // (agriconnect.domain.orders.models.Order) via un ALTER TABLE manuel
+  // hors-migration, jamais propagées ici — absentes de tout schéma
+  // migré depuis Drizzle jusqu'au 2026-09-02 (migration Heroku).
+  paydunyaInvoiceToken: text('paydunya_invoice_token'),
+  deliveryOtp: text('delivery_otp'),
+  paymentExpiresAt: timestamp('payment_expires_at'),
+  lockedAmount: numeric('locked_amount', { precision: 14, scale: 2 }),
+
   auctionId: uuid('auction_id').references(() => auctions.id),
   winningBidId: uuid('winning_bid_id').references(() => bids.id),
 
@@ -406,6 +417,15 @@ export const orderItems = marketplaceSchema.table('order_items', {
   productId: uuid('product_id').references(() => products.id).notNull(),
   quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
   priceAtSale: numeric('price_at_sale', { precision: 12, scale: 2 }).notNull(),
+  // (2026-08-30) Support des paliers de prix/conditionnement multiples
+  // (Product.pricingTiers). NULL sur toute commande sans palier. `tierId`
+  // trace le palier acheté ; `baseUnitQuantity` est la quantité déjà
+  // convertie dans l'unité de BASE du produit (ex: 3 bidons de 10L => 30 en
+  // LITRE) — c'est CETTE valeur qui débite `products.quantityForSale`,
+  // jamais `quantity` telle quelle dès qu'un palier est impliqué (voir
+  // agriconnect.domain.pricing_tiers::resolve_stock_debit côté agent).
+  tierId: text('tier_id'),
+  baseUnitQuantity: numeric('base_unit_quantity', { precision: 14, scale: 3 }),
 }, (t) => [
   index('order_items_order_idx').on(t.orderId),
   index('order_items_product_idx').on(t.productId),
@@ -519,6 +539,10 @@ export const auctions = marketplaceSchema.table('auctions', {
   cancellationReason: text('cancellation_reason'),
   targetZoneId: uuid('target_zone_id'),
   version: integer('version').default(0).notNull(),
+  // Photos de référence jointes par l'acheteur à l'enchère — voir
+  // agriconnect.services.database.auction::add_auction_photo. Ajoutée côté
+  // ORM Python via ALTER TABLE manuel, jamais propagée ici.
+  images: text('images').array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
@@ -541,6 +565,10 @@ export const bids = marketplaceSchema.table('bids', {
   notifiedAt: timestamp('notified_at'),
   validUntil: timestamp('valid_until'),
   estimatedDeliveryDate: timestamp('estimated_delivery_date'),
+  // Photos du lot proposé par le producteur — voir
+  // agriconnect.services.database.auction::add_bid_photo. Ajoutée côté ORM
+  // Python via ALTER TABLE manuel, jamais propagée ici.
+  images: text('images').array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [

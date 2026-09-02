@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   jsonb,
+  numeric,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
@@ -110,6 +111,19 @@ export const subCategories = governanceSchema.table('sub_categories', {
   categoryId: uuid('category_id').notNull(),
   name: text('name').notNull(),
   blockedZoneIds: text('blocked_zone_ids').array().notNull().default(sql`'{}'::text[]`),
+  // Politique plateforme (2026-09-02, feature full-stack) : quantité minimale,
+  // en unité de BASE, qu'une commande de ce TYPE de produit doit représenter
+  // pour être poursuivie — ex. "Tomates" -> 50 KG. Définie par l'ADMIN au
+  // niveau du type de produit (voir components/admin/governance/CategoryManager.tsx),
+  // jamais par le producteur. NULL = aucune règle configurée = comportement
+  // historique (aucun produit existant ne devient soudainement impossible à
+  // commander). Table miroir exacte de `domain/governance/models.py::SubCategory`
+  // côté agent (Python/SQLAlchemy, même DB Postgres partagée, schéma
+  // `governance`) — SOURCE DE VÉRITÉ UNIQUE consommée par les deux ORMs,
+  // jamais une copie indépendante. Validée à l'écriture (0/négatif interdits)
+  // par `updateSubCategoryMinimum` dans dr-governance.service.ts.
+  minimumOrderQuantity: numeric('minimum_order_quantity', { precision: 14, scale: 3 }),
+  minimumOrderUnit: unitEnum('minimum_order_unit'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [

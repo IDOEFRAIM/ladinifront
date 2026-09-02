@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { createCategory, createSubCategory, getCategories, toggleSubCategoryBlock } from '@/services/dr-governance.service';
-import { Plus, ChevronDown, ChevronRight, Lock, Unlock, Package, Layers, Tag } from 'lucide-react';
+import { createCategory, createSubCategory, getCategories, toggleSubCategoryBlock, updateSubCategoryMinimum } from '@/services/dr-governance.service';
+import { Plus, ChevronDown, ChevronRight, Lock, Unlock, Package, Layers, Tag, Scale, X } from 'lucide-react';
 import { useZone } from '@/context/ZoneContext';
 import { useAuth } from '@/hooks/useAuth';
 import ZoneSelector from '@/components/ui/ZoneSelector';
@@ -12,12 +12,19 @@ const C = {
   glass: 'rgba(255,255,255,0.72)', border: 'rgba(6,78,59,0.07)', muted: '#64748B', text: '#1F2937',
 };
 
+const ORDER_UNITS = ['KG', 'TONNE', 'LITRE', 'BAG'] as const;
+
 interface SubCategory {
   id: string;
   categoryId: string;
   name: string;
   blockedZoneIds: string[];
   standardPrices: any[];
+  // Seuil minimum de commande — policy PLATEFORME (voir
+  // services/dr-governance.service.ts::updateSubCategoryMinimum). `null` =
+  // aucune règle configurée, comportement historique.
+  minimumOrderQuantity: string | null;
+  minimumOrderUnit: string | null;
   _count?: { products: number };
 }
 
@@ -51,6 +58,13 @@ export default function CategoryManager() {
 
   // Lock toggle
   const [toggling, setToggling] = useState<string | null>(null);
+
+  // Minimum order quantity edit (policy plateforme, jamais éditable par le producteur)
+  const [minEditFor, setMinEditFor] = useState<string | null>(null);
+  const [minQtyInput, setMinQtyInput] = useState('');
+  const [minUnitInput, setMinUnitInput] = useState<string>('KG');
+  const [minLoading, setMinLoading] = useState(false);
+  const [minMsg, setMinMsg] = useState<string | null>(null);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -137,6 +151,59 @@ export default function CategoryManager() {
       alert(e.message || 'Erreur');
     } finally {
       setToggling(null);
+    }
+  };
+
+  const openMinEditor = (sub: SubCategory) => {
+    setMinEditFor(sub.id);
+    setMinQtyInput(sub.minimumOrderQuantity ?? '');
+    setMinUnitInput(sub.minimumOrderUnit ?? 'KG');
+    setMinMsg(null);
+  };
+
+  const handleSaveMinimum = async (subCategoryId: string) => {
+    const trimmed = minQtyInput.trim();
+    const quantity = trimmed === '' ? null : Number(trimmed);
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0)) {
+      setMinMsg('La quantité doit être un nombre strictement positif (laissez vide pour supprimer le seuil).');
+      return;
+    }
+    setMinLoading(true);
+    setMinMsg(null);
+    try {
+      const res = await updateSubCategoryMinimum({
+        subCategoryId,
+        minimumOrderQuantity: quantity,
+        minimumOrderUnit: quantity !== null ? (minUnitInput as any) : null,
+      });
+      if (res.success) {
+        setMinEditFor(null);
+        loadCategories();
+      } else {
+        setMinMsg(res.error || 'Erreur');
+      }
+    } catch (e: any) {
+      setMinMsg(e.message || 'Erreur');
+    } finally {
+      setMinLoading(false);
+    }
+  };
+
+  const handleClearMinimum = async (subCategoryId: string) => {
+    setMinLoading(true);
+    setMinMsg(null);
+    try {
+      const res = await updateSubCategoryMinimum({ subCategoryId, minimumOrderQuantity: null });
+      if (res.success) {
+        setMinEditFor(null);
+        loadCategories();
+      } else {
+        setMinMsg(res.error || 'Erreur');
+      }
+    } catch (e: any) {
+      setMinMsg(e.message || 'Erreur');
+    } finally {
+      setMinLoading(false);
     }
   };
 
@@ -263,11 +330,15 @@ export default function CategoryManager() {
                     ? sub.standardPrices.find((p: any) => p.zoneId === zoneId)
                     : null;
 
+                  const hasMinimum = sub.minimumOrderQuantity != null;
+
                   return (
                     <div key={sub.id} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '10px 0', borderBottom: `1px solid ${C.border}`,
                       opacity: isBlocked ? 0.5 : 1,
+                    }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <Tag size={14} color={isBlocked ? C.red : C.emerald} />
@@ -280,6 +351,11 @@ export default function CategoryManager() {
                                 • Prix: {priceForZone.pricePerUnit} FCFA/{priceForZone.unit || 'KG'}
                               </span>
                             )}
+                            {hasMinimum && (
+                              <span style={{ marginLeft: 8, color: C.amber, fontWeight: 600 }}>
+                                • Min. commande : {sub.minimumOrderQuantity} {sub.minimumOrderUnit}
+                              </span>
+                            )}
                             {isBlocked && (
                               <span style={{ marginLeft: 8, color: C.red, fontWeight: 600 }}>• BLOQUÉE</span>
                             )}
@@ -289,6 +365,19 @@ export default function CategoryManager() {
 
                       {/* Actions */}
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {isAdmin && (
+                          <button
+                            onClick={() => (minEditFor === sub.id ? setMinEditFor(null) : openMinEditor(sub))}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer',
+                              background: 'transparent', color: C.amber, fontWeight: 600, fontSize: 12,
+                            }}
+                          >
+                            <Scale size={14} />
+                            {hasMinimum ? 'Modifier le seuil' : 'Définir un seuil'}
+                          </button>
+                        )}
                         {zoneId && (
                           <button
                             onClick={() => handleToggleBlock(sub.id, isBlocked)}
@@ -306,6 +395,56 @@ export default function CategoryManager() {
                           </button>
                         )}
                       </div>
+                    </div>
+
+                    {/* Minimum order quantity editor — policy plateforme */}
+                    {minEditFor === sub.id && (
+                      <div style={{
+                        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                        marginTop: 10, padding: 12, borderRadius: 10,
+                        background: 'rgba(217,119,6,0.05)', border: `1px solid ${C.border}`,
+                      }}>
+                        <label style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+                          Quantité minimale de commande
+                        </label>
+                        <input
+                          type="number" min={0} step="any" placeholder="ex: 50"
+                          value={minQtyInput} onChange={e => setMinQtyInput(e.target.value)}
+                          style={{ width: 110, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13 }}
+                        />
+                        <select
+                          value={minUnitInput} onChange={e => setMinUnitInput(e.target.value)}
+                          disabled={minQtyInput.trim() === ''}
+                          style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13 }}
+                        >
+                          {ORDER_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                        <button onClick={() => handleSaveMinimum(sub.id)} disabled={minLoading} style={{
+                          padding: '8px 16px', borderRadius: 8, border: 'none', background: C.emerald, color: '#fff',
+                          fontWeight: 700, fontSize: 12, cursor: minLoading ? 'not-allowed' : 'pointer',
+                        }}>
+                          {minLoading ? '...' : 'Enregistrer'}
+                        </button>
+                        {hasMinimum && (
+                          <button onClick={() => handleClearMinimum(sub.id)} disabled={minLoading} style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent',
+                            color: C.red, fontWeight: 600, fontSize: 12, cursor: minLoading ? 'not-allowed' : 'pointer',
+                          }}>
+                            <X size={13} /> Supprimer le seuil
+                          </button>
+                        )}
+                        <button onClick={() => { setMinEditFor(null); setMinMsg(null); }} style={{
+                          padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 12,
+                        }}>
+                          Annuler
+                        </button>
+                        {minMsg && <span style={{ fontSize: 12, color: C.red, width: '100%' }}>{minMsg}</span>}
+                        <span style={{ fontSize: 11, color: C.muted, width: '100%' }}>
+                          Aucune commande de ce type de produit ne pourra être poursuivie en dessous de ce seuil — quel que soit le producteur. Laissez le champ vide puis « Enregistrer » (ou « Supprimer le seuil ») pour revenir au comportement historique (aucune règle).
+                        </span>
+                      </div>
+                    )}
                     </div>
                   );
                 })}

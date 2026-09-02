@@ -37,30 +37,18 @@ export default function BuyerPreordersPage() {
     } finally {
       setLoading(false);
     }
-
-function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md p-5 relative shadow-xl">
-        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400">×</button>
-        <h3 className="text-lg font-bold text-slate-900 mb-4">{title}</h3>
-        {children}
-      </div>
-    </div>
-  );
-}
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const submitPreorder = async (cropCycleId: string) => {
+  const submitPreorder = async (marketOfferId: string) => {
     const quantity = Number(qty);
     if (!quantity || quantity <= 0) return toast.error('Quantité invalide');
     setSubmitting(true);
     try {
-      const res = await createPreorderAction({ cropCycleId, quantity });
+      const res = await createPreorderAction({ marketOfferId, quantity });
       if (!res.success) {
         toast.error(res.error);
         return;
@@ -151,7 +139,7 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
                 <div key={p.id} className="bg-white rounded-2xl border border-emerald-900/5 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="font-bold text-slate-800">{p.cropType}{p.variety ? ` · ${p.variety}` : ''}</h3>
+                      <h3 className="font-bold text-slate-800">{p.productLabel}</h3>
                       <p className="text-xs text-slate-500 mt-0.5">{p.producer?.businessName ?? p.farm.name}</p>
                     </div>
                     {p.pricePerUnit !== null && (
@@ -213,13 +201,13 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
           {preorders.map((o) => (
             <div key={o.id} className="bg-white rounded-2xl border border-emerald-900/5 p-4 shadow-sm flex items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-slate-800">{o.cropCycle?.cropType ?? 'Production'}</h3>
+                <h3 className="font-bold text-slate-800">{o.marketOffer?.productLabel ?? 'Production'}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {o.cropCycle?.estimatedAvailableAt
-                    ? `Disponible le ${new Date(o.cropCycle.estimatedAvailableAt).toLocaleDateString('fr-FR')}`
+                  {o.marketOffer?.estimatedAvailableAt
+                    ? `Disponible le ${new Date(o.marketOffer.estimatedAvailableAt).toLocaleDateString('fr-FR')}`
                     : 'Date à confirmer'}
                 </p>
-                <p className="text-xs text-slate-500 mt-0.5">{o.quantity} {o.cropCycle ? 'unités' : ''} à {o.unitPrice.toLocaleString()} XOF</p>
+                <p className="text-xs text-slate-500 mt-0.5">{o.quantity} {o.marketOffer ? 'unités' : ''} à {o.unitPrice.toLocaleString()} XOF</p>
                 <div className="flex gap-2 mt-2 text-xs">
                   <button
                     onClick={() => openUpdate(o)}

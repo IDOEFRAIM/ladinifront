@@ -37,7 +37,17 @@ export async function getMyProducts() {
             return { success: false, error: "Profil producteur introuvable." };
         }
 
-        return { success: true, data: producer.products };
+        // `price`/`quantityForSale` sont des colonnes `numeric` (string côté
+        // drizzle) — converties ici pour matcher le type `Product` (number)
+        // attendu par le catalogue producteur.
+        return {
+            success: true,
+            data: producer.products.map((p) => ({
+                ...p,
+                price: Number(p.price),
+                quantityForSale: Number(p.quantityForSale),
+            })),
+        };
     } catch (error) {
         console.error("Erreur chargement catalogue:", error);
         return { success: false, error: "Erreur lors du chargement du catalogue." };
@@ -110,10 +120,10 @@ export async function toggleProductAvailability(productId: string) {
             return { success: false, error: "Non autorisé." };
         }
 
-        const newQuantity = product.quantityForSale > 0 ? 0 : 1;
+        const newQuantity = Number(product.quantityForSale) > 0 ? 0 : 1;
 
         await db.update(schema.products)
-            .set({ quantityForSale: newQuantity })
+            .set({ quantityForSale: String(newQuantity) })
             .where(eq(schema.products.id, productId));
 
         // Audit : toggle disponibilité

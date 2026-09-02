@@ -5,6 +5,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { audit, snapshot } from "@/lib/audit";
 import getUserIdFromSession from "@/lib/get-userId";
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
+import { validateMinimumOrderQuantity } from '@/lib/orderPolicy';
 
 // Type pour la création de commande (agnostique de la source)
 interface CreateOrderParams {
@@ -32,6 +33,8 @@ interface ProductInventoryCheck {
   id: string;
   quantityForSale: number;
   name: string;
+  unit: string;
+  subCategoryId: string | null;
 }
 
 interface OrderCreated {
@@ -79,12 +82,27 @@ async function validateInventory(tx: any, items: CreateOrderParams['items']): Pr
     productIds.length > 0
       ? await tx.query.products.findMany({
           where: inArray(schema.products.id, productIds),
-          columns: { id: true, quantityForSale: true, name: true },
+          columns: { id: true, quantityForSale: true, name: true, unit: true, subCategoryId: true },
         })
       : [];
 
   const productById = new Map<string, ProductInventoryCheck>();
   for (const p of products) productById.set(p.id, p);
+
+  // Seuil minimum de commande — policy PLATEFORME par TYPE de produit (voir
+  // lib/orderPolicy.ts + governance.ts::subCategories.minimumOrderQuantity).
+  // Une seule requête groupée, jamais une par produit dans la boucle.
+  const subCategoryIds = Array.from(
+    new Set(products.map((p) => p.subCategoryId).filter((id): id is string => !!id)),
+  );
+  const subCategoryById = new Map<string, { minimumOrderQuantity: string | null; minimumOrderUnit: string | null }>();
+  if (subCategoryIds.length > 0) {
+    const subs = await tx.query.subCategories.findMany({
+      where: inArray(schema.subCategories.id, subCategoryIds),
+      columns: { id: true, minimumOrderQuantity: true, minimumOrderUnit: true },
+    });
+    for (const s of subs) subCategoryById.set(s.id, s);
+  }
 
   for (const [productId, requiredQty] of requiredByProductId) {
     const product = productById.get(productId);
@@ -93,6 +111,28 @@ async function validateInventory(tx: any, items: CreateOrderParams['items']): Pr
     }
     if ((product.quantityForSale ?? 0) < requiredQty) {
       throw new Error(`Stock insuffisant pour "${product.name}" (disponible: ${product.quantityForSale})`);
+    }
+
+    // Le backend NE FAIT JAMAIS confiance au frontend pour cette règle
+    // (même si l'UI affiche déjà le seuil pour l'UX) — re-validation
+    // obligatoire ici, seul point de vérité côté serveur pour ce canal.
+    const sub = product.subCategoryId ? subCategoryById.get(product.subCategoryId) : undefined;
+    const minCheck = validateMinimumOrderQuantity({
+      minimumOrderQuantity: sub?.minimumOrderQuantity ?? null,
+      minimumOrderUnit: sub?.minimumOrderUnit ?? null,
+      totalQuantity: requiredQty,
+      totalUnit: product.unit,
+    });
+    if (!minCheck.passed) {
+      if (minCheck.reason === 'UNIT_INCOMPATIBLE') {
+        throw new Error(
+          `Le seuil minimum de commande pour "${product.name}" est défini en ${minCheck.minimumUnit}, incompatible avec ${product.unit}.`,
+        );
+      }
+      throw new Error(
+        `La quantité minimale pour "${product.name}" est de ${minCheck.minimumInTotalUnit} ${product.unit} ` +
+        `(commande actuelle : ${requiredQty} ${product.unit}).`,
+      );
     }
   }
 

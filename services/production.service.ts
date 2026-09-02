@@ -1,62 +1,57 @@
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { and, asc, eq, gte, inArray } from 'drizzle-orm';
+import { and, asc, eq, gte } from 'drizzle-orm';
 import { z } from 'zod';
 import { ok, fail, errorMessage, type ApiResult } from '@/lib/api-result';
+
+// (2026-09-02) `crop_cycles` a été remplacé par `market_offers` (structure de
+// prévente dégraissée — voir src/db/schema/marketplace.ts, commit "switch
+// schema"). Plusieurs champs de l'ANCIEN modèle producteur détaillé
+// (areaSize, plantedAt, variety, growthStage, initialStock, hatchDate)
+// n'existent plus sur `marketOffers` — intentionnel (simplification du
+// schéma), pas un oubli : ce service est adapté à la structure RÉELLE
+// actuelle plutôt que de garder des champs qui n'ont plus de colonne.
 
 const productionTypeEnum = z.enum(['CROP', 'LIVESTOCK']);
 
 const DeclareProductionSchema = z.object({
   farmId: z.string().uuid(),
-  cropType: z.string().min(1),
+  productLabel: z.string().min(1),
   productionType: productionTypeEnum.default('CROP'),
   subCategoryId: z.string().uuid().optional(),
-  areaSize: z.number().positive().optional(),
-  plantedAt: z.coerce.date().optional(),
   expectedHarvestDate: z.coerce.date().optional(),
   estimatedAvailableAt: z.coerce.date().optional(),
   availableQuantity: z.number().nonnegative().optional(),
   pricePerUnit: z.number().positive().optional(),
   unit: z.string().min(1).default('KG'),
-  variety: z.string().min(1).optional(),
-  growthStage: z.string().min(1).optional(),
-  status: z.string().min(1).default('GROWING'),
+  status: z.string().min(1).default('DRAFT'),
   isPublic: z.boolean().default(false),
   preorderEnabled: z.boolean().default(false),
   species: z.string().min(1).optional(),
   breed: z.string().min(1).optional(),
-  initialStock: z.number().nonnegative().optional(),
   currentStock: z.number().nonnegative().optional(),
-  hatchDate: z.coerce.date().optional(),
 }).superRefine((data, ctx) => {
   if (data.productionType === 'CROP') {
-    if (data.areaSize == null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Superficie requise pour une culture', path: ['areaSize'] });
-    }
-    if (!data.plantedAt) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Date de semis requise', path: ['plantedAt'] });
-    }
     if (!data.expectedHarvestDate) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Date de récolte requise', path: ['expectedHarvestDate'] });
     }
   } else {
-    if (!data.species && !data.cropType) {
+    if (!data.species && !data.productLabel) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Espèce obligatoire pour l’élevage', path: ['species'] });
     }
-    if (data.initialStock == null && data.currentStock == null && data.availableQuantity == null) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Stock initial ou disponible requis', path: ['initialStock'] });
+    if (data.currentStock == null && data.availableQuantity == null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Stock initial ou disponible requis', path: ['currentStock'] });
     }
   }
 });
 
 const UpdateVisibilitySchema = z.object({
-  cropCycleId: z.string().uuid(),
+  marketOfferId: z.string().uuid(),
   isPublic: z.boolean().optional(),
   preorderEnabled: z.boolean().optional(),
   estimatedAvailableAt: z.coerce.date().nullable().optional(),
   availableQuantity: z.number().nonnegative().optional(),
   pricePerUnit: z.number().positive().nullable().optional(),
-  growthStage: z.string().min(1).nullable().optional(),
   status: z.string().min(1).optional(),
   currentStock: z.number().nonnegative().optional(),
   species: z.string().min(1).optional(),
@@ -68,11 +63,10 @@ export type UpdateVisibilityInput = z.input<typeof UpdateVisibilitySchema>;
 
 export type PublicProduction = {
   id: string;
-  cropType: string;
+  productLabel: string;
   productionType: z.infer<typeof productionTypeEnum>;
-  variety: string | null;
-  growthStage: string | null;
   estimatedAvailableAt: Date | null;
+  expectedHarvestDate: Date | null;
   availableQuantity: number;
   reservedQuantity: number;
   pricePerUnit: number | null;
@@ -80,9 +74,7 @@ export type PublicProduction = {
   preorderEnabled: boolean;
   species: string | null;
   breed: string | null;
-  initialStock: number;
   currentStock: number;
-  hatchDate: Date | null;
   subCategory: { id: string; name: string } | null;
   producer: {
     id: string;
@@ -118,36 +110,29 @@ export async function declareFutureProduction(
     const ownsFarm = await assertFarmOwnership(producerId, data.farmId);
     if (!ownsFarm) return fail('FARM_NOT_OWNED');
 
-    const areaSizeValue = data.productionType === 'CROP' ? (data.areaSize ?? 0) : 0;
-    const plantedAtValue = data.productionType === 'CROP' ? (data.plantedAt ?? new Date()) : new Date();
-    const harvestValue = data.productionType === 'CROP' ? (data.expectedHarvestDate ?? new Date()) : new Date();
+    const harvestValue = data.productionType === 'CROP' ? (data.expectedHarvestDate ?? new Date()) : undefined;
 
     const [created] = await db
-      .insert(schema.cropCycles)
-      .values({ 
+      .insert(schema.marketOffers)
+      .values({
+        producerId,
         farmId: data.farmId,
-        cropType: data.cropType,
+        productLabel: data.productLabel,
         productionType: data.productionType,
         subCategoryId: data.subCategoryId ?? null,
-        areaSize: areaSizeValue,
-        plantedAt: plantedAtValue,
         expectedHarvestDate: harvestValue,
         estimatedAvailableAt: data.estimatedAvailableAt ?? null,
-        availableQuantity: data.availableQuantity ?? 0,
-        pricePerUnit: data.pricePerUnit ?? null,
-        unit: data.unit,
-        variety: data.variety ?? null,
-        growthStage: data.growthStage ?? null,
+        availableQuantity: String(data.availableQuantity ?? 0),
+        pricePerUnit: data.pricePerUnit != null ? String(data.pricePerUnit) : null,
+        unit: data.unit as any,
         status: data.status,
         isPublic: data.isPublic,
         preorderEnabled: data.preorderEnabled,
         species: data.species ?? null,
         breed: data.breed ?? null,
-        initialStock: data.initialStock ?? 0,
-        currentStock: data.currentStock ?? data.initialStock ?? 0,
-        hatchDate: data.hatchDate ?? null,
-      } satisfies typeof schema.cropCycles.$inferInsert)
-      .returning({ id: schema.cropCycles.id });
+        currentStock: String(data.currentStock ?? 0),
+      } satisfies typeof schema.marketOffers.$inferInsert)
+      .returning({ id: schema.marketOffers.id });
 
     if (!created) return fail('CREATE_FAILED');
     return ok({ id: created.id });
@@ -169,35 +154,33 @@ export async function updateProductionVisibility(
     }
     const data = parsed.data;
 
-    const cycle = await db.query.cropCycles.findFirst({
-      where: eq(schema.cropCycles.id, data.cropCycleId),
-      columns: { id: true, farmId: true, reservedQuantity: true, availableQuantity: true },
-      with: { farm: { columns: { producerId: true } } },
+    const offer = await db.query.marketOffers.findFirst({
+      where: eq(schema.marketOffers.id, data.marketOfferId),
+      columns: { id: true, producerId: true, reservedQuantity: true, availableQuantity: true },
     });
-    if (!cycle) return fail('CYCLE_NOT_FOUND');
-    if (cycle.farm?.producerId !== producerId) return fail('FORBIDDEN');
+    if (!offer) return fail('CYCLE_NOT_FOUND');
+    if (offer.producerId !== producerId) return fail('FORBIDDEN');
 
-    const patch: Partial<typeof schema.cropCycles.$inferInsert> = {};
+    const patch: Partial<typeof schema.marketOffers.$inferInsert> = {};
     if (data.isPublic !== undefined) patch.isPublic = data.isPublic;
     if (data.preorderEnabled !== undefined) patch.preorderEnabled = data.preorderEnabled;
     if (data.estimatedAvailableAt !== undefined) patch.estimatedAvailableAt = data.estimatedAvailableAt;
     if (data.availableQuantity !== undefined) {
-      if (data.availableQuantity < (cycle.reservedQuantity ?? 0)) {
+      if (data.availableQuantity < Number(offer.reservedQuantity ?? 0)) {
         return fail('AVAILABLE_LT_RESERVED');
       }
-      patch.availableQuantity = data.availableQuantity;
+      patch.availableQuantity = String(data.availableQuantity);
     }
-    if (data.pricePerUnit !== undefined) patch.pricePerUnit = data.pricePerUnit;
-    if (data.growthStage !== undefined) patch.growthStage = data.growthStage;
+    if (data.pricePerUnit !== undefined) patch.pricePerUnit = data.pricePerUnit != null ? String(data.pricePerUnit) : null;
     if (data.status !== undefined) patch.status = data.status;
-    if (data.currentStock !== undefined) patch.currentStock = data.currentStock;
+    if (data.currentStock !== undefined) patch.currentStock = String(data.currentStock);
     if (data.species !== undefined) patch.species = data.species;
     if (data.breed !== undefined) patch.breed = data.breed;
 
-    if (Object.keys(patch).length === 0) return ok({ id: cycle.id });
+    if (Object.keys(patch).length === 0) return ok({ id: offer.id });
 
-    await db.update(schema.cropCycles).set(patch).where(eq(schema.cropCycles.id, cycle.id));
-    return ok({ id: cycle.id });
+    await db.update(schema.marketOffers).set(patch).where(eq(schema.marketOffers.id, offer.id));
+    return ok({ id: offer.id });
   } catch (err) {
     return fail(errorMessage(err));
   }
@@ -207,28 +190,17 @@ export async function getProducerProductions(producerId: string): Promise<ApiRes
   try {
     if (!producerId) return fail('PRODUCER_REQUIRED');
 
-    const farms = await db.query.farms.findMany({
-      where: eq(schema.farms.producerId, producerId),
-      columns: { id: true },
-    });
-    const farmIds = farms.map((f) => f.id);
-    if (farmIds.length === 0) return ok([]);
-
-    const cycles = await db.query.cropCycles.findMany({
-      where: inArray(schema.cropCycles.farmId, farmIds),
+    const offers = await db.query.marketOffers.findMany({
+      where: eq(schema.marketOffers.producerId, producerId),
       orderBy: (t, { desc }) => [desc(t.createdAt)],
       with: {
         subCategory: { columns: { id: true, name: true } },
-        farm: {
-          columns: { id: true, name: true, location: true },
-          with: {
-            producer: { columns: { id: true, businessName: true, logoUrl: true, zoneId: true, rating: true } },
-          },
-        },
+        farm: { columns: { id: true, name: true, location: true } },
+        producer: { columns: { id: true, businessName: true, logoUrl: true, zoneId: true, rating: true } },
       },
     });
 
-    return ok(cycles.map(mapToPublicProduction));
+    return ok(offers.map(mapToPublicProduction));
   } catch (err) {
     return fail(errorMessage(err));
   }
@@ -242,34 +214,30 @@ export async function getPublicFutureProductions(filters?: {
 }): Promise<ApiResult<PublicProduction[]>> {
   try {
     const conditions = [
-      eq(schema.cropCycles.isPublic, true),
-      eq(schema.cropCycles.preorderEnabled, true),
+      eq(schema.marketOffers.isPublic, true),
+      eq(schema.marketOffers.preorderEnabled, true),
     ];
     if (filters?.subCategoryId) {
-      conditions.push(eq(schema.cropCycles.subCategoryId, filters.subCategoryId));
+      conditions.push(eq(schema.marketOffers.subCategoryId, filters.subCategoryId));
     }
     if (filters?.availableFrom) {
-      conditions.push(gte(schema.cropCycles.estimatedAvailableAt, filters.availableFrom));
+      conditions.push(gte(schema.marketOffers.estimatedAvailableAt, filters.availableFrom));
     }
 
-    const cycles = await db.query.cropCycles.findMany({
+    const offers = await db.query.marketOffers.findMany({
       where: and(...conditions),
-      orderBy: [asc(schema.cropCycles.estimatedAvailableAt)],
+      orderBy: [asc(schema.marketOffers.estimatedAvailableAt)],
       limit: Math.min(filters?.limit ?? 50, 100),
       with: {
         subCategory: { columns: { id: true, name: true } },
-        farm: {
-          columns: { id: true, name: true, location: true },
-          with: {
-            producer: { columns: { id: true, businessName: true, logoUrl: true, zoneId: true, rating: true } },
-          },
-        },
+        farm: { columns: { id: true, name: true, location: true } },
+        producer: { columns: { id: true, businessName: true, logoUrl: true, zoneId: true, rating: true } },
       },
     });
 
     const scoped = filters?.zoneId
-      ? cycles.filter((c) => c.farm?.producer?.zoneId === filters.zoneId)
-      : cycles;
+      ? offers.filter((o) => o.producer?.zoneId === filters.zoneId)
+      : offers;
 
     return ok(scoped.map(mapToPublicProduction));
   } catch (err) {
@@ -277,50 +245,41 @@ export async function getPublicFutureProductions(filters?: {
   }
 }
 
-type CycleWithRelations = typeof schema.cropCycles.$inferSelect & {
+type OfferWithRelations = typeof schema.marketOffers.$inferSelect & {
   subCategory: { id: string; name: string } | null;
-  farm:
-    | {
-        id: string;
-        name: string;
-        location: string | null;
-        producer:
-          | { id: string; businessName: string | null; logoUrl: string | null; zoneId: string | null; rating: number | null }
-          | null;
-      }
+  farm: { id: string; name: string; location: string | null } | null;
+  producer:
+    | { id: string; businessName: string | null; logoUrl: string | null; zoneId: string | null; rating: number | null }
     | null;
 };
 
-function mapToPublicProduction(c: CycleWithRelations): PublicProduction {
+function mapToPublicProduction(o: OfferWithRelations): PublicProduction {
   return {
-    id: c.id,
-    cropType: c.cropType,
-    productionType: (c.productionType as z.infer<typeof productionTypeEnum>) ?? 'CROP',
-    variety: c.variety ?? null,
-    growthStage: c.growthStage ?? null,
-    estimatedAvailableAt: c.estimatedAvailableAt ?? null,
-    availableQuantity: c.availableQuantity,
-    reservedQuantity: c.reservedQuantity,
-    pricePerUnit: c.pricePerUnit ?? null,
-    unit: c.unit,
-    preorderEnabled: Boolean(c.preorderEnabled),
-    species: c.species ?? null,
-    breed: c.breed ?? null,
-    initialStock: c.initialStock ?? 0,
-    currentStock: c.currentStock ?? 0,
-    hatchDate: c.hatchDate ?? null,
-    subCategory: c.subCategory ? { id: c.subCategory.id, name: c.subCategory.name } : null,
-    producer: c.farm?.producer
+    id: o.id,
+    productLabel: o.productLabel,
+    productionType: (o.productionType as z.infer<typeof productionTypeEnum>) ?? 'CROP',
+    estimatedAvailableAt: o.estimatedAvailableAt ?? null,
+    expectedHarvestDate: o.expectedHarvestDate ?? null,
+    availableQuantity: Number(o.availableQuantity ?? 0),
+    reservedQuantity: Number(o.reservedQuantity ?? 0),
+    pricePerUnit: o.pricePerUnit != null ? Number(o.pricePerUnit) : null,
+    unit: o.unit,
+    preorderEnabled: Boolean(o.preorderEnabled),
+    species: o.species ?? null,
+    breed: o.breed ?? null,
+    currentStock: Number(o.currentStock ?? 0),
+    subCategory: o.subCategory ? { id: o.subCategory.id, name: o.subCategory.name } : null,
+    producer: o.producer
       ? {
-          id: c.farm.producer.id,
-          businessName: c.farm.producer.businessName ?? null,
-          logoUrl: c.farm.producer.logoUrl ?? null,
-          zoneId: c.farm.producer.zoneId ?? null,
-          rating: c.farm.producer.rating ?? null,
+          id: o.producer.id,
+          businessName: o.producer.businessName ?? null,
+          logoUrl: o.producer.logoUrl ?? null,
+          zoneId: o.producer.zoneId ?? null,
+          rating: o.producer.rating ?? null,
         }
       : null,
-    farm: c.farm
-      ? { id: c.farm.id, name: c.farm.name, location: c.farm.location ?? null }
+    farm: o.farm
+      ? { id: o.farm.id, name: o.farm.name, location: o.farm.location ?? null }
       : { id: '', name: '', location: null },
   };
 }

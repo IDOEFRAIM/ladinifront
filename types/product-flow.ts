@@ -22,6 +22,14 @@ export interface SubCategory {
   name: string;
   blockedZoneIds: string[];
   standardPrices: StandardPrice[];
+  // Seuil minimum de commande — POLICY PLATEFORME configurée par l'admin
+  // (voir components/admin/governance/CategoryManager.tsx), jamais par le
+  // producteur. `null` = aucune règle configurée (comportement historique).
+  // Intentionnellement non affiché dans le flow de création produit
+  // producteur (StepSubCategories.tsx) — ce n'est pas un paramètre qu'il
+  // configure ni qu'il a besoin de voir pour publier son produit.
+  minimumOrderQuantity: string | null;
+  minimumOrderUnit: string | null;
   _count?: { products: number };
 }
 

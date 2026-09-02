@@ -35,7 +35,7 @@ export async function getEyeOfGodData(organizationId?: string) {
       if (!stockAggregates[stock.itemName]) {
         stockAggregates[stock.itemName] = { totalQuantity: 0, unit: stock.unit, itemName: stock.itemName, zones: new Set() };
       }
-      stockAggregates[stock.itemName].totalQuantity += stock.quantity;
+      stockAggregates[stock.itemName].totalQuantity += Number(stock.quantity);
       if (stock.warehouse?.zoneId && zoneMap.has(stock.warehouse.zoneId)) stockAggregates[stock.itemName].zones.add(zoneMap.get(stock.warehouse.zoneId)!);
       if (stock.farm?.zoneId && zoneMap.has(stock.farm.zoneId)) stockAggregates[stock.itemName].zones.add(zoneMap.get(stock.farm.zoneId)!);
     }
@@ -71,19 +71,17 @@ export async function getEyeOfGodData(organizationId?: string) {
       .where(eq(schema.agentActions.status, 'FAILED'));
 
     // 3. Suivi des Zones (Anomalies et Statistiques de Zone)
-    const activeAnomalies = await db.query.anomalies.findMany({
-      where: eq(schema.anomalies.isResolved, false),
-      orderBy: (t, { desc }) => [desc(t.createdAt)],
-      limit: 15
-    });
-
-    // Resolve anomaly zones
-    const anomalyZoneIds = new Set<string>();
-    for (const a of activeAnomalies) if (a.zoneId) anomalyZoneIds.add(a.zoneId);
-    const anomalyZones = anomalyZoneIds.size > 0
-      ? await db.query.zones.findMany({ where: (t, { inArray }) => inArray(t.id, Array.from(anomalyZoneIds)) })
-      : [];
-    const anomalyZoneMap = new Map(anomalyZones.map(z => [z.id, z]));
+    // (2026-09-02) La table `anomalies` a été supprimée du schéma (commit
+    // "switch schema", aucun remplacement direct — `moderation_events` couvre
+    // un concept différent : un journal d'actions de modération par
+    // utilisateur, pas des anomalies non résolues par zone). Section
+    // retournée vide plutôt que de mapper des données non comparables sous
+    // le même nom — la page (`app/admin/eye-of-god/page.tsx`) gère déjà
+    // l'état vide ("Aucune anomalie active").
+    const activeAnomalies: Array<{
+      id: string; zoneId: string | null; createdAt: Date; [key: string]: unknown;
+    }> = [];
+    const anomalyZoneMap = new Map<string, { id: string; name: string }>();
 
     const workZoneWhere = organizationId ? eq(schema.workZones.organizationId, organizationId) : undefined;
     const activeWorkZones = await db.query.workZones.findMany({

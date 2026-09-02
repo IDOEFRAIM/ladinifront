@@ -5,9 +5,15 @@ import { z } from 'zod';
 import { ok, fail, errorMessage, type ApiResult } from '@/lib/api-result';
 import { resolveBuyerProfileId } from '@/services/buyerProfiles.service';
 import { runOrderStatusHooks } from '@/services/order.hooks';
+import { validateMinimumOrderQuantity } from '@/lib/orderPolicy';
+
+// (2026-09-02) `crop_cycles` -> `market_offers` (schéma dégraissé, voir
+// src/db/schema/marketplace.ts). `orders.cropCycleId` -> `orders.marketOfferId`,
+// `cropType` -> `productLabel`. `growthStage` n'existe plus (colonne
+// supprimée) — retiré des types/retours ci-dessous.
 
 const CreatePreorderSchema = z.object({
-  cropCycleId: z.string().uuid(),
+  marketOfferId: z.string().uuid(),
   quantity: z.number().positive(),
   customerName: z.string().min(1).optional(),
   customerPhone: z.string().min(1).optional(),
@@ -39,11 +45,11 @@ const freezeDatePassed = (estimatedAt: Date | null) => {
   return new Date() > freezeDate;
 };
 
-async function resolveCycleProductId(
+async function resolveOfferProductId(
   tx: TxClient,
-  cycle: {
+  offer: {
     id: string;
-    cropType: string;
+    productLabel: string;
     subCategoryId: string | null;
     pricePerUnit: number | null;
     unit: string;
@@ -51,7 +57,7 @@ async function resolveCycleProductId(
     producerId: string;
   },
 ): Promise<string> {
-  const shortCode = `PRE-${cycle.id}`;
+  const shortCode = `PRE-${offer.id}`;
 
   const existing = await tx.query.products.findFirst({
     where: eq(schema.products.shortCode, shortCode),
@@ -63,14 +69,17 @@ async function resolveCycleProductId(
     .insert(schema.products)
     .values({
       shortCode,
-      name: cycle.cropType,
-      categoryLabel: cycle.cropType,
-      subCategoryId: cycle.subCategoryId ?? null,
-      price: cycle.pricePerUnit ?? 0,
-      unit: cycle.unit,
-      quantityForSale: cycle.availableQuantity,
+      name: offer.productLabel,
+      categoryLabel: offer.productLabel,
+      subCategoryId: offer.subCategoryId ?? null,
+      // `price`/`quantityForSale` sont des colonnes `numeric` (drizzle les
+      // représente en `string` côté JS pour ne pas perdre de précision) —
+      // jamais des `number` bruts.
+      price: String(offer.pricePerUnit ?? 0),
+      unit: offer.unit,
+      quantityForSale: String(offer.availableQuantity),
       isAvailable: false,
-      producerId: cycle.producerId,
+      producerId: offer.producerId,
     })
     .returning({ id: schema.products.id });
 
@@ -93,7 +102,7 @@ async function loadPreorderForBuyer(orderId: string, userId: string) {
     columns: {
       id: true,
       status: true,
-      cropCycleId: true,
+      marketOfferId: true,
       totalAmount: true,
       currency: true,
       expectedFulfillmentDate: true,
@@ -101,13 +110,16 @@ async function loadPreorderForBuyer(orderId: string, userId: string) {
     },
     with: {
       items: { columns: { id: true, quantity: true, priceAtSale: true }, limit: 1 },
-      cropCycle: {
-        columns: { id: true, estimatedAvailableAt: true, availableQuantity: true, reservedQuantity: true },
+      marketOffer: {
+        columns: {
+          id: true, estimatedAvailableAt: true, availableQuantity: true, reservedQuantity: true,
+          subCategoryId: true, unit: true,
+        },
       },
     },
   });
 
-  if (!order || !order.cropCycle || !order.items?.[0]) return null;
+  if (!order || !order.marketOffer || !order.items?.[0]) return null;
   return order;
 }
 
@@ -123,26 +135,45 @@ export async function updatePreorderQuantity(
     const order = await loadPreorderForBuyer(parsed.data.orderId, userId);
     if (!order) return fail('ORDER_NOT_FOUND');
     if (order.status !== 'PREORDER' || order.preorderConvertedAt) return fail('ORDER_LOCKED');
-    if (freezeDatePassed(order.cropCycle?.estimatedAvailableAt ?? null)) return fail('MODIFICATION_WINDOW_CLOSED');
+    if (freezeDatePassed(order.marketOffer?.estimatedAvailableAt ?? null)) return fail('MODIFICATION_WINDOW_CLOSED');
 
-    const currentQty = order.items![0].quantity;
+    // `orderItems.quantity`/`marketOffers.reservedQuantity`/`availableQuantity`
+    // sont des colonnes `numeric` -> `string` côté drizzle ; converties ici,
+    // une seule fois, jamais comparées/additionnées à l'état brut.
+    const currentQty = Number(order.items![0].quantity);
     const newQty = parsed.data.quantity;
     if (newQty === currentQty) return ok({ quantity: currentQty });
 
-    const cycle = order.cropCycle!;
-    const newReserved = (cycle.reservedQuantity ?? 0) - currentQty + newQty;
-    if (newReserved > (cycle.availableQuantity ?? 0)) return fail('INSUFFICIENT_FUTURE_QUANTITY');
+    const offer = order.marketOffer!;
+    const newReserved = Number(offer.reservedQuantity ?? 0) - currentQty + newQty;
+    if (newReserved > Number(offer.availableQuantity ?? 0)) return fail('INSUFFICIENT_FUTURE_QUANTITY');
 
-    const unitPrice = order.items![0].priceAtSale;
+    // Un buyer réduisant sa précommande ne doit pas pouvoir passer sous le
+    // seuil minimum de la plateforme — même règle qu'à la création.
+    if (offer.subCategoryId) {
+      const sub = await db.query.subCategories.findFirst({
+        where: eq(schema.subCategories.id, offer.subCategoryId),
+        columns: { minimumOrderQuantity: true, minimumOrderUnit: true },
+      });
+      const minCheck = validateMinimumOrderQuantity({
+        minimumOrderQuantity: sub?.minimumOrderQuantity ?? null,
+        minimumOrderUnit: sub?.minimumOrderUnit ?? null,
+        totalQuantity: newQty,
+        totalUnit: offer.unit,
+      });
+      if (!minCheck.passed) return fail('BELOW_MINIMUM_ORDER_QUANTITY');
+    }
+
+    const unitPrice = Number(order.items![0].priceAtSale);
     const newTotal = Number((unitPrice * newQty).toFixed(2));
 
     await db.transaction(async (tx) => {
-      await tx.update(schema.orderItems).set({ quantity: newQty }).where(eq(schema.orderItems.orderId, order.id));
-      await tx.update(schema.orders).set({ totalAmount: newTotal }).where(eq(schema.orders.id, order.id));
+      await tx.update(schema.orderItems).set({ quantity: String(newQty) }).where(eq(schema.orderItems.orderId, order.id));
+      await tx.update(schema.orders).set({ totalAmount: String(newTotal) }).where(eq(schema.orders.id, order.id));
       await tx
-        .update(schema.cropCycles)
-        .set({ reservedQuantity: sql`${schema.cropCycles.reservedQuantity} - ${currentQty} + ${newQty}` })
-        .where(eq(schema.cropCycles.id, cycle.id));
+        .update(schema.marketOffers)
+        .set({ reservedQuantity: sql`${schema.marketOffers.reservedQuantity} - ${currentQty} + ${newQty}` })
+        .where(eq(schema.marketOffers.id, offer.id));
     });
 
     return ok({ quantity: newQty });
@@ -163,16 +194,16 @@ export async function cancelPreorder(
     const order = await loadPreorderForBuyer(parsed.data.orderId, userId);
     if (!order) return fail('ORDER_NOT_FOUND');
     if (order.status !== 'PREORDER' || order.preorderConvertedAt) return fail('ORDER_LOCKED');
-    if (freezeDatePassed(order.cropCycle?.estimatedAvailableAt ?? null)) return fail('MODIFICATION_WINDOW_CLOSED');
+    if (freezeDatePassed(order.marketOffer?.estimatedAvailableAt ?? null)) return fail('MODIFICATION_WINDOW_CLOSED');
 
     const qty = order.items![0].quantity;
 
     await db.transaction(async (tx) => {
       await tx.update(schema.orders).set({ status: 'CANCELLED' }).where(eq(schema.orders.id, order.id));
       await tx
-        .update(schema.cropCycles)
-        .set({ reservedQuantity: sql`${schema.cropCycles.reservedQuantity} - ${qty}` })
-        .where(eq(schema.cropCycles.id, order.cropCycleId!));
+        .update(schema.marketOffers)
+        .set({ reservedQuantity: sql`${schema.marketOffers.reservedQuantity} - ${qty}` })
+        .where(eq(schema.marketOffers.id, order.marketOfferId!));
     });
 
     return ok({ cancelled: true });
@@ -194,34 +225,52 @@ export async function createPreorder(
     }
     const data = parsed.data;
 
-    const cycle = await db.query.cropCycles.findFirst({
-      where: eq(schema.cropCycles.id, data.cropCycleId),
-      with: { farm: { columns: { producerId: true } } },
+    const offer = await db.query.marketOffers.findFirst({
+      where: eq(schema.marketOffers.id, data.marketOfferId),
     });
-    if (!cycle) return fail('CYCLE_NOT_FOUND');
-    if (!cycle.isPublic || !cycle.preorderEnabled) return fail('PREORDER_NOT_AVAILABLE');
-    if (cycle.pricePerUnit === null) return fail('PREORDER_PRICE_NOT_SET');
+    if (!offer) return fail('CYCLE_NOT_FOUND');
+    if (!offer.isPublic || !offer.preorderEnabled) return fail('PREORDER_NOT_AVAILABLE');
+    if (offer.pricePerUnit === null) return fail('PREORDER_PRICE_NOT_SET');
 
-    const producerId = cycle.farm?.producerId;
+    const producerId = offer.producerId;
     if (!producerId) return fail('PRODUCER_NOT_RESOLVED');
 
-    const remaining = cycle.availableQuantity - cycle.reservedQuantity;
+    const availableQuantity = Number(offer.availableQuantity);
+    const reservedQuantity = Number(offer.reservedQuantity);
+    const remaining = availableQuantity - reservedQuantity;
     if (data.quantity > remaining) return fail('INSUFFICIENT_FUTURE_QUANTITY');
 
-    const unitPrice = cycle.pricePerUnit;
+    // Seuil minimum de commande — policy PLATEFORME par type de produit (voir
+    // lib/orderPolicy.ts). S'applique aux précommandes de production future
+    // exactement comme aux achats directs — même règle, même source de vérité.
+    if (offer.subCategoryId) {
+      const sub = await db.query.subCategories.findFirst({
+        where: eq(schema.subCategories.id, offer.subCategoryId),
+        columns: { minimumOrderQuantity: true, minimumOrderUnit: true },
+      });
+      const minCheck = validateMinimumOrderQuantity({
+        minimumOrderQuantity: sub?.minimumOrderQuantity ?? null,
+        minimumOrderUnit: sub?.minimumOrderUnit ?? null,
+        totalQuantity: data.quantity,
+        totalUnit: offer.unit,
+      });
+      if (!minCheck.passed) return fail('BELOW_MINIMUM_ORDER_QUANTITY');
+    }
+
+    const unitPrice = Number(offer.pricePerUnit);
     const subtotal = Number((unitPrice * data.quantity).toFixed(2));
 
     const orderId = await db.transaction(async (tx) => {
       const buyerProfileId = await resolveBuyerProfileId(userId, { tx });
       if (!buyerProfileId) throw new Error('BUYER_PROFILE_REQUIRED');
 
-      const productId = await resolveCycleProductId(tx, {
-        id: cycle.id,
-        cropType: cycle.cropType,
-        subCategoryId: cycle.subCategoryId,
-        pricePerUnit: cycle.pricePerUnit,
-        unit: cycle.unit,
-        availableQuantity: cycle.availableQuantity,
+      const productId = await resolveOfferProductId(tx, {
+        id: offer.id,
+        productLabel: offer.productLabel,
+        subCategoryId: offer.subCategoryId,
+        pricePerUnit: unitPrice,
+        unit: offer.unit,
+        availableQuantity,
         producerId,
       });
 
@@ -230,7 +279,7 @@ export async function createPreorder(
         .values({
           buyerId: buyerProfileId,
           orderType: 'PREORDER',
-          cropCycleId: cycle.id,
+          marketOfferId: offer.id,
           status: 'PREORDER',
           paymentMethod: data.paymentMethod,
           paymentStatus: 'PENDING',
@@ -240,11 +289,12 @@ export async function createPreorder(
           city: data.city ?? null,
           source: 'APP',
           currency: 'XOF',
-          subtotal,
-          taxAmount: 0,
-          deliveryFee: 0,
-          totalAmount: subtotal,
-          expectedFulfillmentDate: cycle.estimatedAvailableAt ?? null,
+          // Colonnes `numeric` -> `string` côté drizzle.
+          subtotal: String(subtotal),
+          taxAmount: '0',
+          deliveryFee: '0',
+          totalAmount: String(subtotal),
+          expectedFulfillmentDate: offer.estimatedAvailableAt ?? null,
         })
         .returning({ id: schema.orders.id });
 
@@ -253,14 +303,14 @@ export async function createPreorder(
       await tx.insert(schema.orderItems).values({
         orderId: order.id,
         productId,
-        quantity: data.quantity,
-        priceAtSale: unitPrice,
+        quantity: String(data.quantity),
+        priceAtSale: String(unitPrice),
       });
 
       await tx
-        .update(schema.cropCycles)
-        .set({ reservedQuantity: sql`${schema.cropCycles.reservedQuantity} + ${data.quantity}` })
-        .where(eq(schema.cropCycles.id, cycle.id));
+        .update(schema.marketOffers)
+        .set({ reservedQuantity: sql`${schema.marketOffers.reservedQuantity} + ${data.quantity}` })
+        .where(eq(schema.marketOffers.id, offer.id));
 
       return order.id;
     });
@@ -281,10 +331,9 @@ export type BuyerPreorder = {
   expectedFulfillmentDate: Date | null;
   preorderConvertedAt: Date | null;
   createdAt: Date;
-  cropCycle: {
+  marketOffer: {
     id: string;
-    cropType: string;
-    growthStage: string | null;
+    productLabel: string;
     estimatedAvailableAt: Date | null;
   } | null;
 };
@@ -309,8 +358,8 @@ export async function getBuyerPreorders(userId: string): Promise<ApiResult<Buyer
         createdAt: true,
       },
       with: {
-        cropCycle: {
-          columns: { id: true, cropType: true, growthStage: true, estimatedAvailableAt: true },
+        marketOffer: {
+          columns: { id: true, productLabel: true, estimatedAvailableAt: true },
         },
         items: {
           columns: { id: true, quantity: true, priceAtSale: true },
@@ -323,19 +372,18 @@ export async function getBuyerPreorders(userId: string): Promise<ApiResult<Buyer
       rows.map((r) => ({
         id: r.id,
         status: r.status,
-        totalAmount: r.totalAmount,
+        totalAmount: Number(r.totalAmount),
         currency: r.currency,
-        quantity: r.items?.[0]?.quantity ?? 0,
-        unitPrice: r.items?.[0]?.priceAtSale ?? 0,
+        quantity: Number(r.items?.[0]?.quantity ?? 0),
+        unitPrice: Number(r.items?.[0]?.priceAtSale ?? 0),
         expectedFulfillmentDate: r.expectedFulfillmentDate ?? null,
         preorderConvertedAt: r.preorderConvertedAt ?? null,
         createdAt: r.createdAt,
-        cropCycle: r.cropCycle
+        marketOffer: r.marketOffer
           ? {
-              id: r.cropCycle.id,
-              cropType: r.cropCycle.cropType,
-              growthStage: r.cropCycle.growthStage ?? null,
-              estimatedAvailableAt: r.cropCycle.estimatedAvailableAt ?? null,
+              id: r.marketOffer.id,
+              productLabel: r.marketOffer.productLabel,
+              estimatedAvailableAt: r.marketOffer.estimatedAvailableAt ?? null,
             }
           : null,
       })),
@@ -347,29 +395,29 @@ export async function getBuyerPreorders(userId: string): Promise<ApiResult<Buyer
 
 /**
  * Conversion automatique des précommandes arrivées à maturité.
- * Pour chaque cycle public dont la date de disponibilité est atteinte,
+ * Pour chaque offre publique dont la date de disponibilité est atteinte,
  * les commandes PREORDER non converties passent en CONFIRMED et déclenchent
  * le pipeline standard (livraison + notification).
  */
 export async function convertMaturedPreorders(now: Date = new Date()): Promise<ApiResult<{ converted: number }>> {
   try {
-    const maturedCycles = await db.query.cropCycles.findMany({
+    const maturedOffers = await db.query.marketOffers.findMany({
       where: and(
-        eq(schema.cropCycles.preorderEnabled, true),
-        lte(schema.cropCycles.estimatedAvailableAt, now),
+        eq(schema.marketOffers.preorderEnabled, true),
+        lte(schema.marketOffers.estimatedAvailableAt, now),
       ),
       columns: { id: true },
     });
-    if (maturedCycles.length === 0) return ok({ converted: 0 });
+    if (maturedOffers.length === 0) return ok({ converted: 0 });
 
-    const cycleIds = maturedCycles.map((c) => c.id);
+    const offerIds = maturedOffers.map((o) => o.id);
 
     const pending = await db.query.orders.findMany({
       where: and(eq(schema.orders.orderType, 'PREORDER'), eq(schema.orders.status, 'PREORDER')),
-      columns: { id: true, cropCycleId: true },
+      columns: { id: true, marketOfferId: true },
     });
 
-    const toConvert = pending.filter((o) => o.cropCycleId && cycleIds.includes(o.cropCycleId));
+    const toConvert = pending.filter((o) => o.marketOfferId && offerIds.includes(o.marketOfferId));
     if (toConvert.length === 0) return ok({ converted: 0 });
 
     let converted = 0;

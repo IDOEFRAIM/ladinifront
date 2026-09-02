@@ -13,6 +13,19 @@ export const users = authSchema.table('users', {
   whatsappEnabled: boolean('whatsapp_enabled').default(true), // Canaux de communication
   latitude: doublePrecision('latitude'), // Géoloc livraison
   longitude: doublePrecision('longitude'), // Géoloc livraison
+  // Horodatage de la dernière mise à jour GPS (nullable — l'absence de
+  // position ne doit jamais bloquer un profil). Alimenté par l'ingestion
+  // native Twilio (message de localisation WhatsApp) côté agent — voir
+  // agriconnect.domain.identity.models.User.location_updated_at (backend
+  // Python, même table `auth.users`). Colonne manquante ici jusqu'au
+  // 2026-09-02 (migration Heroku) : présente côté ORM Python depuis la
+  // feature GPS delivery mais jamais propagée à ce schéma Drizzle
+  // source-de-vérité — `search_products` échouait avec `UndefinedColumnError:
+  // column users.location_updated_at does not exist` dès que le backend
+  // tournait contre une base migrée depuis CE schéma (confirmé sur Heroku,
+  // vraisemblablement masqué sur DigitalOcean par un ALTER TABLE manuel
+  // hors-migration).
+  locationUpdatedAt: timestamp('location_updated_at'),
   cnibNumber: text('cnib_number').unique(),
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),

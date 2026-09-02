@@ -58,7 +58,7 @@ export async function settleExpiredAuctions() {
         }
 
         // 3. Sélectionner le meilleur bid (prix le plus bas = meilleur pour l'acheteur)
-        const sortedBids = [...auction.bids].sort((a, b) => a.offeredPrice - b.offeredPrice);
+        const sortedBids = [...auction.bids].sort((a, b) => Number(a.offeredPrice) - Number(b.offeredPrice));
         const winnerBid = sortedBids[0];
 
         // 4. Transaction atomique : attribution + création commande + lock stock
@@ -126,7 +126,7 @@ export async function settleExpiredAuctions() {
               buyerId: buyerProfile?.id ?? null,
               customerName: buyerUser?.name ?? null,
               customerPhone: buyerUser?.phone ?? null,
-              totalAmount,
+              totalAmount: String(totalAmount),
               source: 'AUCTION',
               status: 'PENDING',
               deliveryStatus: 'PENDING',
@@ -180,7 +180,7 @@ export async function settleExpiredAuctions() {
               await tx.insert(schema.stockMovements).values({
                 stockId: winnerBid.linkedStockId,
                 type: 'SALE',
-                quantity: -auction.quantity,
+                quantity: String(-auction.quantity),
                 reason: `Enchère #${auction.id.slice(0, 8)} — Commande auto-générée`,
               });
             }

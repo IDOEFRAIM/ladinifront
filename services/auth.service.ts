@@ -183,7 +183,8 @@ export async function registerUser(data: {
             role: role as any,
             phone: phone || undefined,
             whatsappEnabled: whatsappEnabled ?? true,
-            dailyAdviceTime: dailyAdviceTime || undefined,
+            // (2026-09-02) `dailyAdviceTime` n'existe plus sur `users` (colonne
+            // supprimée, aucun remplacement dans le schéma actuel) — retiré.
             latitude: latitude ?? undefined,
             longitude: longitude ?? undefined,
             cnibNumber: cnibNumber && cnibNumber.trim() !== "" ? cnibNumber : null,
