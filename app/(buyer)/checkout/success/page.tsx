@@ -191,7 +191,7 @@ export default function OrderSuccessPage() {
               href="/catalogue"
               className="flex items-center justify-center gap-2 bg-emerald-900 text-white py-4 rounded-2xl font-bold hover:bg-emerald-800 transition-colors"
             >
-              Boutique <ArrowRight size={18} />
+              Catalogue <ArrowRight size={18} />
             </Link>
           </div>
           

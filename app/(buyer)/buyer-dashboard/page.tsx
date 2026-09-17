@@ -346,7 +346,7 @@ export default function BuyerDashboardPage() {
               {suggestedProducts.slice(0, 3).map((p: any) => (
                 <div key={p.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div style={{ width: 50, height: 50, borderRadius: 8, background: C.sand, overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={p.images?.[0] || '/api/placeholder/50/50'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={p.images?.[0] || 'images/no_image.webp'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.forest, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
