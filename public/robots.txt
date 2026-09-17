@@ -1,0 +1,12 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /checkout
+
+# Host
+Host: https://votre-site.com
+
+# Sitemaps
+Sitemap: https://votre-site.com/sitemap.xml
