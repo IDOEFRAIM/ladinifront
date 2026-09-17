@@ -627,14 +627,14 @@ export function ValuesSection() {
 export function PartnersSection() {
   // Exactement 8 coopératives pour le carrousel normal
   const cooperatives = [
-    { name: "Les Éleveurs du Val Vert", type: "Élevage Bovin Responsable", location: "Vallée Centrale", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
-    { name: "Coopérative La Moisson", type: "Céréales & Oléagineux", location: "Plaines de l'Est", color: "#d97706", bg: "rgba(217,119,6,0.12)" },
-    { name: "Union des Maraîchers Bio", type: "Maraîchage Biologique", location: "Ceinture Verte", color: "#84cc16", bg: "rgba(132,204,22,0.12)" },
-    { name: "Aquaculteurs de la Baie", type: "Pisciculture Durable", location: "Côte Ouest", color: "#0ea5e9", bg: "rgba(14,165,233,0.12)" },
-    { name: "Vergers du Soleil", type: "Arboriculture Fruitière", location: "Sud Ensoleillé", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-    { name: "Coopérative Laitière", type: "Produits Laitiers Locaux", location: "Hauts Plateaux", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
-    { name: "Alliance Viticole", type: "Viticulture d'Exception", location: "Coteaux Historiques", color: "#a855f7", bg: "rgba(168,85,247,0.12)" },
-    { name: "Rucher des Forêts", type: "Apiculture & Biodiversité", location: "Lisière Forestière", color: "#eab308", bg: "rgba(234,179,8,0.12)" }
+    { name: "AFEN", type: "AGROALIMENTAIRE", location: "KADIOGO", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+    { name: "Coopérative Namaneb zanga", type: "Maraichers", location: "OUAGADOUGOU", color: "#d97706", bg: "rgba(217,119,6,0.12)" },
+    { name: "Fromagerie Gariko", type: "Laitiers", location: "KADIOGO", color: "#84cc16", bg: "rgba(132,204,22,0.12)" },
+    { name: "Coopérative Soulama", type: "Transformation", location: "A PRECISE", color: "#0ea5e9", bg: "rgba(14,165,233,0.12)" },
+    { name: "COOP-Bendia", type: "maraichers+transformation ", location: "OUAGADOUGOU", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+    { name: "UPPA", type: "CEREALES , Maraichers, fruits et légumes ,", location: "Kenedougou", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+    { name: "Kosam", type: "Laitiers", location: "OUAGADOUGOU", color: "#a855f7", bg: "rgba(168,85,247,0.12)" },
+    { name: "CARTPL(en cours de négociation) ", type: "Transformation", location: "OUAGADOUGOU", color: "#eab308", bg: "rgba(234,179,8,0.12)" }
   ];
 
   const [index, setIndex] = useState<number>(0);
