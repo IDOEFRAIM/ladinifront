@@ -6,7 +6,7 @@ Disallow: /dashboard
 Disallow: /checkout
 
 # Host
-Host: https://votre-site.com
+Host: https://ladini.tech
 
 # Sitemaps
-Sitemap: https://votre-site.com/sitemap.xml
+Sitemap: https://ladini.tech/sitemap.xml

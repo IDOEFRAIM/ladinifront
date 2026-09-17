@@ -157,8 +157,6 @@ function SectionHeading({ tag, title, subtitle }: { tag: string; title: string; 
 }
 
 /* ======= HERO SECTION ======= */
-
-
 export function HeroSection() {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
@@ -174,7 +172,7 @@ export function HeroSection() {
 
       <motion.div variants={stagger} initial="hidden" animate="show" style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: 860, margin: '0 auto', textAlign: 'center' }}>
 
-        {/* Badge */}
+        {/* Badge haut */}
         <motion.div variants={fadeUp} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 100, background: C.glass, backdropFilter: 'blur(16px)', border: `1px solid ${C.border}`, marginBottom: 28 }}>
           <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }} style={{ width: 8, height: 8, borderRadius: 8, background: C.emerald }} />
           <span style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 600, color: C.forest, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -182,7 +180,7 @@ export function HeroSection() {
           </span>
         </motion.div>
 
-        {/* Ton Titre Poétique Conservé */}
+        {/* Titre Poétique */}
         <motion.h1
           variants={fadeUp}
           style={{
@@ -214,7 +212,7 @@ export function HeroSection() {
           </span>
         </motion.h1>
 
-        {/* Texte du bas : Raccourci, fluide et percutant */}
+        {/* Description */}
         <motion.p
           variants={fadeUp}
           style={{
@@ -971,9 +969,9 @@ export default function HomePage() {
 
       <div style={{ position: 'relative', zIndex: 2 }}>
         <HeroSection />
-        <AIAgentSection />
-        <KPIStrip />
-        <ProducersSection />
+        <AIAgentSection/>    
+            <KPIStrip />
+<ProducersSection />
         <MarketFlowSection />
         <ValuesSection />
         <PartnersSection />

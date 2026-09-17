@@ -1,6 +1,7 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || 'https://votre-site.com', // Remplacer par l'URL de production de votre site
+  siteUrl: process.env.SITE_URL || 'https://ladini.tech', 
+  
   generateRobotsTxt: true, // Génère automatiquement le fichier robots.txt
   generateIndexSitemap: true, // Génère un index sitemap si le site devient très grand
   

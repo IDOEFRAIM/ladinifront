@@ -34,7 +34,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="h-full"> 
+    <html lang="fr" className="h-full">
+      <head>
+        {/* Déplacé depuis un @import dans globals.css : un <link> en tête de document est
+            découvert par le navigateur immédiatement (en parallèle du CSS), alors qu'un
+            @import d'URL externe n'est trouvé qu'après téléchargement du fichier CSS qui le
+            contient — PageSpeed mesurait ~750ms de retard evitable sur ce fetch. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" />
+      </head>
       <body className="antialiased min-h-screen bg-slate-50 flex flex-col text-slate-900 overflow-x-hidden">
         <AuthProvider>
           <DevServiceWorkerCleanup />
