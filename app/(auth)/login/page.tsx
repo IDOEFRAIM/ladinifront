@@ -96,7 +96,7 @@ export default function LoginPage() {
             <Leaf size={28} style={{ color: C.forest }} />
           </div>
           <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.5rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em', marginBottom: 6 }}>
-            Connexion a FrontAg
+            Connexion a LADINI
           </h2>
           <p style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: C.muted }}>
             Connectons producteurs et consommateurs au Burkina Faso.

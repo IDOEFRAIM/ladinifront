@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'FrontAg Burkina',
-    short_name: 'FrontAg',
+    name: 'LadiNi Burkina',
+    short_name: 'LadiNi',
     description: 'Commerce agricole résilient et hors-ligne pour le Sahel.',
     start_url: '/',
     scope: '/',
@@ -13,16 +13,16 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait-primary',
     icons: [
       {
-        src: '/icons/file.svg',
+        src: '/images/logo.jpeg',
         sizes: '192x192',
-        type: 'image/svg+xml',
-        purpose: 'maskable',
+        type: 'image/jpeg',
+        purpose: 'any',
       },
       {
-        src: '/icons/globe.svg',
+        src: '/images/logo.jpeg',
         sizes: '512x512',
-        type: 'image/svg+xml',
-        purpose: 'maskable',
+        type: 'image/jpeg',
+        purpose: 'any',
       },
     ],
   };
