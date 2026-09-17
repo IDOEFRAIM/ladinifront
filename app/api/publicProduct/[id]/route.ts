@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { ok, retryAfterSeconds } = checkRateLimit(`publicProductById:${getClientIp(request)}`);
+    if (!ok) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } });
+    }
+
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'ID manquant' }, { status: 400 });
 

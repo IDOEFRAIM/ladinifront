@@ -3,12 +3,13 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { Leaf, Loader2, Lock, Mail } from 'lucide-react';
+import { Leaf, Loader2, Lock, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { toast, Toaster } from 'react-hot-toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { RequiredPhoneSchema } from '@/lib/validators';
 
 const C = {
   forest: '#064E3B', emerald: '#10B981', amber: '#D97706', sand: '#F9FBF8',
@@ -16,7 +17,7 @@ const C = {
 };
 
 const loginSchema = z.object({
-  email: z.string().email("Email invalide"),
+  phone: RequiredPhoneSchema,
   password: z.string().min(1, "Mot de passe requis"),
 });
 
@@ -52,7 +53,7 @@ export default function LoginPage() {
   }, [isAuthenticated, isLoading, userRole]);
 
   const onSubmit = async (data: LoginFormInputs) => {
-    const result = await login(data.email, data.password);
+    const result = await login(data.phone, data.password);
     if (result?.success) {
       toast.success("Connexion reussie !");
       if (result.user?.role) redirectUserByRole(result.user.role, result.user.onboardingCompleted);
@@ -103,26 +104,26 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {/* EMAIL */}
+          {/* TÉLÉPHONE */}
           <div>
-            <label style={{ display: 'block', fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Email</label>
+            <label style={{ display: 'block', fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Téléphone</label>
             <div style={{ position: 'relative' }}>
-              <Mail size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.muted, opacity: 0.6 }} />
+              <Phone size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.muted, opacity: 0.6 }} />
               <input
-                type="email"
-                {...register("email")}
+                type="tel"
+                {...register("phone")}
                 disabled={isSubmitting}
-                placeholder="votre@email.com"
+                placeholder="+226 70 00 00 00"
                 style={{
                   width: '100%', paddingLeft: 42, paddingRight: 16, paddingTop: 14, paddingBottom: 14,
-                  borderRadius: 12, border: `1px solid ${errors.email ? '#DC2626' : C.border}`,
+                  borderRadius: 12, border: `1px solid ${errors.phone ? '#DC2626' : C.border}`,
                   background: 'rgba(255,255,255,0.6)', fontFamily: "'Inter', sans-serif", fontSize: 14,
                   color: C.forest, outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s',
                   boxSizing: 'border-box',
                 }}
               />
             </div>
-            {errors.email && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 600, marginTop: 4 }}>{errors.email.message}</p>}
+            {errors.phone && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 600, marginTop: 4 }}>{errors.phone.message}</p>}
           </div>
 
           {/* PASSWORD */}

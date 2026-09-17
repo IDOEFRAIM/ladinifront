@@ -71,6 +71,11 @@ const client: PostgresClient =
     connect_timeout: 10,
     timeout: 30,
     max_lifetime: isVercel ? 60 : 300,
+    // Filet de sécurité sous forte charge : une requête (ex. scan non borné,
+    // verrou en attente) ne doit jamais monopoliser une connexion du pool
+    // indéfiniment — avec seulement 5-10 connexions dispo (poolMax), quelques
+    // requêtes bloquées suffisent à affamer tout le reste du trafic.
+    connection: { statement_timeout: 15000 },
     ...sslOptions,
   });
 

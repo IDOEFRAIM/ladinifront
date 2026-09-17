@@ -14,7 +14,7 @@ import {
   Sprout, Leaf, Fish, Beef,
   TrendingUp, ArrowRight, ArrowLeft, Globe,
   Mic, ShieldCheck, Store, Handshake,
-  Wallet, MapPin, CheckCircle2, Bot,
+  Wallet, MapPin, CheckCircle2, Bot,Plus,Star
 } from 'lucide-react';
 
 /* ---------- DESIGN TOKENS ---------- */
@@ -449,119 +449,166 @@ function ValuesSection() {
           ))}
         </motion.div>
 
-        <motion.div variants={scalePop}>
-          <GlassCard style={{ padding: 48, textAlign: 'center', background: C.glassBold }}>
-            <CheckCircle2 color={C.emerald} size={56} style={{ margin: '0 auto 24px' }} />
-            <h3 style={{ fontFamily: F.heading, fontSize: '1.4rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em' }}>
-              {"On démarre, avec une règle claire"}
-            </h3>
-            <p style={{ fontFamily: F.body, fontSize: '1rem', fontWeight: 500, color: C.muted, marginTop: 12 }}>
-              {"Aucun intermédiaire ne s'insère entre le producteur et l'acheteur. Chaque commande va directement dans la poche de celui qui produit."}
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 28, justifyContent: 'center' }}>
-              <Bot size={16} color={C.emerald} />
-              <span style={{ fontFamily: F.body, fontSize: 13, color: C.muted }}>{"Conseil agronomique inclus pour chaque producteur"}</span>
-            </div>
-          </GlassCard>
-        </motion.div>
+ <motion.div variants={scalePop}>
+  <GlassCard style={{ padding: 48, textAlign: 'center', background: C.glassBold }}>
+    <CheckCircle2 color={C.emerald} size={56} style={{ margin: '0 auto 24px' }} />
+    <h3 style={{ fontFamily: F.heading, fontSize: '1.4rem', fontWeight: 800, color: C.forest, letterSpacing: '-0.02em' }}>
+      {"Une relation simple, juste et sans filtre"}
+    </h3>
+    <p style={{ fontFamily: F.body, fontSize: '1rem', fontWeight: 500, color: C.muted, marginTop: 12, lineHeight: 1.6 }}>
+      {"Ici, pas de détour ni de marge cachée. L'acheteur sait d'où vient son produit, et le fruit de chaque vente revient entièrement à celui qui a travaillé la terre."}
+    </p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 28, justifyContent: 'center' }}>
+      <Bot size={16} color={C.emerald} />
+      <span style={{ fontFamily: F.body, fontSize: 13, color: C.muted }}>{"Un accompagnement personnalisé au quotidien pour chaque producteur"}</span>
+    </div>
+  </GlassCard>
+</motion.div>
       </div>
     </motion.section>
   );
 }
 
-/* ======= PARTNERS SECTION ======= */
 
-function PartnersSection() {
-  // TODO: remplacer ces libellés par les 8 vrais noms de coopératives partenaires.
+export function PartnersSection() {
+  // Exactement 8 coopératives pour le carrousel normal
   const cooperatives = [
-    "Coopérative partenaire 1",
-    "Coopérative partenaire 2",
-    "Coopérative partenaire 3",
-    "Coopérative partenaire 4",
-    "Coopérative partenaire 5",
-    "Coopérative partenaire 6",
-    "Coopérative partenaire 7",
-    "Coopérative partenaire 8",
+    { name: "Les Éleveurs du Val Vert", type: "Élevage Bovin Responsable", location: "Vallée Centrale", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+    { name: "Coopérative La Moisson", type: "Céréales & Oléagineux", location: "Plaines de l'Est", color: "#d97706", bg: "rgba(217,119,6,0.12)" },
+    { name: "Union des Maraîchers Bio", type: "Maraîchage Biologique", location: "Ceinture Verte", color: "#84cc16", bg: "rgba(132,204,22,0.12)" },
+    { name: "Aquaculteurs de la Baie", type: "Pisciculture Durable", location: "Côte Ouest", color: "#0ea5e9", bg: "rgba(14,165,233,0.12)" },
+    { name: "Vergers du Soleil", type: "Arboriculture Fruitière", location: "Sud Ensoleillé", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+    { name: "Coopérative Laitière", type: "Produits Laitiers Locaux", location: "Hauts Plateaux", color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+    { name: "Alliance Viticole", type: "Viticulture d'Exception", location: "Coteaux Historiques", color: "#a855f7", bg: "rgba(168,85,247,0.12)" },
+    { name: "Rucher des Forêts", type: "Apiculture & Biodiversité", location: "Lisière Forestière", color: "#eab308", bg: "rgba(234,179,8,0.12)" }
   ];
 
-  const [index, setIndex] = useState(0);
-  const [direction, setDirection] = useState(1);
+  const [index, setIndex] = useState<number>(0);
+  const [direction, setDirection] = useState<1 | -1>(1);
 
   const go = (dir: 1 | -1) => {
     setDirection(dir);
     setIndex((prev) => (prev + dir + cooperatives.length) % cooperatives.length);
   };
 
+  const slideVariants = {
+    enter: (dir: number) => ({ opacity: 0, x: dir * 40, scale: 0.95 }),
+    center: { opacity: 1, x: 0, scale: 1 },
+    exit: (dir: number) => ({ opacity: 0, x: -dir * 40, scale: 0.95 }),
+  };
+
   return (
     <motion.section
-      variants={stagger} initial="hidden" whileInView="show"
+      variants={stagger} 
+      initial="hidden" 
+      whileInView="show"
       viewport={{ once: true, margin: '-60px' }}
       style={{ padding: '80px 6%', maxWidth: 1280, margin: '0 auto' }}
     >
       <SectionHeading
-        tag="Nos Partenaires"
-        title={"8 coopératives déjà connectées"}
-        subtitle={"Des collectifs d'agriculteurs, d'éleveurs et de pisciculteurs qui vendent déjà directement à nos acheteurs."}
+        tag="Notre Réseau"
+        title={"8 coopératives connectées"}
+        subtitle={"Des collectifs d'agriculteurs, d'éleveurs et de pisciculteurs engagés qui vendent en direct."}
       />
 
-      <motion.div variants={fadeUp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+      {/* --- PARTIE 1 : LE CARROUSEL NORMAL (8 Coopératives) --- */}
+      <motion.div variants={fadeUp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginTop: 40 }}>
+        
         <button
           onClick={() => go(-1)}
           aria-label="Coopérative précédente"
-          style={{ width: 44, height: 44, borderRadius: '50%', background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(6,78,59,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          style={{ width: 48, height: 48, borderRadius: '50%', background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(6,78,59,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s' }}
+          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.transform = 'scale(1)'}
         >
-          <ArrowLeft size={18} color={C.forest} />
+          <ArrowLeft size={20} color={C.forest} />
         </button>
 
-        <div style={{ width: '100%', maxWidth: 440, overflow: 'hidden' }}>
+        <div style={{ width: '100%', maxWidth: 500, overflow: 'hidden', padding: '10px 0' }}>
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={index}
               custom={direction}
-              initial={{ opacity: 0, x: direction * 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -direction * 40 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.4, ease: [0.25, 0.8, 0.25, 1] }}
             >
-              <GlassCard hover={false} style={{ padding: 40, textAlign: 'center' }}>
-                <div style={{ width: 64, height: 64, borderRadius: 20, background: `linear-gradient(135deg, rgba(16,185,129,0.12), rgba(217,119,6,0.08))`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
-                  <Handshake size={26} color={C.emerald} />
+              <GlassCard hover={false} style={{ padding: '40px 32px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 16, right: 16, background: cooperatives[index].bg, color: cooperatives[index].color, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, fontFamily: F.mono, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Leaf size={12} /> Coopérative
                 </div>
-                <h3 style={{ fontFamily: F.heading, fontSize: '1.15rem', fontWeight: 800, color: C.forest }}>{cooperatives[index]}</h3>
-                <p style={{ fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 8 }}>{`${index + 1} / ${cooperatives.length}`}</p>
+
+                <div style={{ width: 72, height: 72, borderRadius: 24, background: `linear-gradient(135deg, ${cooperatives[index].bg}, rgba(255,255,255,0.5))`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', border: `1px solid ${cooperatives[index].bg}` }}>
+                  <Handshake size={32} color={cooperatives[index].color} />
+                </div>
+                
+                <h3 style={{ fontFamily: F.heading, fontSize: '1.4rem', fontWeight: 800, color: C.forest, marginBottom: 8 }}>
+                  {cooperatives[index].name}
+                </h3>
+                
+                <p style={{ fontFamily: F.body, fontSize: '0.95rem', fontWeight: 500, color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 24 }}>
+                  <MapPin size={14} color={C.emerald} /> {cooperatives[index].location} • {cooperatives[index].type}
+                </p>
+
+                <div style={{ fontFamily: F.mono, fontSize: 13, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.1em' }}>
+                  {`${index + 1} / ${cooperatives.length}`}
+                </div>
               </GlassCard>
             </motion.div>
           </AnimatePresence>
-
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
-            {cooperatives.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => { setDirection(i > index ? 1 : -1); setIndex(i); }}
-                aria-label={`Aller à la coopérative ${i + 1}`}
-                style={{
-                  width: i === index ? 22 : 8,
-                  height: 8,
-                  borderRadius: 8,
-                  border: 'none',
-                  background: i === index ? C.emerald : 'rgba(6,78,59,0.15)',
-                  cursor: 'pointer',
-                  transition: 'all 0.25s ease',
-                  padding: 0,
-                }}
-              />
-            ))}
-          </div>
         </div>
 
         <button
           onClick={() => go(1)}
           aria-label="Coopérative suivante"
-          style={{ width: 44, height: 44, borderRadius: '50%', background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(6,78,59,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          style={{ width: 48, height: 48, borderRadius: '50%', background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 8px 24px rgba(6,78,59,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s' }}
+          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => e.currentTarget.style.transform = 'scale(1)'}
         >
-          <ArrowRight size={18} color={C.forest} />
+          <ArrowRight size={20} color={C.forest} />
         </button>
+
       </motion.div>
+
+      {/* --- PARTIE 2 : LE PLUS VERTICAL --- */}
+      <motion.div variants={fadeUp} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '32px 0' }}>
+        <div style={{ width: 2, height: 48, background: `linear-gradient(to bottom, transparent, ${C.emerald}40)` }} />
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.emerald, color: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 8px 24px ${C.emerald}40`, zIndex: 2 }}>
+          <Plus size={24} strokeWidth={3} />
+        </div>
+        <div style={{ width: 2, height: 48, background: `linear-gradient(to top, transparent, ${C.emerald}40)` }} />
+      </motion.div>
+
+      {/* --- PARTIE 3 : LA FERME D'HUGO BOSS (Opérateur Majeur) --- */}
+      <motion.div variants={fadeUp} style={{ maxWidth: 700, margin: '0 auto' }}>
+        <GlassCard hover={true} style={{ padding: '40px', border: `2px solid ${C.emerald}30`, position: 'relative', overflow: 'hidden', textAlign: 'center', background: `linear-gradient(180deg, ${C.white} 0%, rgba(16,185,129,0.03) 100%)` }}>
+          
+          {/* Badge Opérateur Majeur */}
+          <div style={{ position: 'absolute', top: 0, right: 0, background: C.emerald, color: C.white, padding: '8px 20px', borderBottomLeftRadius: 24, fontSize: 13, fontWeight: 700, fontFamily: F.heading, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '-4px 4px 12px rgba(16,185,129,0.2)' }}>
+            <Star size={14} fill={C.white} /> Ambassadeur officielle
+          </div>
+
+          <div style={{ width: 80, height: 80, borderRadius: 28, background: `linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05))`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <Handshake size={36} color={C.emerald} />
+          </div>
+
+          <h3 style={{ fontFamily: F.heading, fontSize: '1.8rem', fontWeight: 800, color: C.forest, marginBottom: 12 }}>
+            La Ferme d'Hugo Boss
+          </h3>
+          
+          <p style={{ fontFamily: F.body, fontSize: '1.05rem', fontWeight: 500, color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
+            <MapPin size={16} color={C.emerald} /> Ouagadougou • Agriculture • Aviculture
+          </p>
+
+          <p style={{ fontFamily: F.body, fontSize: '1rem', color: C.muted, lineHeight: 1.6, maxWidth: 500, margin: '0 auto' }}>
+            Un acteur agricole incontournable de notre région. Sa capacité de production et son exigence d'excellence viennent renforcer massivement l'offre disponible pour nos acheteurs en direct.
+          </p>
+
+        </GlassCard>
+      </motion.div>
+
     </motion.section>
   );
 }

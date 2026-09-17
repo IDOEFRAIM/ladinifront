@@ -4,7 +4,9 @@ import { getProductById } from '@/services/catalogue.service';
 import { Product } from '@/types/product';
 import ProductClientView from './ProductView';
 
-export const dynamic = 'force-dynamic';
+// ISR : chaque page produit est mise en cache 30s et revalidée en arrière-plan,
+// au lieu de retaper la DB à chaque clic depuis le catalogue (voir catalogue/page.tsx).
+export const revalidate = 30;
 
 function IconAlertTriangle({ size = 40, color = '#E65100' }: { size?: number; color?: string }) {
     return (

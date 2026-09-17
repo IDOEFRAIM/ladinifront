@@ -107,11 +107,11 @@ async function setSessionCookies(
 // ╚══════════════════════════════════════════════╝
 
 export async function registerUser(data: {
-    email: string;
+    email?: string;
     password: string;
     name: string;
     role?: string;
-    phone?: string;
+    phone: string;
     whatsappEnabled?: boolean;
     dailyAdviceTime?: string;
     latitude?: number;
@@ -158,14 +158,15 @@ export async function registerUser(data: {
             }
         }
 
-        // Check uniqueness
+        // Check uniqueness — le téléphone est désormais obligatoire (identifiant de connexion),
+        // l'email reste optionnel et n'est vérifié que s'il a été renseigné.
         const existingUser = await db.query.users.findFirst({
-            where: phone
-                ? or(eq(schema.users.email, email), eq(schema.users.phone, phone))
-                : eq(schema.users.email, email),
+            where: email
+                ? or(eq(schema.users.phone, phone), eq(schema.users.email, email))
+                : eq(schema.users.phone, phone),
         });
         if (existingUser) {
-            return { success: false, error: "Cet email ou numéro de téléphone est déjà utilisé.Vous pouvez vous connecter." };
+            return { success: false, error: "Ce numéro de téléphone ou cet email est déjà utilisé. Vous pouvez vous connecter." };
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
@@ -177,11 +178,11 @@ export async function registerUser(data: {
         }
 
         const [newUser] = await db.insert(schema.users).values({
-            email,
+            email: email || null,
             password: hashedPassword,
             name,
             role: role as any,
-            phone: phone || undefined,
+            phone,
             whatsappEnabled: whatsappEnabled ?? true,
             // (2026-09-02) `dailyAdviceTime` n'existe plus sur `users` (colonne
             // supprimée, aucun remplacement dans le schéma actuel) — retiré.
@@ -302,7 +303,7 @@ export async function registerUser(data: {
     } catch (error: any) {
         console.error('[auth] register error:', error?.message || error);
         if (error.code === '23505') {
-            return { success: false, error: "L'email ou le numéro de téléphone est déjà utilisé." };
+            return { success: false, error: "Le numéro de téléphone ou l'email est déjà utilisé." };
         }
         return { success: false, error: "Erreur lors de la création du compte." };
     }
@@ -312,19 +313,19 @@ export async function registerUser(data: {
 // ║  CONNEXION                                   ║
 // ╚══════════════════════════════════════════════╝
 
-export async function loginUser(credentials: { email: string; password: string }) {
+export async function loginUser(credentials: { phone: string; password: string }) {
     try {
         const validation = LoginSchema.safeParse(credentials);
         if (!validation.success) {
             return { success: false, error: "Identifiants invalides." };
         }
 
-        const { email, password } = validation.data;
+        const { phone, password } = validation.data;
 
         const user = await db.query.users.findFirst({
-            where: eq(schema.users.email, email),
+            where: eq(schema.users.phone, phone),
             columns: {
-                id: true, name: true, email: true, password: true, role: true,
+                id: true, name: true, phone: true, password: true, role: true,
                 updatedAt: true, onboardingCompleted: true,
             },
             with: {

@@ -28,7 +28,7 @@ interface AuthContextType extends AuthState {
   isLoading: boolean;
   isActionLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<any>;
+  login: (phone: string, password: string) => Promise<any>;
   register: (data: any) => Promise<any>;
   logout: () => void;
 }
@@ -174,11 +174,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') window.location.href = target;
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (phone: string, password: string) => {
     setIsActionLoading(true);
     setError(null);
     try {
-      const result = await loginUser({ email, password });
+      const result = await loginUser({ phone, password });
       if (result.success && result.user) {
         hydrateSession(result.user);
         handleRedirect(result.user);

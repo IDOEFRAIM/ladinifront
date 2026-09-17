@@ -5,7 +5,11 @@ import UnifiedFilter from './filter';
 import CatalogueClient from './CatalogueClient';
 import { Category } from '@/services/catalogue.service';
 
-export const dynamic = 'force-dynamic';
+// ISR plutôt que force-dynamic : le catalogue n'a pas besoin d'être exact à la
+// milliseconde près (le stock réel est revérifié à la réservation) — servir une
+// page mise en cache 30s évite de refaire le scan+join complet à chaque visite,
+// ce qui rend la navigation quasi instantanée entre deux revalidations.
+export const revalidate = 30;
 
 /*  Tokens  */
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
@@ -81,9 +85,13 @@ const LoadingState = () => (
 
 /*  Main  */
 export default async function CataloguePage() {
-  // Server-side initial fetch using actions
-  const filters = await fetchFiltersServer();
-  const initialProducts = await fetchProductsServer();
+  // Server-side initial fetch using actions — en parallèle : ces deux requêtes
+  // sont indépendantes, les enchaîner en série double inutilement le temps
+  // avant le premier rendu de la page.
+  const [filters, initialProducts] = await Promise.all([
+    fetchFiltersServer(),
+    fetchProductsServer(),
+  ]);
   const initialCategories = (filters?.categories || []).map((c: string) => ({ key: c, name: c }));
   const initialRegions = filters?.locations || [];
 

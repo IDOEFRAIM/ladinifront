@@ -27,7 +27,17 @@ export const VALID_ROLES = VALID_SYSTEM_ROLES;
 export const IdSchema = z.string().min(1, "ID requis");
 export const CuidSchema = z.string().regex(CUID_REGEX, "ID invalide");
 export const EmailSchema = z.string().email("Email invalide").max(255);
-export const PhoneSchema = z.string().regex(PHONE_REGEX, "Numéro de téléphone invalide (format Burkina Faso)").optional();
+// Email optionnel : normalise une chaîne vide (champ laissé blanc dans un formulaire) en `undefined`
+// avant validation, pour ne pas rejeter "" comme email invalide.
+export const OptionalEmailSchema = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : v),
+  EmailSchema.optional()
+);
+// Normalise avant validation (espaces/tirets tolérés à la saisie, ex: "+226 70 00 00 00")
+export const RequiredPhoneSchema = z.string()
+  .transform((v) => v.replace(/[\s-]/g, ''))
+  .refine((v) => PHONE_REGEX.test(v), { message: "Numéro de téléphone invalide (format Burkina Faso)" });
+export const PhoneSchema = RequiredPhoneSchema.optional();
 export const PositiveFloat = z.number().min(0, "La valeur doit être positive");
 export const StrictPositiveFloat = z.number().gt(0, "La valeur doit être strictement positive");
 
@@ -37,10 +47,10 @@ export const StrictPositiveFloat = z.number().gt(0, "La valeur doit être strict
 
 export const RegisterSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
-  email: EmailSchema,
+  email: OptionalEmailSchema,
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères").max(128),
   role: z.enum(VALID_SYSTEM_ROLES).default('USER'),
-  phone: PhoneSchema,
+  phone: RequiredPhoneSchema,
   whatsappEnabled: z.boolean().optional().default(true),
   dailyAdviceTime: z.string().optional(),
   latitude: z.number().min(-90).max(90).optional(),
@@ -76,7 +86,7 @@ export const RegisterWithOrgSchema = RegisterSchema.extend({
 });
 
 export const LoginSchema = z.object({
-  email: EmailSchema,
+  phone: RequiredPhoneSchema,
   password: z.string().min(1, "Mot de passe requis"),
 });
 

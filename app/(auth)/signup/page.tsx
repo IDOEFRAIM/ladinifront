@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useGeoLocation } from '@/hooks/useGeoLocalisation';
 import { Sprout, Loader2, User, Mail, Lock, Phone, MapPin } from 'lucide-react';
+import { RequiredPhoneSchema } from '@/lib/validators';
 
 const C = {
   forest: '#064E3B', emerald: '#10B981', sand: '#F9FBF8',
@@ -18,9 +19,9 @@ const C = {
 
 const signupSchema = z.object({
   name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
-  email: z.string().email('Email invalide'),
+  email: z.string().email('Email invalide').optional().or(z.literal('')),
   password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
-  phone: z.string().optional(),
+  phone: RequiredPhoneSchema,
   latitude: z.number().optional(),
   longitude: z.number().optional(),
 });
@@ -103,14 +104,15 @@ function SignupPageContent() {
           </div>
 
           <div style={{ position: 'relative' }}>
-            <Mail size={16} style={iconStyle(!!errors.email)} />
-            <input {...register('email')} disabled={isSubmitting} placeholder="Email" type="email" style={inputStyle(!!errors.email)} />
-            {errors.email && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.email.message}</p>}
+            <Phone size={16} style={iconStyle(!!errors.phone)} />
+            <input {...register('phone')} disabled={isSubmitting} placeholder="Téléphone (ex: +226 70 00 00 00)" type="tel" style={inputStyle(!!errors.phone)} />
+            {errors.phone && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.phone.message}</p>}
           </div>
 
           <div style={{ position: 'relative' }}>
-            <Phone size={16} style={iconStyle(false)} />
-            <input {...register('phone')} disabled={isSubmitting} placeholder="Téléphone (optionnel)" style={inputStyle(false)} />
+            <Mail size={16} style={iconStyle(!!errors.email)} />
+            <input {...register('email')} disabled={isSubmitting} placeholder="Email (optionnel)" type="email" style={inputStyle(!!errors.email)} />
+            {errors.email && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.email.message}</p>}
           </div>
 
           <div style={{ position: 'relative' }}>

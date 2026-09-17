@@ -1,6 +1,7 @@
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq, and, or, ilike, inArray } from 'drizzle-orm';
+import { unstable_cache } from 'next/cache';
 
 async function addCategoryFilter(conditions: any[], category?: string) {
   if (category && category !== 'all') {
@@ -33,13 +34,22 @@ async function addRegionFilter(conditions: any[], region?: string) {
   return true;
 }
 
-export async function fetchProductsServer(filters: { category?: string; region?: string; search?: string } = {}) {
+// Plafond dur sur le catalogue public : évite le scan complet + join de la
+// table `products` à chaque chargement de page (cause principale de lenteur
+// et de saturation du pool DB sous forte charge concurrente — la page
+// catalogue est `force-dynamic`, donc cette requête tourne à CHAQUE visite).
+const DEFAULT_PRODUCTS_LIMIT = 60;
+const MAX_PRODUCTS_LIMIT = 100;
+
+export async function fetchProductsServer(filters: { category?: string; region?: string; search?: string; limit?: number } = {}) {
   const conditions: any[] = [];
   await addCategoryFilter(conditions, filters.category);
   await addSearchFilter(conditions, filters.search);
   const hasRegion = await addRegionFilter(conditions, filters.region);
-  
+
   if (!hasRegion) return [];
+
+  const limit = Math.min(filters.limit && filters.limit > 0 ? filters.limit : DEFAULT_PRODUCTS_LIMIT, MAX_PRODUCTS_LIMIT);
 
   const products = await db.query.products.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
@@ -52,6 +62,7 @@ export async function fetchProductsServer(filters: { category?: string; region?:
       }
     },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
+    limit,
   });
 
   return products.map((p: any) => ({
@@ -139,15 +150,21 @@ export async function fetchProductByIdServer(id: string) {
   return formatProductResponse(product);
 }
 
-export async function fetchFiltersServer() {
-  // categories & locations
-  const categoriesRes = await db.select({ categoryLabel: schema.products.categoryLabel }).from(schema.products).groupBy(schema.products.categoryLabel);
-  const categories = categoriesRes.map((r: any) => r.categoryLabel).filter(Boolean);
+// Les catégories/régions changent rarement (ajout de produit/producteur) —
+// pas besoin de re-scanner `products`/`producers` en entier à chaque
+// chargement du catalogue. Cache 5 min, invalidable via la tag `public-filters`.
+export const fetchFiltersServer = unstable_cache(
+  async () => {
+    const categoriesRes = await db.select({ categoryLabel: schema.products.categoryLabel }).from(schema.products).groupBy(schema.products.categoryLabel);
+    const categories = categoriesRes.map((r: any) => r.categoryLabel).filter(Boolean);
 
-  const locationsRes = await db.select({ name: schema.producers.region }).from(schema.producers).groupBy(schema.producers.region);
-  const locations = locationsRes.map((r: any) => ({ id: String(r.name || '').trim(), name: r.name }));
+    const locationsRes = await db.select({ name: schema.producers.region }).from(schema.producers).groupBy(schema.producers.region);
+    const locations = locationsRes.map((r: any) => ({ id: String(r.name || '').trim(), name: r.name }));
 
-  return { categories, locations };
-}
+    return { categories, locations };
+  },
+  ['public-filters'],
+  { revalidate: 300, tags: ['public-filters'] }
+);
 
 export default { fetchProductsServer, fetchProductByIdServer, fetchFiltersServer };

@@ -108,6 +108,14 @@ const nextConfig = {
         hostname: 'images.unsplash.com',
         pathname: '/**',
       },
+      {
+        // Photos produits/producteurs stockées sur Supabase Storage — nécessaire
+        // pour que next/image puisse redimensionner/optimiser ces images au lieu
+        // de servir les fichiers originaux (souvent plusieurs Mo, photos de tel.).
+        protocol: 'https',
+        hostname: 'zcnkjlvhegyykoeuckwv.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
     ],
   },
   // Increase Server Actions body size limit to allow image uploads in forms

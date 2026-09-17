@@ -48,7 +48,19 @@ export default function CatalogueClient({ initialProducts = [], initialCategorie
     setLoading(false);
   }, [activeCategory, activeRegion, debouncedSearch, serverLoad]);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  // Le serveur a déjà chargé `initialProducts` avec les filtres par défaut
+  // (page catalogue en `force-dynamic`). Sans ce garde, ce useEffect
+  // relançait systématiquement la même requête DB juste après le montage —
+  // doublant la charge sur le pool Postgres à chaque visite pour rien.
+  const isFirstRun = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      const isDefaultFilters = activeCategory === 'all' && activeRegion === 'all' && !debouncedSearch.trim();
+      if (isDefaultFilters && initialProducts.length > 0) return;
+    }
+    loadProducts();
+  }, [loadProducts]);
 
   useEffect(() => {
     (async () => {
@@ -165,9 +177,9 @@ export default function CatalogueClient({ initialProducts = [], initialCategorie
           {loading ? <LoadingState /> : products.length === 0 ? <EmptyState /> : (
             <div style={{ display:'grid', gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill,minmax(300px,1fr))' : '1fr', gap:24 }}>
               <AnimatePresence>
-                {products.map((p:any) => (
+                {products.map((p:any, i:number) => (
                   <motion.div key={p.id} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.3}}>
-                    <ProductCard product={p} viewMode={viewMode} />
+                    <ProductCard product={p} viewMode={viewMode} priority={i < 4} />
                   </motion.div>
                 ))}
               </AnimatePresence>
