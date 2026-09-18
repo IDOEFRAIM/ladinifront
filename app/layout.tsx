@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent', // Meilleur look sur iPhone
     title: 'Ladini',
   },
+  other: {
+    'facebook-domain-verification': '5myi9o3b0lwuxb2ia1pcst4ypx12s9',
+  },
 };
 
 export const viewport: Viewport = {
