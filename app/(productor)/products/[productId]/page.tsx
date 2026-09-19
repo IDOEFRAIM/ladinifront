@@ -180,8 +180,9 @@ function ProductHeader({ product, isOwner, onEdit, onDelete, router }: any) {
 
 
 
-export default async function ProductDetailPage({ params }: { params: { productId: string } }) {
-  const product = await fetchProductByIdServer(params.productId);
+export default async function ProductDetailPage({ params }: { params: Promise<{ productId: string }> }) {
+  const { productId } = await params;
+  const product = await fetchProductByIdServer(productId);
   if (!product) {
     return (
       <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-[#F8FAFC]">
@@ -191,5 +192,5 @@ export default async function ProductDetailPage({ params }: { params: { productI
     );
   }
 
-  return <ProductDetailClient product={product} productId={params.productId} />;
+  return <ProductDetailClient product={product} productId={productId} />;
 }

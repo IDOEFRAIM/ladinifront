@@ -1,0 +1,2 @@
+CREATE INDEX "user_org_user_idx" ON "governance"."user_organizations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_org_role_idx" ON "governance"."user_organizations" USING btree ("role_id");

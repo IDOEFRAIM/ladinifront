@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "drizzle-kit generate && next build",
+    "build": "next build --webpack",
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "eslint",
@@ -61,7 +61,6 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "baseline-browser-mapping": "^2.11.21",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",

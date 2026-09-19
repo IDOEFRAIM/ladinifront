@@ -157,7 +157,7 @@ function SectionHeading({ tag, title, subtitle }: { tag: string; title: string; 
 }
 
 /* ======= HERO SECTION ======= */
-export function HeroSection() {
+function HeroSection() {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
   const y1 = useTransform(scrollYProgress, [0, 1], [0, 120]);
@@ -284,7 +284,7 @@ export function HeroSection() {
 
 /* ======= KPI STRIP ======= */
 
-export function AIAgentSection() {
+function AIAgentSection() {
   return (
     <section style={{ padding: "80px 6%", background: "linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)", position: "relative" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -535,7 +535,7 @@ function MarketFlowSection() {
 
 /* ======= NOS ENGAGEMENTS (VALEURS) ======= */
 
-export function ValuesSection() {
+function ValuesSection() {
   const values = [
     { 
       icon: Wallet, 
@@ -624,7 +624,7 @@ export function ValuesSection() {
   );
 }
 
-export function PartnersSection() {
+function PartnersSection() {
   // Exactement 8 coopératives pour le carrousel normal
   const cooperatives = [
     { name: "AFEN", type: "AGROALIMENTAIRE", location: "KADIOGO", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
@@ -772,7 +772,7 @@ export function PartnersSection() {
 // Création des composants Link animés
 const MotionLink = motion.create(Link);
 
-export function FinalCTASection() {
+function FinalCTASection() {
   return (
     <motion.section
       variants={stagger} 
@@ -847,7 +847,7 @@ export function FinalCTASection() {
 
 /* ======= FOOTER ======= */
 
-export function Footer() {
+function Footer() {
   return (
     <footer style={{ background: C.forest, color: "#fff", paddingTop: 60, paddingBottom: 30, borderTop: `1px solid ${C.border}` }}>
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 6%" }}>
