@@ -85,13 +85,14 @@ const withPWA = require('@ducanh2912/next-pwa').default({
     document: '/offline.html',
   },
 
-  // Workbox: fallback navigation + options de génération SW
+  // NB : pas de navigateFallback — il enregistre une NavigationRoute qui sert
+  // /offline.html pour TOUTE navigation, même en ligne. Le fallback hors-ligne
+  // est déjà géré par `fallbacks.document` (uniquement en cas d'échec réseau).
+  // Workbox: options de génération SW
   workboxOptions: {
     skipWaiting: true,
     clientsClaim: true,
     cleanupOutdatedCaches: true,
-    navigateFallback: '/offline.html',
-    navigateFallbackDenylist: [/^\/api\//, /^\/_next\//],
     runtimeCaching,
   },
 });
