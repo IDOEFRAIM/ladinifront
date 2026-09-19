@@ -69,7 +69,6 @@ const client: PostgresClient =
     prepare: false, // Requis pour les architectures Serverless / PgBouncer
     idle_timeout: 20,
     connect_timeout: 10,
-    timeout: 30,
     max_lifetime: isVercel ? 60 : 300,
     // Filet de sécurité sous forte charge : une requête (ex. scan non borné,
     // verrou en attente) ne doit jamais monopoliser une connexion du pool

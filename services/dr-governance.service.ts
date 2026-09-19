@@ -5,6 +5,7 @@ import * as schema from '@/src/db/schema';
 import { eq, count } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
+import { SUB_CATEGORY_UNITS, type SubCategoryUnit } from '@/lib/quantityUnit';
 
 // ╔══════════════════════════════════════════════════════════════════════╗
 // ║  SERVICE DR – Gouvernance des Directions Régionales                ║
@@ -193,6 +194,89 @@ export async function updateSubCategoryMinimum(input: {
   }
 }
 
+/**
+ * Configure (ou efface) l'unité de mesure d'un TYPE de produit : l'ensemble des
+ * unités autorisées + l'unité PRIORITAIRE utilisée pour standardiser.
+ *
+ * Policy de PLATEFORME (2026-09-19, comme `updateSubCategoryMinimum` ci-dessus) —
+ * jamais éditée par le producteur. Remplace la devinette historique du backend
+ * agent (règle de secours codée en dur type "un élevage se compte à la tête"),
+ * qui a produit des incidents réels (un bœuf vendu "au litre"...).
+ *
+ * `allowedUnits: null` EFFACE la config (retour au comportement historique du
+ * backend — devinette depuis le texte libre). Sinon : au moins une unité de
+ * `SUB_CATEGORY_UNITS`, `priorityUnit` doit être l'une d'elles si fournie, et
+ * peut être omise seulement quand une seule unité est autorisée (le backend la
+ * déduit alors automatiquement).
+ *
+ * Source de vérité UNIQUE (même table `governance.sub_categories`, même DB
+ * Postgres partagée, lue directement par l'agent conversationnel
+ * `services/database/base.py::get_product_category_unit_config` côté Python)
+ * — aucune copie indépendante, aucun cache à invalider.
+ */
+export async function updateSubCategoryUnitConfig(input: {
+  subCategoryId: string;
+  allowedUnits: SubCategoryUnit[] | null;
+  priorityUnit?: SubCategoryUnit | null;
+}) {
+  try {
+    const userId = await assertPlatformAdmin();
+
+    const existing = await db.query.subCategories.findFirst({
+      where: eq(schema.subCategories.id, input.subCategoryId),
+    });
+    if (!existing) return { success: false, error: 'Type de produit introuvable' };
+
+    let nextAllowed: string[] | null = null;
+    let nextPriority: string | null = null;
+
+    if (input.allowedUnits !== null && input.allowedUnits !== undefined) {
+      const allowed = Array.from(new Set(input.allowedUnits));
+      if (allowed.length === 0) {
+        return { success: false, error: 'Sélectionnez au moins une unité autorisée (ou effacez la config).' };
+      }
+      const invalid = allowed.filter((u) => !SUB_CATEGORY_UNITS.includes(u));
+      if (invalid.length > 0) {
+        return { success: false, error: `Unité(s) inconnue(s) : ${invalid.join(', ')}.` };
+      }
+
+      if (input.priorityUnit) {
+        if (!allowed.includes(input.priorityUnit)) {
+          return { success: false, error: "L'unité prioritaire doit faire partie des unités autorisées." };
+        }
+        nextPriority = input.priorityUnit;
+      } else if (allowed.length === 1) {
+        // Une seule unité autorisée : le backend la déduit, mais on la fixe
+        // aussi explicitement ici pour que l'admin la voie sans ambiguïté.
+        nextPriority = allowed[0];
+      } else {
+        return { success: false, error: "Une unité prioritaire est requise dès que plusieurs unités sont autorisées." };
+      }
+
+      nextAllowed = allowed;
+    }
+
+    const [updated] = await db.update(schema.subCategories)
+      .set({ allowedUnits: nextAllowed, priorityUnit: nextPriority })
+      .where(eq(schema.subCategories.id, input.subCategoryId))
+      .returning();
+
+    await audit({
+      action: nextAllowed === null ? 'CLEAR_SUBCATEGORY_UNIT_CONFIG' : 'SET_SUBCATEGORY_UNIT_CONFIG',
+      actorId: userId,
+      entityType: 'SubCategory',
+      entityId: updated.id,
+      oldValue: { allowedUnits: existing.allowedUnits, priorityUnit: existing.priorityUnit },
+      newValue: { allowedUnits: nextAllowed, priorityUnit: nextPriority },
+    });
+
+    return { success: true, data: updated };
+  } catch (e: any) {
+    console.error('updateSubCategoryUnitConfig error:', e);
+    return { success: false, error: e.message || 'Erreur interne' };
+  }
+}
+
 export async function getCategories() {
   try {
     interface Zone {
@@ -221,6 +305,10 @@ export async function getCategories() {
         // règle configurée (comportement historique).
         minimumOrderQuantity: string | null;
         minimumOrderUnit: string | null;
+        // Policy plateforme — voir updateSubCategoryUnitConfig. `null` = pas
+        // configuré (le backend continue de deviner l'unité depuis le texte libre).
+        allowedUnits: string[] | null;
+        priorityUnit: string | null;
     }
 
     interface Category {
@@ -286,6 +374,8 @@ export async function getCategories() {
           standardPrices: standardPricesBySub.get(sc.id) ?? [],
           minimumOrderQuantity: sc.minimumOrderQuantity,
           minimumOrderUnit: sc.minimumOrderUnit,
+          allowedUnits: sc.allowedUnits,
+          priorityUnit: sc.priorityUnit,
         })),
     }));
     // Compute _count.products per subcategory

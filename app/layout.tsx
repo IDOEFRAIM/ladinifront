@@ -5,6 +5,7 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/context/CartContext';
 import { Toaster } from 'react-hot-toast';
 import { DevServiceWorkerCleanup } from '@/components/DevServiceWorkerCleanup';
+import InstallPrompt from '@/components/pwa/InstallPrompt';
 
 
 export const metadata: Metadata = {
@@ -50,6 +51,7 @@ export default function RootLayout({
       <body className="antialiased min-h-screen bg-slate-50 flex flex-col text-slate-900 overflow-x-hidden">
         <AuthProvider>
           <DevServiceWorkerCleanup />
+          <InstallPrompt />
           <CartProvider>
             {/* Toaster optimisé pour mobile (en bas sur mobile pour être accessible au pouce) */}
             <Toaster 

@@ -33,6 +33,8 @@ export const userOrganizations = governanceSchema.table('user_organizations', {
   managedZoneId: uuid('managed_zone_id'),
 }, (t) => [
   uniqueIndex('user_org_unique').on(t.userId, t.organizationId),
+  index('user_org_user_idx').on(t.userId),
+  index('user_org_role_idx').on(t.roleId),
 ]);
 
 export const roleDefs = governanceSchema.table('role_definitions', {
@@ -124,6 +126,17 @@ export const subCategories = governanceSchema.table('sub_categories', {
   // par `updateSubCategoryMinimum` dans dr-governance.service.ts.
   minimumOrderQuantity: numeric('minimum_order_quantity', { precision: 14, scale: 3 }),
   minimumOrderUnit: unitEnum('minimum_order_unit'),
+  // Config unité par sous-catégorie (2026-09-19) — même principe que le seuil
+  // ci-dessus : policy PLATEFORME, jamais éditée par le producteur. Consommée
+  // directement par l'agent conversationnel (domain/quantity_unit.py côté
+  // Python, même table partagée) pour standardiser l'unité d'un produit au
+  // lieu de la deviner depuis le texte libre. `allowedUnits` NULL/vide ou
+  // `priorityUnit` NULL = "pas configuré" = comportement historique inchangé
+  // (aucune contrainte SQL ici par choix : la validation — liste fermée des
+  // 7 unités, cohérence priority ∈ allowed — vit côté service d'écriture,
+  // voir updateSubCategoryUnitConfig dans dr-governance.service.ts).
+  priorityUnit: text('priority_unit'),
+  allowedUnits: text('allowed_units').array(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [

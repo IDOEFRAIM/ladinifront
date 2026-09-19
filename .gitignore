@@ -17,6 +17,13 @@
 /.next/
 /out/
 
+# PWA — générés par next-pwa (@ducanh2912/next-pwa) à chaque `next build`,
+# ne doivent jamais être commités (sinon ils figent un ancien service worker en prod)
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+
 # production
 /build
 

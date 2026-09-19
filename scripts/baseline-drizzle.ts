@@ -49,10 +49,17 @@ async function ensureMigrationsTable() {
 
 async function main() {
   const journal = readJournal();
-  const baselineEntry = journal.entries.find((e) => e.idx === 0);
+  // Usage: `tsx scripts/baseline-drizzle.ts [idx]` — defaults to 0 (original behavior).
+  // Run once per already-applied-but-untracked migration (e.g. idx 0, then 1, then 2, then 3)
+  // when the live DB's schema is ahead of __drizzle_migrations (typically because it was
+  // bootstrapped via `db:push` rather than `db:migrate`). NEVER pass the idx of a migration
+  // that has NOT actually been applied yet — this only records history, it never runs SQL.
+  const idxArg = process.argv[2];
+  const targetIdx = idxArg !== undefined ? parseInt(idxArg, 10) : 0;
+  const baselineEntry = journal.entries.find((e) => e.idx === targetIdx);
 
   if (!baselineEntry) {
-    throw new Error('No migration with idx 0 found in journal.');
+    throw new Error(`No migration with idx ${targetIdx} found in journal.`);
   }
 
   const migrationFile = path.resolve(MIGRATION_DIR, `${baselineEntry.tag}.sql`);

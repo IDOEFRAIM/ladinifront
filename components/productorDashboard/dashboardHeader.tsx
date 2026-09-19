@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { THEME_COLORS as C, THEME_FONTS as F } from '@/lib/theme';
 
-const COLOR_PALETTE = ['bg-green-600', 'bg-amber-400', 'bg-red-500', 'bg-slate-400', 'bg-emerald-500', 'bg-cyan-500'];
+const COLOR_PALETTE = ['bg-emerald-600', 'bg-amber-500', 'bg-rose-500', 'bg-slate-400', 'bg-blue-500', 'bg-cyan-500'];
 
 interface HeaderProps {
     activeUnit: string;
@@ -27,32 +28,32 @@ export default function DashboardHeader({ activeUnit, onUnitChange, units }: Hea
             {/* TITRE DYNAMIQUE */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${currentUnit?.color || 'bg-green-600'}`} />
-                    <p className="text-xs font-bold text-[#7c795d] uppercase tracking-wider">
+                    <span className={`w-2 h-2 rounded-full ${currentUnit?.color || 'bg-emerald-600'}`} />
+                    <p style={{ fontFamily: F.body, color: C.muted }} className="text-xs font-bold uppercase tracking-wider">
                         Exploitation / {currentUnit?.label}
                     </p>
                 </div>
-                <h1 className="text-3xl md:text-5xl font-black text-[#5b4636] tracking-tight mt-1">
+                <h1 style={{ fontFamily: F.heading, color: C.forest, letterSpacing: '-0.02em' }} className="text-3xl md:text-5xl font-black tracking-tight mt-1">
                     {activeUnit === 'global' ? 'Ma Ferme' : currentUnit?.label}
-                    <span className="text-[#e65100]">.</span>
+                    <span style={{ color: C.emerald }}>.</span>
                 </h1>
             </div>
 
             {/* SÉLECTEUR DE CULTURE (TACTIQUE) */}
-            <div className="flex flex-wrap gap-2 p-1.5 bg-white rounded-2xl border border-[#e0e0d1] shadow-sm">
+            <div className="flex flex-wrap gap-2 p-1.5 bg-white rounded-2xl shadow-sm" style={{ border: `1px solid ${C.border}` }}>
                 {availableUnits.map((unit) => {
                     const isActive = activeUnit === unit.id;
                     return (
                         <button
                             key={unit.id}
                             onClick={() => onUnitChange(unit.id)}
-                            className={`
-                                px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200
-                                ${isActive 
-                                    ? 'bg-[#497a3a] text-white shadow-md' 
-                                    : 'text-[#7c795d] hover:bg-[#f7f5ee]'
-                                }
-                            `}
+                            style={{
+                                fontFamily: F.body,
+                                background: isActive ? C.forest : 'transparent',
+                                color: isActive ? C.white : C.muted,
+                                boxShadow: isActive ? '0 4px 14px rgba(6,78,59,0.2)' : 'none',
+                            }}
+                            className="px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 hover:bg-black/[0.03]"
                         >
                             {unit.label}
                         </button>

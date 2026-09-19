@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Clock, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { THEME_FONTS as F } from '@/lib/theme';
 
 interface PendingDist {
   id: string;
@@ -35,7 +36,7 @@ export default function PendingSeedDistributions() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-stone-200 bg-white p-5">
+      <div className="rounded-3xl border border-stone-200 bg-white p-5">
         <div className="flex items-center justify-center py-6">
           <Loader2 size={20} className="animate-spin text-emerald-600" />
         </div>
@@ -46,10 +47,10 @@ export default function PendingSeedDistributions() {
   if (distributions.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+    <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5">
       <div className="flex items-center gap-2 mb-3">
         <Package size={18} className="text-amber-700" />
-        <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">
+        <h3 style={{ fontFamily: F.heading }} className="text-sm font-bold text-amber-900 uppercase tracking-wide">
           Semences en attente
         </h3>
         <span className="ml-auto text-xs font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">

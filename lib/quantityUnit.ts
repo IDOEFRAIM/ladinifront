@@ -16,6 +16,15 @@ const UNIT_TO_KG: Record<string, number> = {
   TONNE: 1000,
 };
 
+// Liste FERMÉE des unités reconnues par le backend agent (domain/quantity_unit.py::UNIT_SYNONYMS),
+// utilisée pour la config allowedUnits/priorityUnit par sous-catégorie (voir
+// services/dr-governance.service.ts::updateSubCategoryUnitConfig). Vit ici — et pas dans
+// dr-governance.service.ts — car ce fichier a `'use server'` et ne peut exporter QUE des
+// fonctions async (Next.js Server Actions) ; toute autre valeur exportée casse le build
+// ("A 'use server' file can only export async functions, found object").
+export const SUB_CATEGORY_UNITS = ['KG', 'TONNE', 'SAC', 'PANIER', 'TETE', 'UNITE', 'LITRE'] as const;
+export type SubCategoryUnit = typeof SUB_CATEGORY_UNITS[number];
+
 export function normalizeUnit(raw: string | null | undefined): string {
   return String(raw ?? '').trim().toUpperCase();
 }

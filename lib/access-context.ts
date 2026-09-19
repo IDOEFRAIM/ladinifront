@@ -6,13 +6,25 @@
 
 import { db } from '@/src/db';
 import { eq } from 'drizzle-orm';
-import { users } from '@/src/db/schema';
+import { users, producers, userOrganizations, roleDefs } from '@/src/db/schema';
 import type { Permission } from '@/lib/permissions';
 
-// Cache court pour éviter les requêtes redondantes lors d'un même cycle de rendu
-// Note : Dans un environnement Serverless (Vercel), ce Map survit tant que le "warm" lambda est actif.
-const ctxCache = new Map<string, { ctx: AccessContext; expiresAt: number }>();
-const CACHE_TTL_MS = 1000; // 1 seconde
+// Cache mémoire par process (partagé entre HMR via globalThis) + dédoublonnage des
+// requêtes en vol : N requêtes simultanées du même user = 1 seul aller-retour DB.
+const g = globalThis as unknown as {
+  __ctxCache?: Map<string, { ctx: AccessContext; expiresAt: number }>;
+  __ctxInflight?: Map<string, Promise<AccessContext>>;
+};
+const ctxCache = (g.__ctxCache ??= new Map());
+const inflight = (g.__ctxInflight ??= new Map());
+const CACHE_TTL_MS = 30_000; // 30 s — invalider via invalidateAccessContext() après changement de rôle
+const CACHE_MAX = 500;
+
+/** À appeler après tout changement de rôle / appartenance / permissions. */
+export function invalidateAccessContext(userId?: string) {
+  if (userId) ctxCache.delete(userId);
+  else ctxCache.clear();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -42,42 +54,43 @@ export interface AccessContext {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Construit le contexte d'accès en une seule requête Drizzle.
+ * Construit le contexte d'accès : 3 requêtes plates (index PK / unique / user_id)
+ * exécutées en parallèle, au lieu d'un LEFT JOIN LATERAL monolithique multi-schémas.
  */
-export async function buildAccessContext(userId: string): Promise<AccessContext> {
-  const now = Date.now();
+export function buildAccessContext(userId: string): Promise<AccessContext> {
   const cached = ctxCache.get(userId);
-  
-  if (cached && cached.expiresAt > now) {
-    return cached.ctx;
-  }
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.ctx);
 
-  // Requête optimisée avec tous les joins nécessaires
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-    columns: {
-      id: true,
-      role: true,
-      updatedAt: true,
-    },
-    with: {
-      producer: {
-        columns: { id: true },
-      },
-      userOrganizations: {
-        columns: {
-          organizationId: true,
-          role: true,
-          managedZoneId: true,
-        },
-        with: {
-          dynRole: { 
-            columns: { permissions: true } 
-          },
-        },
-      },
-    },
-  });
+  const pending = inflight.get(userId);
+  if (pending) return pending;
+
+  const p = loadAccessContext(userId).finally(() => inflight.delete(userId));
+  inflight.set(userId, p);
+  return p;
+}
+
+async function loadAccessContext(userId: string): Promise<AccessContext> {
+  const now = Date.now();
+
+  const [userRows, producerRows, memberships] = await Promise.all([
+    db.select({ id: users.id, role: users.role, updatedAt: users.updatedAt })
+      .from(users).where(eq(users.id, userId)).limit(1),
+    db.select({ id: producers.id })
+      .from(producers).where(eq(producers.userId, userId)).limit(1),
+    db.select({
+        organizationId: userOrganizations.organizationId,
+        role: userOrganizations.role,
+        managedZoneId: userOrganizations.managedZoneId,
+        permissions: roleDefs.permissions,
+      })
+      .from(userOrganizations)
+      .leftJoin(roleDefs, eq(roleDefs.id, userOrganizations.roleId))
+      .where(eq(userOrganizations.userId, userId)),
+  ]);
+
+  const user = userRows[0]
+    ? { ...userRows[0], producer: producerRows[0], userOrganizations: memberships }
+    : undefined;
 
   if (!user) throw new Error('USER_NOT_FOUND');
 
@@ -96,7 +109,7 @@ export async function buildAccessContext(userId: string): Promise<AccessContext>
     organizationIds.push(orgId);
 
     // Extraction des permissions du rôle dynamique (Cast sécurisé)
-    const rawPerms = (membership.dynRole?.permissions as Permission[]) ?? [];
+    const rawPerms = (membership.permissions as Permission[]) ?? [];
     const orgPerms = new Set<Permission>(rawPerms);
     
     // On alimente le set global pour les checks "toutes orgs confondues"
@@ -133,7 +146,7 @@ export async function buildAccessContext(userId: string): Promise<AccessContext>
   ctxCache.set(userId, { ctx, expiresAt: now + CACHE_TTL_MS });
 
   // Nettoyage périodique sommaire du cache si trop volumineux
-  if (ctxCache.size > 500) {
+  if (ctxCache.size > CACHE_MAX) {
     const firstKey = ctxCache.keys().next().value;
     if (firstKey) ctxCache.delete(firstKey);
   }

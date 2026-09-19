@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { createCategory, createSubCategory, getCategories, toggleSubCategoryBlock, updateSubCategoryMinimum } from '@/services/dr-governance.service';
-import { Plus, ChevronDown, ChevronRight, Lock, Unlock, Package, Layers, Tag, Scale, X } from 'lucide-react';
+import { createCategory, createSubCategory, getCategories, toggleSubCategoryBlock, updateSubCategoryMinimum, updateSubCategoryUnitConfig } from '@/services/dr-governance.service';
+import { SUB_CATEGORY_UNITS, type SubCategoryUnit } from '@/lib/quantityUnit';
+import { Plus, ChevronDown, ChevronRight, Lock, Unlock, Package, Layers, Tag, Scale, X, Ruler } from 'lucide-react';
 import { useZone } from '@/context/ZoneContext';
 import { useAuth } from '@/hooks/useAuth';
 import ZoneSelector from '@/components/ui/ZoneSelector';
@@ -25,6 +26,10 @@ interface SubCategory {
   // aucune règle configurée, comportement historique.
   minimumOrderQuantity: string | null;
   minimumOrderUnit: string | null;
+  // Config unité — voir services/dr-governance.service.ts::updateSubCategoryUnitConfig.
+  // `null` = pas configuré (le backend continue de deviner depuis le texte libre).
+  allowedUnits: string[] | null;
+  priorityUnit: string | null;
   _count?: { products: number };
 }
 
@@ -65,6 +70,13 @@ export default function CategoryManager() {
   const [minUnitInput, setMinUnitInput] = useState<string>('KG');
   const [minLoading, setMinLoading] = useState(false);
   const [minMsg, setMinMsg] = useState<string | null>(null);
+
+  // Config unité (allowedUnits + priorityUnit) — policy plateforme, jamais éditable par le producteur
+  const [unitEditFor, setUnitEditFor] = useState<string | null>(null);
+  const [unitAllowedInput, setUnitAllowedInput] = useState<SubCategoryUnit[]>([]);
+  const [unitPriorityInput, setUnitPriorityInput] = useState<SubCategoryUnit | ''>('');
+  const [unitLoading, setUnitLoading] = useState(false);
+  const [unitMsg, setUnitMsg] = useState<string | null>(null);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -207,6 +219,72 @@ export default function CategoryManager() {
     }
   };
 
+  const openUnitEditor = (sub: SubCategory) => {
+    setUnitEditFor(sub.id);
+    setUnitAllowedInput((sub.allowedUnits ?? []) as SubCategoryUnit[]);
+    setUnitPriorityInput((sub.priorityUnit ?? '') as SubCategoryUnit | '');
+    setUnitMsg(null);
+  };
+
+  const toggleAllowedUnit = (unit: SubCategoryUnit) => {
+    setUnitAllowedInput((prev) => {
+      const next = prev.includes(unit) ? prev.filter((u) => u !== unit) : [...prev, unit];
+      // Une unité prioritaire retirée des unités autorisées n'est plus valide.
+      if (unitPriorityInput === '' || !next.includes(unitPriorityInput)) {
+        setUnitPriorityInput(next.length === 1 ? next[0] : '');
+      }
+      return next;
+    });
+  };
+
+  const handleSaveUnitConfig = async (subCategoryId: string) => {
+    if (unitAllowedInput.length === 0) {
+      setUnitMsg('Sélectionnez au moins une unité autorisée (ou utilisez « Supprimer la config »).');
+      return;
+    }
+    if (unitAllowedInput.length > 1 && !unitPriorityInput) {
+      setUnitMsg('Une unité prioritaire est requise dès que plusieurs unités sont autorisées.');
+      return;
+    }
+    setUnitLoading(true);
+    setUnitMsg(null);
+    try {
+      const res = await updateSubCategoryUnitConfig({
+        subCategoryId,
+        allowedUnits: unitAllowedInput,
+        priorityUnit: unitPriorityInput || undefined,
+      });
+      if (res.success) {
+        setUnitEditFor(null);
+        loadCategories();
+      } else {
+        setUnitMsg(res.error || 'Erreur');
+      }
+    } catch (e: any) {
+      setUnitMsg(e.message || 'Erreur');
+    } finally {
+      setUnitLoading(false);
+    }
+  };
+
+  const handleClearUnitConfig = async (subCategoryId: string) => {
+    setUnitLoading(true);
+    setUnitMsg(null);
+    try {
+      const res = await updateSubCategoryUnitConfig({ subCategoryId, allowedUnits: null });
+      if (res.success) {
+        setUnitEditFor(null);
+        loadCategories();
+      } else {
+        setUnitMsg(res.error || 'Erreur');
+      }
+    } catch (e: any) {
+      setUnitMsg(e.message || 'Erreur');
+    } finally {
+      setUnitLoading(false);
+    }
+  };
+
   const totalProducts = categories.reduce((sum, cat) =>
     sum + cat.subCategories.reduce((s, sub) => s + (sub._count?.products || 0), 0), 0);
   const totalSubs = categories.reduce((sum, cat) => sum + cat.subCategories.length, 0);
@@ -331,6 +409,7 @@ export default function CategoryManager() {
                     : null;
 
                   const hasMinimum = sub.minimumOrderQuantity != null;
+                  const hasUnitConfig = !!sub.allowedUnits && sub.allowedUnits.length > 0;
 
                   return (
                     <div key={sub.id} style={{
@@ -356,6 +435,12 @@ export default function CategoryManager() {
                                 • Min. commande : {sub.minimumOrderQuantity} {sub.minimumOrderUnit}
                               </span>
                             )}
+                            {hasUnitConfig && (
+                              <span style={{ marginLeft: 8, color: '#0891B2', fontWeight: 600 }}>
+                                • Unité{(sub.allowedUnits?.length ?? 0) > 1 ? 's' : ''} : {sub.allowedUnits?.join(', ')}
+                                {sub.priorityUnit ? ` (prioritaire : ${sub.priorityUnit})` : ''}
+                              </span>
+                            )}
                             {isBlocked && (
                               <span style={{ marginLeft: 8, color: C.red, fontWeight: 600 }}>• BLOQUÉE</span>
                             )}
@@ -376,6 +461,19 @@ export default function CategoryManager() {
                           >
                             <Scale size={14} />
                             {hasMinimum ? 'Modifier le seuil' : 'Définir un seuil'}
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => (unitEditFor === sub.id ? setUnitEditFor(null) : openUnitEditor(sub))}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer',
+                              background: 'transparent', color: '#0891B2', fontWeight: 600, fontSize: 12,
+                            }}
+                          >
+                            <Ruler size={14} />
+                            {hasUnitConfig ? "Modifier l'unité" : "Configurer l'unité"}
                           </button>
                         )}
                         {zoneId && (
@@ -443,6 +541,88 @@ export default function CategoryManager() {
                         <span style={{ fontSize: 11, color: C.muted, width: '100%' }}>
                           Aucune commande de ce type de produit ne pourra être poursuivie en dessous de ce seuil — quel que soit le producteur. Laissez le champ vide puis « Enregistrer » (ou « Supprimer le seuil ») pour revenir au comportement historique (aucune règle).
                         </span>
+                      </div>
+                    )}
+
+                    {/* Config unité (allowedUnits + priorityUnit) — policy plateforme */}
+                    {unitEditFor === sub.id && (
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', gap: 10,
+                        marginTop: 10, padding: 12, borderRadius: 10,
+                        background: 'rgba(8,145,178,0.05)', border: `1px solid ${C.border}`,
+                      }}>
+                        <label style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+                          Unités autorisées
+                        </label>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {SUB_CATEGORY_UNITS.map((u) => {
+                            const checked = unitAllowedInput.includes(u);
+                            return (
+                              <button
+                                key={u}
+                                type="button"
+                                onClick={() => toggleAllowedUnit(u)}
+                                style={{
+                                  padding: '6px 12px', borderRadius: 100, fontSize: 12, fontWeight: 700,
+                                  border: `1px solid ${checked ? '#0891B2' : C.border}`,
+                                  background: checked ? '#0891B2' : 'transparent',
+                                  color: checked ? '#fff' : C.text,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {u}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <label style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+                          Unité prioritaire (standardisation)
+                        </label>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {unitAllowedInput.length === 0 && (
+                            <span style={{ fontSize: 12, color: C.muted }}>Cochez d&apos;abord une ou plusieurs unités ci-dessus.</span>
+                          )}
+                          {unitAllowedInput.map((u) => (
+                            <label key={u} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                              <input
+                                type="radio"
+                                name={`priority-${sub.id}`}
+                                checked={unitPriorityInput === u}
+                                onChange={() => setUnitPriorityInput(u)}
+                                disabled={unitAllowedInput.length === 1}
+                              />
+                              {u}
+                            </label>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <button onClick={() => handleSaveUnitConfig(sub.id)} disabled={unitLoading} style={{
+                            padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0891B2', color: '#fff',
+                            fontWeight: 700, fontSize: 12, cursor: unitLoading ? 'not-allowed' : 'pointer',
+                          }}>
+                            {unitLoading ? '...' : 'Enregistrer'}
+                          </button>
+                          {hasUnitConfig && (
+                            <button onClick={() => handleClearUnitConfig(sub.id)} disabled={unitLoading} style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent',
+                              color: C.red, fontWeight: 600, fontSize: 12, cursor: unitLoading ? 'not-allowed' : 'pointer',
+                            }}>
+                              <X size={13} /> Supprimer la config
+                            </button>
+                          )}
+                          <button onClick={() => { setUnitEditFor(null); setUnitMsg(null); }} style={{
+                            padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 12,
+                          }}>
+                            Annuler
+                          </button>
+                          {unitMsg && <span style={{ fontSize: 12, color: C.red, width: '100%' }}>{unitMsg}</span>}
+                          <span style={{ fontSize: 11, color: C.muted, width: '100%' }}>
+                            L&apos;agent WhatsApp/webchat n&apos;acceptera que ces unités pour ce type de produit et utilisera l&apos;unité prioritaire pour standardiser. « Supprimer la config » restaure la devinette automatique historique.
+                          </span>
+                        </div>
                       </div>
                     )}
                     </div>

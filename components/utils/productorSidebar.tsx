@@ -84,7 +84,7 @@ export default function ProductorSidebar({ isOpen, onClose }: ProductorSidebarPr
               ) : (
                 <div>
                   <span className="font-['Space_Grotesk'] text-3xl font-extrabold text-emerald-950 tracking-tight block leading-none">
-                    FrontAg<span className="text-emerald-500">.</span>
+                    LADINI<span className="text-emerald-500">.</span>
                   </span>
                   <span className="font-['Inter'] text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 block">
                     Espace Producteur
