@@ -30,8 +30,8 @@ export default function Footer() {
           <nav aria-label="Navigation">
             <h2 style={footerTitle}>Navigation</h2>
             <ul style={footerList}>
-              <li><Link className="footer-link" href="/production" style={footerLink}>Vendre ma production</Link></li>
-              <li><Link className="footer-link" href="/buyer-dashboard" style={footerLink}>Espace Acheteur</Link></li>
+              <li><Link className="footer-link" href="/signup?role=seller" style={footerLink}>Vendre ma production</Link></li>
+              <li><Link className="footer-link" href="/login" style={footerLink}>Espace Acheteur</Link></li>
               <li><Link className="footer-link" href="/catalogue" style={footerLink}>Nos Produits &amp; Offres</Link></li>
             </ul>
           </nav>

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import JsonLd from '@/components/seo/JsonLd';
 import ProductView from '@/features/products/components/ProductView';
-import ProductNotFound from '@/features/products/components/ProductNotFound';
-import { loadProduct } from '@/features/products/services/product.service';
+import { notFound } from 'next/navigation';
+import { loadProduct, productExists } from '@/features/products/services/product.service';
 import { buildProductMetadata } from '@/features/products/seo/product-metadata';
 import { productPageJsonLd } from '@/features/products/seo/product-jsonld';
 
@@ -23,7 +23,12 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     const { id } = await params;
     const product = await loadProduct(id); // dédupliqué avec generateMetadata (React cache)
 
-    if (!product) return <ProductNotFound id={id} />;
+    if (!product) {
+        // Vrai 404 HTTP (et non une page d'erreur en 200 = « soft 404 » pour Google) — mais seulement si le produit
+        // n'existe réellement pas. Si la lecture a échoué (panne DB), on lève : l'ISR garde la dernière bonne version.
+        if (!(await productExists(id))) notFound();
+        throw new Error('PRODUCT_TEMPORARILY_UNAVAILABLE');
+    }
 
     return (
         <main style={{ backgroundColor: '#FDFCFB', minHeight: '100vh' }}>
