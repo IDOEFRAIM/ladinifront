@@ -70,7 +70,7 @@ function SectionHeading({ tag, title, subtitle }: { tag: string; title: string; 
 
 export function HeroSection() {
   const trust: { icon: Icon; label: string; color: string }[] = [
-    { icon: Handshake, label: '6 coopératives partenaires', color: C.emerald },
+    { icon: Handshake, label: '8 coopératives partenaires', color: C.emerald },
     { icon: Wallet, label: 'Paiement direct au producteur', color: C.amber },
     { icon: ShieldCheck, label: 'Traçabilité de la ferme à l’assiette', color: C.statBlue },
   ];

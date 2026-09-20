@@ -43,6 +43,15 @@ const runtimeCaching = [
     },
   },
   {
+    urlPattern: /\/fonts\/.*\.woff2$/i,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'self-hosted-fonts',
+      expiration: { maxEntries: 8, maxAgeSeconds: 365 * 24 * 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
+    },
+  },
+  {
     urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
     handler: 'CacheFirst',
     options: {
@@ -135,6 +144,11 @@ const nextConfig = {
       'settings', 'agents', 'agent', 'org', 'onboarding', 'select-org', 'login', 'signup', 'preorders',
     ];
     return [
+      {
+        // Polices auto-hébergées : noms de fichiers versionnés → cache navigateur/CDN d'un an, immuable.
+        source: '/fonts/:file*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
       {
         source: `/:route(${privateRoutes.join('|')})/:path*`,
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],

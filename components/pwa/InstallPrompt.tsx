@@ -9,7 +9,9 @@ import { Download, X, Share } from 'lucide-react';
 // les fois suivantes) — c'est la demande explicite, pas un choix arbitraire.
 const INSTALLED_KEY = 'ladini_pwa_installed';
 const DISMISSED_THIS_SESSION_KEY = 'ladini_pwa_prompt_dismissed_session';
-const SHOW_DELAY_MS = 2000;
+// 8 s : la bannière ne doit pas apparaître pendant le chargement — un élément qui s'affiche après l'hydratation devenait
+// l'élément LCP (Largest Contentful Paint) mesuré par Lighthouse/Google et repoussait le LCP de la page.
+const SHOW_DELAY_MS = 8000;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;

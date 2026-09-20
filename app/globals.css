@@ -1,8 +1,4 @@
-/* Space Grotesk and Inter sont chargées via <link> dans app/layout.tsx (head), pas ici :
-   un @import d'URL externe dans un fichier CSS n'est découvert par le navigateur qu'après
-   téléchargement + parsing de CE fichier, ce qui le met en série derrière le CSS principal
-   au lieu d'être récupéré en parallèle dès le HTML — c'est exactement ce que PageSpeed
-   signalait comme requête bloquant le rendu (~750ms de retard mesurés sur fonts.googleapis.com). */
+/* Space Grotesk et Inter : polices auto-hébergées, déclarées dans app/fonts.css (fichiers dans public/fonts). */
 
 @import "tailwindcss";
 

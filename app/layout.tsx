@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./home.css";
+import "./fonts.css";
 
 import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/features/checkout/context/CartContext';
@@ -76,13 +77,10 @@ export default function RootLayout({
   return (
     <html lang="fr" className="h-full">
       <head>
-        {/* Déplacé depuis un @import dans globals.css : un <link> en tête de document est
-            découvert par le navigateur immédiatement (en parallèle du CSS), alors qu'un
-            @import d'URL externe n'est trouvé qu'après téléchargement du fichier CSS qui le
-            contient — PageSpeed mesurait ~750ms de retard evitable sur ce fetch. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" />
+        {/* Polices auto-hébergées (app/fonts.css) : plus de feuille de style bloquante vers fonts.googleapis.com.
+            On précharge uniquement les sous-ensembles « latin » réellement utilisés au premier affichage. */}
+        <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className="antialiased min-h-screen bg-slate-50 flex flex-col text-slate-900 overflow-x-hidden">
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
