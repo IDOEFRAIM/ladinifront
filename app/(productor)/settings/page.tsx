@@ -3,9 +3,9 @@ import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireProducer } from '@/lib/api-guard';
-import ProducerSettingsForm from '@/components/ProducerSettingsForm';
-import ZoneSelector from '@/components/ZoneSelector';
-import { C, F, RestrictedScreen } from '@/components/productor/tokens';
+import ProducerSettingsForm from '@/features/production/components/ProducerSettingsForm';
+import ZoneSelector from '@/features/production/components/ProducerZoneField';
+import { C, F, RestrictedScreen } from '@/features/production/components/tokens';
 import { Settings } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export default async function SettingsPage() {
   // bind server action to update user zone (optional)
   let serverUpdateZone = undefined;
   try {
-    const orgMod = await import('@/app/actions/org.server');
+    const orgMod = await import('@/features/organization/services/org-selection.service');
     const updateUserZoneAction = orgMod.updateUserZoneAction;
     serverUpdateZone = async (zoneId: string) => {
       try {

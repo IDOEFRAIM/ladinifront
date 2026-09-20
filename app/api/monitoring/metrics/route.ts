@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { fetchMonitoringMetrics } from '@/app/actions/monitoring.server';
+import { fetchMonitoringMetrics } from '@/features/monitoring/services/monitoring-api.service';
 
 export async function GET(req: NextRequest): Promise<Response | void> {
   const { ctx, error } = await getAccessContext();

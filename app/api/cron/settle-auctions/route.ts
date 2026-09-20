@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { settleExpiredAuctions } from '@/services/auctionSettlement.service';
+import { settleExpiredAuctions } from '@/features/auction/services/auction-settlement.service';
+import { asError } from '@/lib/errors';
 
 /**
  * POST /api/cron/settle-auctions
@@ -26,7 +27,8 @@ export async function POST(req: NextRequest) {
 
     const result = await settleExpiredAuctions();
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = asError(_error);
     console.error('POST /api/cron/settle-auctions error:', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

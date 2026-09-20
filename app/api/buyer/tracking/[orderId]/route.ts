@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { getOrderTrackingTimeline } from '@/services/buyer.service';
+import { getOrderTrackingTimeline } from '@/features/buyer/services/buyer.service';
 
 export async function GET(
   _req: Request,

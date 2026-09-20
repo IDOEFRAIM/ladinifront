@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { getAvailableDeliveries } from '@/services/delivery.service';
+import { getAvailableDeliveries } from '@/features/delivery/services/delivery.service';
 
 export async function GET() {
   const { ctx, error } = await getAccessContext(['AGENT', 'ADMIN', 'SUPERADMIN']);

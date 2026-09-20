@@ -1,5 +1,5 @@
-import AdminDashboardClient from './AdminDashboardClient';
-import { fetchAdminMetrics } from '@/app/actions/admin.server';
+import AdminDashboardClient from '@/features/admin/components/AdminDashboardClient';
+import { fetchAdminMetrics } from '@/features/admin/services/admin-organizations.service';
 
 export const dynamic = 'force-dynamic';
 

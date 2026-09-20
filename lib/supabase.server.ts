@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { asError } from '@/lib/errors';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || process.env.SUPABASE_PROJECT_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -36,7 +37,8 @@ function getSupabaseAdmin() {
   try {
     _supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     return _supabaseAdmin;
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = asError(_err);
     // Provide a clearer error message for common misconfigurations
     console.error('Failed to create Supabase client:', err?.message || err);
     throw new Error('Failed to initialize Supabase client. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
@@ -58,7 +60,8 @@ export async function uploadBufferToSupabase(path: string, buffer: Buffer, conte
 
       const { data: publicData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
       return publicData?.publicUrl || null;
-    } catch (err: any) {
+    } catch (_err: unknown) {
+    const err = asError(_err);
       lastErr = err;
       const code = err?.code || err?.status || err?.statusCode || 'unknown';
       console.warn(`[supabase] upload attempt ${attempt}/${maxAttempts} failed for ${path} — code=${code}`, err?.message || err);
@@ -87,7 +90,8 @@ export async function removeFileFromSupabase(path: string) {
       const { error } = await supabaseAdmin.storage.from(BUCKET).remove([path]);
       if (error) throw error;
       return true;
-    } catch (err: any) {
+    } catch (_err: unknown) {
+    const err = asError(_err);
       lastErr = err;
       console.warn(`[supabase] remove attempt ${attempt}/${maxAttempts} failed for ${path}`, err?.message || err);
       if (attempt < maxAttempts) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { createPreorder, getBuyerPreorders } from '@/services/preorder.service';
+import { createPreorder, getBuyerPreorders } from '@/features/orders/services/preorder.service';
 
 export async function GET() {
   const { ctx, error } = await getAccessContext(['BUYER', 'ADMIN', 'SUPERADMIN']);

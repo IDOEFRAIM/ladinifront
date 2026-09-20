@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/api-guard';
-import { verifyBuyerProfile, getPendingBuyerVerifications, revokeBuyerTrustBadge } from '@/services/buyerVerification.service';
+import { verifyBuyerProfile, getPendingBuyerVerifications, revokeBuyerTrustBadge } from '@/features/buyer/services/buyerVerification.service';
 
 export async function GET() {
   const { user, error: authError } = await requireAdmin();

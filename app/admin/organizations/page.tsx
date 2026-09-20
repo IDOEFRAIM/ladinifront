@@ -1,5 +1,5 @@
-import OrgListClient from '@/app/admin/organizations/OrgListClient';
-import { fetchOrganizations } from '@/app/actions/admin.server';
+import OrgListClient from '@/features/organization/components/OrgListClient';
+import { fetchOrganizations } from '@/features/admin/services/admin-organizations.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +10,7 @@ export default async function AdminOrganizationsListPage() {
   let userId: string | undefined = undefined;
   try {
     const sessionMod = await import('@/lib/session');
-    const session = await sessionMod.getSessionFromRequest({} as any).catch(() => null);
+    const session = await sessionMod.getSessionFromRequest({}).catch(() => null);
     userId = session?.userId;
   } catch (e) {
     // ignore
@@ -19,8 +19,8 @@ export default async function AdminOrganizationsListPage() {
   let serverApproveOrg = undefined;
   let serverSelectOrg = undefined;
   try {
-    const adminMod = await import('@/app/actions/admin.server');
-    const orgMod = await import('@/app/actions/org.server');
+    const adminMod = await import('@/features/admin/services/admin-organizations.service');
+    const orgMod = await import('@/features/organization/services/org-selection.service');
     const approveOrganization = adminMod.approveOrganization;
     const selectOrganizationAction = orgMod.selectOrganizationAction;
 

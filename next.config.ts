@@ -127,7 +127,22 @@ const nextConfig = {
   },
   // Sécurité : Headers HTTP
   async headers() {
+    // Filet anti-indexation : même si une URL privée fuite dans un lien, Google ne l'indexe pas.
+    // (robots.txt seul n'empêche pas l'indexation d'une URL connue.)
+    const privateRoutes = [
+      'admin', 'dashboard', 'buyer-dashboard', 'checkout', 'cart', 'orders', 'tracking',
+      'conversations', 'market', 'products', 'sales', 'inventory', 'production', 'clients',
+      'settings', 'agents', 'agent', 'org', 'onboarding', 'select-org', 'login', 'signup', 'preorders',
+    ];
     return [
+      {
+        source: `/:route(${privateRoutes.join('|')})/:path*`,
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+      {
+        source: `/:route(${privateRoutes.join('|')})`,
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
       {
         source: '/api/:path*',
         headers: [

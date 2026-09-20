@@ -3,8 +3,9 @@ import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { assertTransition } from '@/lib/orderStateMachine';
-import { runOrderStatusHooks } from '@/services/order.hooks';
+import { runOrderStatusHooks } from '@/features/orders/services/order-hooks';
 import { requireAdmin } from '@/lib/api-guard';
+import { asError } from '@/lib/errors';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   const { user, error: authError } = await requireAdmin();
@@ -27,7 +28,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     let validatedStatus: string;
     try {
       validatedStatus = assertTransition(current.status as string, status);
-    } catch (err: any) {
+    } catch (_err: unknown) {
+    const err = asError(_err);
       return NextResponse.json({ error: err.message }, { status: 422 });
     }
 

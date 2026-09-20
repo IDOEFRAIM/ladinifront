@@ -8,7 +8,7 @@ export async function GET() {
   }
 
   try {
-    const { fetchAdminMetrics } = await import('@/app/actions/admin.server');
+    const { fetchAdminMetrics } = await import('@/features/admin/services/admin-organizations.service');
     const stats = await fetchAdminMetrics();
     return NextResponse.json(stats);
   } catch (err) {

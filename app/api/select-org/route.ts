@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { selectOrganizationAction } from '@/app/actions/org.server';
+import { selectOrganizationAction } from '@/features/organization/services/org-selection.service';
 
 export async function POST(req: Request) {
-  const session = await getSessionFromRequest(req as any);
+  const session = await getSessionFromRequest(req);
   if (!session?.userId) return new Response('Unauthorized', { status: 401 });
 
   const body = await req.json().catch(() => ({}));

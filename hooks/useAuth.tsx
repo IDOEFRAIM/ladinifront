@@ -4,7 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
-import { registerUser, loginUser, logoutUser } from '@/services/auth.service';
+import { registerUser, loginUser, logoutUser } from '@/features/auth/actions/auth.actions';
+import { asError } from '@/lib/errors';
 type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
 
 interface AuthUser {
@@ -114,6 +115,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
         }
 
+        // Base momentanément indisponible (503) : on réessaie 2 fois avant de se rabattre sur les cookies UI.
+        for (let i = 0; i < 2 && res.status === 503 && mounted; i++) {
+          await delay(3000 * (i + 1));
+          res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
+        }
+
         if (isDev) console.debug('[Auth] /api/me response', { ok: res.ok, status: res.status, durationMs: Date.now() - startMs });
 
         if (res.ok) {
@@ -145,7 +152,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             userLocation: savedLocation ? JSON.parse(savedLocation) : null,
           }));
         }
-      } catch (e: any) {
+      } catch (_e: unknown) {
+    const e = asError(_e);
         if (e.name !== 'AbortError') console.error('Initial check session failed:', e);
       } finally {
         if (mounted) setIsLoading(false);
@@ -179,9 +187,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await loginUser({ phone, password });
-      if (result.success && result.user) {
-        hydrateSession(result.user);
-        handleRedirect(result.user);
+      if (result.success) {
+        hydrateSession(result.data.user);
+        handleRedirect(result.data.user);
       } else {
         setError(result.error || 'Identifiants incorrects');
       }
@@ -199,13 +207,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await registerUser(data);
-      if (result.success && result.user) {
-        hydrateSession(result.user);
-        if (result.pendingOrgCreated) {
-          const role = (result.user.role || '').toString().toUpperCase();
+      if (result.success) {
+        const { user, pendingOrgCreated } = result.data;
+        hydrateSession(user);
+        if (pendingOrgCreated) {
+          const role = (user.role || '').toString().toUpperCase();
           window.location.href = role === 'PRODUCER' ? '/dashboard' : '/market';
         } else {
-          handleRedirect(result.user);
+          handleRedirect(user);
         }
       } else {
         setError(result.error || "Erreur lors de l'inscription");

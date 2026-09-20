@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireProducer } from '@/lib/api-guard';
 import { AgrobusinessAsset } from '@/types/dashboard.index';
-import { fetchProducerInventory } from '@/app/actions/inventory.server';
+import { fetchProducerInventory } from '@/features/inventory/services/inventory-api.service';
 
 export const dynamic = 'force-dynamic';
 

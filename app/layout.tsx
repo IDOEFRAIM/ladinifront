@@ -1,16 +1,50 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./home.css";
 
 import { AuthProvider } from '@/hooks/useAuth';
-import { CartProvider } from '@/context/CartContext';
+import { CartProvider } from '@/features/checkout/context/CartContext';
 import { Toaster } from 'react-hot-toast';
 import { DevServiceWorkerCleanup } from '@/components/DevServiceWorkerCleanup';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
+import JsonLd from '@/components/seo/JsonLd';
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
 
 
 export const metadata: Metadata = {
-  title: 'Ladini — Marché Agricole du Burkina Faso',
-  description: 'Plateforme connectant producteurs et consommateurs au Burkina Faso.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Ladini — Marché agricole du Burkina Faso',
+    template: '%s | Ladini',
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: ['marché agricole Burkina Faso', 'produits agricoles', 'acheter céréales Ouagadougou', 'coopératives agricoles', 'légumes frais Burkina', 'Ladini'],
+  alternates: { canonical: '/' }, // les pages enfants surchargent avec leur propre canonical
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    locale: 'fr_BF',
+    url: '/',
+    title: 'Ladini — Marché agricole du Burkina Faso',
+    description: SITE_DESCRIPTION,
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630, alt: 'Ladini — producteurs et acheteurs au Burkina Faso' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Ladini — Marché agricole du Burkina Faso',
+    description: SITE_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1 },
+  },
+  // Token fourni par Search Console (méthode « balise HTML ») ; ignoré s'il est absent.
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
   // App Router manifest route (app/manifest.ts)
   manifest: '/manifest.webmanifest',
   appleWebApp: {
@@ -49,6 +83,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" />
       </head>
       <body className="antialiased min-h-screen bg-slate-50 flex flex-col text-slate-900 overflow-x-hidden">
+        <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
         <AuthProvider>
           <DevServiceWorkerCleanup />
           <InstallPrompt />

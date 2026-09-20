@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { confirmDeliveryWithOTP } from '@/services/delivery.service';
+import { confirmDeliveryWithOTP } from '@/features/delivery/services/delivery.service';
 
 /**
  * POST /api/delivery/confirm

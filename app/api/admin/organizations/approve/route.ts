@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const { organizationId } = body || {};
     if (!organizationId) return NextResponse.json({ success: false, error: 'Bad Request' }, { status: 400 });
 
-    const { approveOrganization } = await import('@/app/actions/admin.server');
+    const { approveOrganization } = await import('@/features/admin/services/admin-organizations.service');
     const updated = await approveOrganization(organizationId, ctx.userId);
 
     return NextResponse.json({ success: true, data: updated });

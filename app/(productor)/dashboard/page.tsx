@@ -1,13 +1,13 @@
 ﻿import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
+import { fetchDashboardInventoryServer } from '@/features/inventory/services/dashboard-inventory.service';
 import { Leaf, Plus, Loader2 } from 'lucide-react';
 import { SessionPayload } from '@/lib/session';
 
 // Extension du type Session pour inclure nos champs spécifiques
 interface ExtendedSessionPayload extends SessionPayload {
-  organizations?: any[];
+  organizations?: unknown[];
   activeOrg?: any;
 }
 
@@ -76,13 +76,13 @@ function EmptyView({ activeOrg }: { activeOrg?: any }) {
 
 export default async function DashboardPage() {
   let userId: string | undefined = undefined;
-  let organizations: any[] = [];
+  let organizations: unknown[] = [];
   let activeOrg: any = null;
 
   try {
     const sessionMod = await import('@/lib/session');
     const cookieStore = await cookies();
-    const session = await sessionMod.getSessionFromRequest({ cookies: cookieStore } as any).catch(() => null);
+    const session = await sessionMod.getSessionFromRequest({ cookies: cookieStore }).catch(() => null);
 
     // Application de notre extension de type
     const typedSession = session as ExtendedSessionPayload | null;
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
   }
 
   // Import dynamique du composant client
-  const DashboardShell = (await import('@/components/productorDashboard/DashboardShellClient')).default;
+  const DashboardShell = (await import('@/features/production/components/dashboard/DashboardShellClient')).default;
   
   return (
     <DashboardShell 

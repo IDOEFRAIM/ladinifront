@@ -1,12 +1,13 @@
 ﻿'use client';
 
 import React, { useState, useEffect } from 'react';
-import ProductCard from '@/components/Market/ProductCard';
-import FilterSidebar from '@/components/Market/FilterSidebar';
-import { ProductRepository } from '@/services/repository';
-import { Product } from '@/types/product';
+import ProductCard from '@/features/products/components/MarketProductCard';
+import FilterSidebar from '@/features/products/components/MarketFilterSidebar';
+import { ProductRepository } from '@/features/products/services/product.repository';
+import { Product } from '@/features/products/types/product.types';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Loader2, AlertTriangle, RotateCcw, Search } from 'lucide-react';
+import { asError } from '@/lib/errors';
 
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };
 const F = { heading:"'Space Grotesk', sans-serif", body:"'Inter', sans-serif" };
@@ -21,7 +22,8 @@ export default function MarketPage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try { setLoading(true); setError(null); const data = await ProductRepository.getAllProducts(); setProducts(data); setFilteredProducts(data); }
-      catch (err: any) { console.error("Erreur catalogue:", err); setError("Impossible de charger les produits."); }
+      catch (_err: unknown) {
+    const err = asError(_err); console.error("Erreur catalogue:", err); setError("Impossible de charger les produits."); }
       finally { setLoading(false); }
     };
     fetchProducts();

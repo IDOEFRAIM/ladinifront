@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { awardAuctionAction } from '@/app/actions/auctions.server';
+import { awardAuctionAction } from '@/features/auction/actions/auction.actions';
 import { getAccessContext } from '@/lib/api-guard';
+import { asError } from '@/lib/errors';
 
 export async function POST(
   req: Request,
@@ -18,7 +19,8 @@ export async function POST(
     const res = await awardAuctionAction({ auctionId: id, winnerBidId });
     if (!res.success) return NextResponse.json({ error: (res as any).error }, { status: 400 });
     return NextResponse.json({ data: (res as any).data });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     console.error('POST /award error', e);
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }

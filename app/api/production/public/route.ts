@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPublicFutureProductions } from '@/services/production.service';
+import { getPublicFutureProductions } from '@/features/production/services/production.service';
 
 export async function GET(req: NextRequest) {
   try {

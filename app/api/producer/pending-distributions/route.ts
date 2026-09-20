@@ -6,7 +6,7 @@ import { eq, and } from 'drizzle-orm';
 
 export async function GET(req: Request) {
   try {
-    const session = await getSessionFromRequest(req as any);
+    const session = await getSessionFromRequest(req);
     if (!session?.userId) {
       return NextResponse.json({ distributions: [] });
     }

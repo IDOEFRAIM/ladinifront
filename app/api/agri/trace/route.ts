@@ -4,10 +4,10 @@ import { getSessionFromRequest } from '@/lib/session';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const session = await getSessionFromRequest(req as any).catch(() => null);
+    const session = await getSessionFromRequest(req).catch(() => null);
     const userId = session?.userId;
 
-    const { traceAction } = await import('@/app/actions/agri.server');
+    const { traceAction } = await import('@/features/territory/services/agri-trace.service');
     const res = await traceAction(body, String(userId));
 
     return NextResponse.json(res);

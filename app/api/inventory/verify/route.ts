@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
-import { verifySeedDistributionCode } from '@/services/seedDistribution.service';
+import { verifySeedDistributionCode } from '@/features/inventory/services/seed-distribution.service';
+import { asError } from '@/lib/errors';
 
 export async function POST(req: Request) {
   const body = await req.json();
   const { distributionId, code, ipAddress } = body;
   if (!distributionId || !code) return NextResponse.json({ error: 'missing' }, { status: 400 });
 
-  const session = await getSessionFromRequest(req as any);
+  const session = await getSessionFromRequest(req);
   if (!session || !session.userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   try {
     const result = await verifySeedDistributionCode(session.userId, distributionId, String(code), ipAddress);
     return NextResponse.json({ ok: true, ...result });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     const msg = String(e?.message || 'server_error');
     if (msg.toLowerCase().includes('introuvable')) return NextResponse.json({ error: 'not_found' }, { status: 404 });
     if (msg.toLowerCase().includes('expir')) return NextResponse.json({ error: 'expired' }, { status: 400 });

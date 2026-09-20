@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import AuctionClient from '@/components/auction/AuctionClient'; 
-import { getAuctionById, getEligibleProducers } from '@/services/auction.service'; 
+import AuctionClient from '@/features/auction/components/AuctionClient'; 
+import { getAuctionById, getEligibleProducers } from '@/features/auction/services/auction.service'; 
 
 export const dynamic = 'force-dynamic';
 

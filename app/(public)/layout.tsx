@@ -1,9 +1,9 @@
 ﻿'use client';
 
 import React from 'react';
-import Navbar from '@/components/utils/Navbar';
-import CartFloatingIcon from '@/components/utils/CartFloating';
-import SyncProvider from '@/services/syncProvider';
+import Navbar from '@/components/layout/Navbar';
+import CartFloatingIcon from '@/components/layout/CartFloating';
+import SyncProvider from '@/components/providers/SyncProvider';
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (

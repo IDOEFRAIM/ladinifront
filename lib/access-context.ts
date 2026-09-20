@@ -8,16 +8,20 @@ import { db } from '@/src/db';
 import { eq } from 'drizzle-orm';
 import { users, producers, userOrganizations, roleDefs } from '@/src/db/schema';
 import type { Permission } from '@/lib/permissions';
+import { withDbRetry, isTransientDbError } from '@/lib/db-retry';
 
 // Cache mémoire par process (partagé entre HMR via globalThis) + dédoublonnage des
 // requêtes en vol : N requêtes simultanées du même user = 1 seul aller-retour DB.
 const g = globalThis as unknown as {
-  __ctxCache?: Map<string, { ctx: AccessContext; expiresAt: number }>;
+  __ctxCache?: Map<string, { ctx: AccessContext; expiresAt: number; staleUntil: number }>;
   __ctxInflight?: Map<string, Promise<AccessContext>>;
 };
 const ctxCache = (g.__ctxCache ??= new Map());
 const inflight = (g.__ctxInflight ??= new Map());
 const CACHE_TTL_MS = 30_000; // 30 s — invalider via invalidateAccessContext() après changement de rôle
+// Stale-if-error : si la base est momentanément indisponible, on réutilise le DERNIER contexte connu
+// (au plus 5 min) plutôt que de renvoyer une 500 ; tout est re-vérifié dès que la DB répond.
+const STALE_TTL_MS = 5 * 60_000;
 const CACHE_MAX = 500;
 
 /** À appeler après tout changement de rôle / appartenance / permissions. */
@@ -64,7 +68,16 @@ export function buildAccessContext(userId: string): Promise<AccessContext> {
   const pending = inflight.get(userId);
   if (pending) return pending;
 
-  const p = loadAccessContext(userId).finally(() => inflight.delete(userId));
+  const p = withDbRetry(() => loadAccessContext(userId))
+    .catch((err) => {
+      const stale = ctxCache.get(userId);
+      if (stale && stale.staleUntil > Date.now() && isTransientDbError(err)) {
+        console.warn('[access-context] DB indisponible, contexte en cache réutilisé pour', userId);
+        return stale.ctx;
+      }
+      throw err;
+    })
+    .finally(() => inflight.delete(userId));
   inflight.set(userId, p);
   return p;
 }
@@ -143,7 +156,7 @@ async function loadAccessContext(userId: string): Promise<AccessContext> {
   };
 
   // Mise en cache
-  ctxCache.set(userId, { ctx, expiresAt: now + CACHE_TTL_MS });
+  ctxCache.set(userId, { ctx, expiresAt: now + CACHE_TTL_MS, staleUntil: now + STALE_TTL_MS });
 
   // Nettoyage périodique sommaire du cache si trop volumineux
   if (ctxCache.size > CACHE_MAX) {

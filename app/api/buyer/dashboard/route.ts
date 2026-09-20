@@ -6,9 +6,9 @@ import {
   getBuyerOrderHistory,
   getBuyerAuctionHistory,
   getBuyerBillingSummary,
-} from '@/services/buyer.service';
-import { getBuyerPreorders, type BuyerPreorder } from '@/services/preorder.service';
-import { suggestedProducts } from '@/services/crossSelling.service';
+} from '@/features/buyer/services/buyer.service';
+import { getBuyerPreorders, type BuyerPreorder } from '@/features/orders/services/preorder.service';
+import { suggestedProducts } from '@/features/buyer/services/crossSelling.service';
 
 const ALLOWED_SECTIONS = new Set(['all', 'profile', 'orders', 'auctions', 'billing', 'preorders', 'suggestions']);
 

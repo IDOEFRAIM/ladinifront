@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
     const { ctx, error } = await getAccessContext(undefined, ['ORGANIZATION_MANAGE']);
     if (error) return error;
 
-    const { fetchOrganizations } = await import('@/app/actions/admin.server');
+    const { fetchOrganizations } = await import('@/features/admin/services/admin-organizations.service');
     const orgs = await fetchOrganizations();
     return NextResponse.json({ success: true, data: orgs });
   } catch (err) {

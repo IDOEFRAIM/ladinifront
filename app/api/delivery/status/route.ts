@@ -5,7 +5,7 @@ import {
   markDeliveryFailed,
   updateAgentStatus,
   getAgentDeliveryHistory,
-} from '@/services/delivery.service';
+} from '@/features/delivery/services/delivery.service';
 
 type DeliveryAction = 'PICKUP' | 'FAILED' | 'GO_ONLINE' | 'GO_OFFLINE';
 

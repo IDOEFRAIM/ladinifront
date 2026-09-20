@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { claimDelivery } from '@/services/delivery.service';
+import { claimDelivery } from '@/features/delivery/services/delivery.service';
 
 /**
  * POST /api/delivery/claim

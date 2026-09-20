@@ -1,6 +1,6 @@
 import React from 'react';
-import ProductFlow from '@/components/utils/productorProductFlow';
-import { fetchProductByIdServer } from '@/app/actions/publicProduct.safe.server';
+import ProductFlow from '@/features/products/components/ProductForm/ProductFlow';
+import { fetchProductByIdServer } from '@/features/products/actions/get-catalogue-products';
 
 export const dynamic = 'force-dynamic';
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import DistributionReceiptForm from '@/components/DistributionReceiptForm';
+import DistributionReceiptForm from '@/features/inventory/components/DistributionReceiptForm';
 import { ShieldCheck, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export default function PageClient() {

@@ -1,5 +1,5 @@
-import NewAuctionClient from "@/components/auction/NewAuctionClient"; // Ajuste le chemin
-import { createAuction } from "@/services/auction.service"; // Ton service d'enchères
+import NewAuctionClient from "@/features/auction/components/NewAuctionClient"; // Ajuste le chemin
+import { createAuction } from "@/features/auction/services/auction.service"; // Ton service d'enchères
 import { db } from "@/src/db";
 import * as schema from "@/src/db/schema";
 import { eq } from 'drizzle-orm';

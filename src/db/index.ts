@@ -67,9 +67,10 @@ const client: PostgresClient =
   postgres(bareConnectionString, {
     max: poolMax,
     prepare: false, // Requis pour les architectures Serverless / PgBouncer
-    idle_timeout: 20,
+    // Une reconnexion SSL vers RDS coûte ~1,5 s : on garde les connexions chaudes plus longtemps hors serverless.
+    idle_timeout: isVercel ? 20 : 120,
     connect_timeout: 10,
-    max_lifetime: isVercel ? 60 : 300,
+    max_lifetime: isVercel ? 60 : 1800,
     // Filet de sécurité sous forte charge : une requête (ex. scan non borné,
     // verrou en attente) ne doit jamais monopoliser une connexion du pool
     // indéfiniment — avec seulement 5-10 connexions dispo (poolMax), quelques

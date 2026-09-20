@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { convertMaturedPreorders } from '@/services/preorder.service';
+import { convertMaturedPreorders } from '@/features/orders/services/preorder.service';
 
 export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;

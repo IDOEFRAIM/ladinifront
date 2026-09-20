@@ -10,6 +10,8 @@ import { userOrganizations, zones } from '@/src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { buildAccessContext, type AccessContext } from '@/lib/access-context';
 import { getSessionFromRequest } from '@/lib/session';
+import { isTransientDbError } from '@/lib/db-retry';
+import { asError } from '@/lib/errors';
 
 export type { AccessContext };
 
@@ -48,11 +50,11 @@ export async function getAccessContext(
   const headerStore = await headers(); // Next.js 15 nécessite await
 
   // Tentative de récupération de session (Cookie puis Header)
-  let session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  let session = await getSessionFromRequest({ cookies: cookieStore });
   
   if (!session?.userId) {
     try {
-      session = await getSessionFromRequest({ headers: headerStore } as any);
+      session = await getSessionFromRequest({ headers: headerStore });
     } catch (e) { /* ignore */ }
   }
 
@@ -100,6 +102,16 @@ export async function getAccessContext(
   } catch (err) {
     if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
       return { ctx: null, error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }) };
+    }
+    if (isTransientDbError(err)) {
+      console.warn('[getAccessContext] base indisponible (transitoire):', asError(err).message);
+      return {
+        ctx: null,
+        error: NextResponse.json(
+          { error: 'Service momentanément indisponible, réessayez dans quelques secondes.' },
+          { status: 503, headers: { 'Retry-After': '3' } }
+        ),
+      };
     }
     console.error('[getAccessContext] Fatal error:', err);
     return { ctx: null, error: NextResponse.json({ error: "Erreur serveur d'authentification." }, { status: 500 }) };

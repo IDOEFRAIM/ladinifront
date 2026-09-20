@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchProductByIdServer } from '@/app/actions/publicProduct.safe.server';
+import { fetchProductByIdServer } from '@/features/products/actions/get-catalogue-products';
 
 export async function GET(
   req: Request,

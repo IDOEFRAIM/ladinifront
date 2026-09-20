@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSessionFromRequest } from '@/lib/session';
-import { fetchMeServer } from '@/app/actions/me.server';
+import { fetchMeServer } from '@/features/auth/services/me.service';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
 import { eq } from 'drizzle-orm';
 import { ok, fail, errorMessage } from '@/lib/api-result';
-import type { MePayload } from '@/app/actions/me.server';
+import type { MePayload } from '@/features/auth/services/me.service';
+import { asError } from '@/lib/errors';
+import { isTransientDbError } from '@/lib/db-retry';
 
 async function fetchMeFallback(userId: string): Promise<MePayload | null> {
   const user = await db.query.users.findFirst({
@@ -64,8 +66,8 @@ export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
     const session =
-      (await getSessionFromRequest({ cookies: cookieStore } as any)) ||
-      (await getSessionFromRequest(req as any));
+      (await getSessionFromRequest({ cookies: cookieStore })) ||
+      (await getSessionFromRequest(req));
 
     if (!session?.userId) {
       return NextResponse.json(fail('Authentification requise'), { status: 401 });
@@ -79,7 +81,16 @@ export async function GET(req: Request) {
           headers: { 'Cache-Control': 'no-store, max-age=0' },
         });
       }
-    } catch (err: any) {
+    } catch (_err: unknown) {
+    const err = asError(_err);
+      // Base indisponible : le repli (requête plus lourde) échouerait pareil et doublerait la charge → 503 immédiat.
+      if (isTransientDbError(_err)) {
+        console.warn('[api/me] base indisponible (transitoire):', err.message);
+        return NextResponse.json(fail('Service momentanément indisponible, réessayez.'), {
+          status: 503,
+          headers: { 'Retry-After': '3', 'Cache-Control': 'no-store' },
+        });
+      }
       console.warn('[api/me] primary resolver failed, using fallback:', err);
     }
 
@@ -92,7 +103,11 @@ export async function GET(req: Request) {
       status: 200,
       headers: { 'Cache-Control': 'no-store, max-age=0' },
     });
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = asError(_err);
+    if (isTransientDbError(_err)) {
+      return NextResponse.json(fail('Service momentanément indisponible, réessayez.'), { status: 503, headers: { 'Retry-After': '3' } });
+    }
     console.error('[api/me] Error:', err);
     return NextResponse.json(fail(errorMessage(err, 'Erreur serveur interne.')), { status: 500 });
   }

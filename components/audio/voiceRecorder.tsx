@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import AudioPlayer from "./AudioPlayer";
 import Waveform from "./waveForm";
+import { asError } from '@/lib/errors';
 
 const THEME = {
     record: "#D32F2F",
@@ -91,7 +92,8 @@ export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProp
             setIsRecording(true);
             setTimer(0);
             timerIntervalRef.current = window.setInterval(() => setTimer((p) => p + 1), 1000);
-        } catch (err: any) {
+        } catch (_err: unknown) {
+    const err = asError(_err);
             console.error("Erreur accès micro:", err);
             const name = err?.name;
             if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {

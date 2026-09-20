@@ -8,7 +8,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } });
     }
 
-    const { fetchFiltersServer } = await import('@/app/actions/publicProduct.safe.server');
+    const { fetchFiltersServer } = await import('@/features/products/actions/get-catalogue-products');
     const data = await fetchFiltersServer();
     return NextResponse.json(data);
   } catch (error) {

@@ -5,7 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { approveAgentAction } from '@/app/actions/monitoring.server';
+import { approveAgentAction } from '@/features/monitoring/services/monitoring-api.service';
+import { asError } from '@/lib/errors';
 
 export async function PATCH(
   req: NextRequest,
@@ -33,7 +34,8 @@ export async function PATCH(
     try {
       const updated = await approveAgentAction(id, ctx.userId, decision as 'APPROVED' | 'REJECTED', adminNotes);
       return NextResponse.json(updated);
-    } catch (e: any) {
+    } catch (_e: unknown) {
+    const e = asError(_e);
       if (e?.message === 'INSUFFICIENT_PERMISSIONS') {
         return NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 });
       }

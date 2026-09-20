@@ -1,8 +1,8 @@
 import React from 'react';
 import { normalizeAssetUrl } from '@/lib/assetUrl';
 import Image from 'next/image';
-import ProductDetailClient from '@/components/product/ProductDetailClient';
-import { fetchProductByIdServer } from '@/app/actions/publicProduct.safe.server';
+import ProductDetailClient from '@/features/products/components/ProductDetailClient';
+import { fetchProductByIdServer } from '@/features/products/actions/get-catalogue-products';
 
 import {
   FaBoxOpen,

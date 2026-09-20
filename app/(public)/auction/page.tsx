@@ -1,6 +1,6 @@
 import React from 'react';
-import { getOpenAuctions } from '@/services/auction.service';
-import AuctionCard from '@/components/auction/AuctionCard'; // On importe le composant client
+import { getOpenAuctions } from '@/features/auction/services/auction.service';
+import AuctionCard from '@/features/auction/components/AuctionCard'; // On importe le composant client
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';

@@ -34,6 +34,8 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/buyer-dashboard': [],
   '/tracking':      [],
   '/onboarding':    [],
+  '/checkout':      [],                   // authentifié + rôle (voir ROUTE_ROLES)
+  '/production':    [],                   // authentifié + rôle (voir ROUTE_ROLES)
 };
 
 // ─── Rôles autorisés par préfixe (contrôle haut niveau) ───────────────────
@@ -52,6 +54,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/buyer-dashboard': ['BUYER', 'ADMIN', 'SUPERADMIN'],
   '/tracking':   ['BUYER', 'ADMIN', 'SUPERADMIN'],
   '/onboarding': [],
+  '/production': ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
 };
 
 function parsePermissions(raw: string | undefined): string[] {
@@ -272,6 +275,7 @@ export const config = {
     '/admin/:path*',
     '/market/:path*',
     '/checkout/:path*',
+    '/production/:path*',
     '/conversations/:path*',
     '/org/:path*',
     '/agent/:path*',

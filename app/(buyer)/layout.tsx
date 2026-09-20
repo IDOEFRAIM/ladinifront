@@ -1,12 +1,15 @@
 ﻿'use client';
 
 import React from 'react';
-import BuyerNavbar from '@/components/utils/BuyerNavbar';
-import CartFloatingIcon from '@/components/utils/CartFloating';
-import SyncProvider from '@/services/syncProvider';
-import { AccountTypeGuard, AccountTypeBanner } from '@/components/guards/AccountTypeGuard';
-import { BuyerMobileTabBar } from '@/components/ui/MobileTabBar';
-import LadiniChatWidget from '@/components/chat/LadiniChatWidget';
+import BuyerNavbar from '@/components/layout/BuyerNavbar';
+import CartFloatingIcon from '@/components/layout/CartFloating';
+import SyncProvider from '@/components/providers/SyncProvider';
+import { AccountTypeGuard, AccountTypeBanner } from '@/features/auth/components/AccountTypeGuard';
+import { BuyerMobileTabBar } from '@/components/layout/MobileTabBar';
+import dynamic from 'next/dynamic';
+
+// Le chat n'est pas nécessaire au premier affichage : chargé après hydratation, hors bundle initial.
+const LadiniChatWidget = dynamic(() => import('@/features/chat/components/LadiniChatWidget'), { ssr: false });
 
 export default function BuyerLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import Link from 'next/link'; // Import pour la navigation
 import { ArrowLeft } from 'lucide-react'; // Icône de retour
-import CopyButton from './CopyButton';
+import CopyButton from '@/features/inventory/components/CopyButton';
 import {
   DIST_STATUS_LABELS,
   DIST_STATUS_BADGE,
@@ -27,7 +27,7 @@ export default async function Page(props: PageProps) {
   const accessManagerMod = await import('@/lib/access-manager');
   const perms = await import('@/lib/permissions');
 
-  const session = await sessionMod.getSessionFromRequest({ headers: hdr } as any).catch(() => null);
+  const session = await sessionMod.getSessionFromRequest({ headers: hdr }).catch(() => null);
   const userId = session?.userId;
 
   if (!userId) {

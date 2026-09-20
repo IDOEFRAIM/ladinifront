@@ -28,7 +28,7 @@ export async function GET(
         const { user, error } = await requireProducer(req);
         if (error || !user) return error!;
 
-                const { fetchOrderDetailsForProducer } = await import('@/app/actions/orders.server');
+                const { fetchOrderDetailsForProducer } = await import('@/features/orders/services/order-form.service');
                 const details = await fetchOrderDetailsForProducer(id, user.id);
         if (!details) return NextResponse.json({ error: 'Commande introuvable ou accès refusé' }, { status: 404 });
 
@@ -120,7 +120,7 @@ export async function PATCH(
                     .where(eq(schema.orders.id, id))
                     .returning();
 
-                const { fetchOrderDetailsForProducer } = await import('@/app/actions/orders.server');
+                const { fetchOrderDetailsForProducer } = await import('@/features/orders/services/order-form.service');
                 const details = await fetchOrderDetailsForProducer(id, user.id);
 
                 return NextResponse.json(

@@ -56,7 +56,8 @@ export default function LoginPage() {
     const result = await login(data.phone, data.password);
     if (result?.success) {
       toast.success("Connexion reussie !");
-      if (result.user?.role) redirectUserByRole(result.user.role, result.user.onboardingCompleted);
+      const user = result.data?.user;
+      if (user?.role) redirectUserByRole(user.role, user.onboardingCompleted);
     } else {
       toast.error(result?.error || "Echec de la connexion");
     }

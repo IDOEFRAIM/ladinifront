@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { submitAuctionBid, fetchBidsForAuction } from '@/app/actions/auctions.server';
+import { submitAuctionBid, fetchBidsForAuction } from '@/features/auction/actions/auction.actions';
 import { getAccessContext } from '@/lib/api-guard';
+import { asError } from '@/lib/errors';
 
 export async function GET(
   _req: Request,
@@ -14,7 +15,8 @@ export async function GET(
     const res = await fetchBidsForAuction(id);
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ data: res.data });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     console.error('GET /bids error', e);
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }
@@ -38,7 +40,8 @@ export async function POST(
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     if (!('data' in res)) return NextResponse.json({ error: 'Réponse invalide du serveur' }, { status: 500 });
     return NextResponse.json({ data: res.data });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     console.error('POST /bids error', e);
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }

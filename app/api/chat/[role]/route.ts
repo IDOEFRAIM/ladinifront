@@ -12,10 +12,14 @@ import { eq } from 'drizzle-orm';
 import { getAccessContext } from '@/lib/api-guard';
 import { db } from '@/src/db';
 import { users } from '@/src/db/schema';
-import { sendLadiniWebchatMessage, LadiniChatError, type LadiniChatRole } from '@/lib/ladini-chat';
+import { sendLadiniWebchatMessage, LadiniChatError, type LadiniChatRole, type LadiniChatImage } from '@/features/chat/services/ladini-chat.service';
 
 // L'agent peut enchaîner plusieurs appels LLM/outils avant de répondre.
 export const maxDuration = 60;
+
+const ALLOWED_MIMES: string[] = ['image/jpeg', 'image/png', 'image/webp'];
+// Le backend accepte 8 Mo décodés ; base64 = 4/3 de la taille binaire.
+const MAX_IMAGE_BASE64_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3);
 
 const VALID_ROLES: LadiniChatRole[] = ['producer', 'buyer'];
 
@@ -37,9 +41,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rol
     return NextResponse.json({ error: 'Corps de requête invalide.' }, { status: 422 });
   }
 
-  const message = (body as { message?: unknown } | null)?.message;
-  if (typeof message !== 'string' || message.trim().length === 0 || message.length > 4000) {
-    return NextResponse.json({ error: 'Message invalide (1 à 4000 caractères requis).' }, { status: 422 });
+  const { message: rawMessage, image_base64, image_mime } = (body ?? {}) as {
+    message?: unknown; image_base64?: unknown; image_mime?: unknown;
+  };
+  const message = typeof rawMessage === 'string' ? rawMessage.trim() : '';
+  if (message.length > 4000) {
+    return NextResponse.json({ error: 'Message trop long (4000 caractères max).' }, { status: 422 });
+  }
+
+  let image: LadiniChatImage | undefined;
+  if (image_base64 !== undefined || image_mime !== undefined) {
+    if (
+      typeof image_base64 !== 'string' ||
+      !ALLOWED_MIMES.includes(image_mime as string) ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(image_base64) // refuse aussi le préfixe "data:image/...;base64,"
+    ) {
+      return NextResponse.json({ error: 'Image invalide (JPEG, PNG ou WebP uniquement).' }, { status: 422 });
+    }
+    if (image_base64.length > MAX_IMAGE_BASE64_CHARS) {
+      return NextResponse.json({ error: 'Image trop volumineuse.' }, { status: 413 });
+    }
+    image = { base64: image_base64, mime: image_mime as LadiniChatImage['mime'] };
+  }
+
+  if (!message && !image) {
+    return NextResponse.json({ error: 'Message invalide (un texte ou une image est requis).' }, { status: 422 });
   }
 
   const user = await db.query.users.findFirst({
@@ -55,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rol
   }
 
   try {
-    const result = await sendLadiniWebchatMessage(role as LadiniChatRole, user.phone, message.trim());
+    const result = await sendLadiniWebchatMessage(role as LadiniChatRole, user.phone, message, image);
     return NextResponse.json({ reply: result.reply, interactive: result.interactive });
   } catch (err) {
     if (err instanceof LadiniChatError) {

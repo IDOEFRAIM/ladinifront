@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireProducer } from '@/lib/api-guard';
-import { updateProducerSettings } from '@/app/actions/productor.server';
+import { updateProducerSettings } from '@/features/production/services/producer-settings.service';
 
 export async function POST(req: Request) {
   const { user, error } = await requireProducer();

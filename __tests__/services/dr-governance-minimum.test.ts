@@ -49,7 +49,7 @@ vi.mock('@/src/db', () => {
   return { db };
 });
 
-import { updateSubCategoryMinimum } from '@/services/dr-governance.service';
+import { updateSubCategoryMinimum } from '@/features/governance/services/dr-governance.service';
 
 beforeEach(() => {
   state.user.role = 'ADMIN';

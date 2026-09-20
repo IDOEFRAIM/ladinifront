@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { getOrganizationDetails } from '@/services/org-manager.service';
+import { getOrganizationDetails } from '@/features/organization/services/org-manager.service';
 
 export const dynamic = 'force-dynamic';
 

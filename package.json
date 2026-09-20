@@ -8,6 +8,7 @@
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "eslint",
+    "check:seo": "node scripts/check-seo.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

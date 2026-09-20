@@ -3,10 +3,36 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /dashboard
+Disallow: /buyer-dashboard
 Disallow: /checkout
+Disallow: /cart
+Disallow: /orders
+Disallow: /tracking
+Disallow: /conversations
+Disallow: /market
+Disallow: /products
+Disallow: /sales
+Disallow: /inventory
+Disallow: /production
+Disallow: /clients
+Disallow: /settings
+Disallow: /agents
+Disallow: /agent
+Disallow: /org
+Disallow: /onboarding
+Disallow: /select-org
+Disallow: /login
+Disallow: /signup
+Disallow: /preorders
+Disallow: /ai
+Disallow: /api
+Disallow: /403
+Disallow: /offline
+Disallow: /debug
 
 # Host
 Host: https://ladini.tech
 
 # Sitemaps
 Sitemap: https://ladini.tech/sitemap.xml
+Sitemap: https://ladini.tech/product-sitemap.xml

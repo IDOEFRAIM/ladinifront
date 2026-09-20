@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { asError } from '@/lib/errors';
 
 // Définir des interfaces strictes pour la robustesse
 export interface DashboardData {
   profile: any;
-  activeOrders: any[];
-  orderHistory: any[];
-  auctions?: { active: any[]; won: any[]; lost: any[] };
-  suggestedProducts: any[];
+  activeOrders: unknown[];
+  orderHistory: unknown[];
+  auctions?: { active: unknown[]; won: unknown[]; lost: unknown[] };
+  suggestedProducts: unknown[];
 }
 
 export function useBuyerDashboard() {
@@ -34,7 +35,8 @@ export function useBuyerDashboard() {
       
       const data = await res.json();
       setState({ data, loading: false, error: null });
-    } catch (err: any) {
+    } catch (_err: unknown) {
+    const err = asError(_err);
       if (err.name === 'AbortError') return;
       setState({ data: null, loading: false, error: err.message });
     }

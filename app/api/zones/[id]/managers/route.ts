@@ -4,7 +4,7 @@ import * as schema from '@/src/db/schema';
 import { eq, inArray, or } from 'drizzle-orm';
 import { getSessionFromRequest } from '@/lib/session';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
-import { assignAgentToWorkZone } from '@/services/membership.service';
+import { assignAgentToWorkZone } from '@/features/organization/services/membership.service';
 
 // GET: list managers for a zone (work_zones + user_organizations entries)
 export async function GET(req: Request) {
@@ -67,7 +67,7 @@ export async function PATCH(req: Request) {
     }
 
     // Get session user (admin) and active org from cookies/header
-    const session = await getSessionFromRequest(req as any);
+    const session = await getSessionFromRequest(req);
     const adminUserId = session?.userId;
     if (!adminUserId) return NextResponse.json({ success: false, data: null, error: 'Unauthorized' }, { status: 401 });
 
@@ -75,14 +75,14 @@ export async function PATCH(req: Request) {
     let orgId: string | undefined;
     try {
       // 1) header override (useful for API clients)
-      const headerOrg = (req.headers as any).get ? (req.headers as any).get('x-organization-id') : undefined;
+      const headerOrg = req.headers.get('x-organization-id') ?? undefined;
       if (headerOrg) orgId = headerOrg;
     } catch (e) { /* ignore */ }
 
     try {
       // 2) cookie
       if (!orgId) {
-        const raw = (req.headers as any).get ? (req.headers as any).get('cookie') : undefined;
+        const raw = req.headers.get('cookie') ?? undefined;
         if (raw) {
           // Try active-org-id cookie
           const match = raw.match(new RegExp(COOKIE_NAMES.ACTIVE_ORG_ID + '=([^;]+)'));
@@ -102,8 +102,8 @@ export async function PATCH(req: Request) {
     }
 
     // Fallback: session payload may contain activeOrgId
-    if (!orgId && (session as any)?.activeOrgId) {
-      orgId = (session as any).activeOrgId;
+    if (!orgId && session?.activeOrgId) {
+      orgId = session.activeOrgId;
     }
 
     if (!orgId) {
@@ -132,10 +132,10 @@ export async function PATCH(req: Request) {
         const memberships = await db.select({ organizationId: schema.userOrganizations.organizationId, role: schema.userOrganizations.role })
           .from(schema.userOrganizations)
           .where(eq(schema.userOrganizations.userId, adminUserId));
-        const adminOrgs = memberships.filter((m: any) => {
+        const adminOrgs = memberships.filter((m) => {
           const r = String(m.role || '').toLowerCase();
           return r.includes('admin') || r.includes('owner') || r.includes('manager');
-        }).map((m: any) => m.organizationId).filter(Boolean);
+        }).map((m) => m.organizationId).filter(Boolean);
         const uniqueOrgs = Array.from(new Set(adminOrgs));
         if (uniqueOrgs.length === 1) {
           orgId = uniqueOrgs[0];
@@ -146,12 +146,12 @@ export async function PATCH(req: Request) {
     }
 
     if (!orgId) {
-      console.debug('[api/zones/[id]/managers PATCH] missing orgId, attempted sources: header|cookie|body|session|zone|work_zones|user_membership, body:', body, 'resolved agentUserId:', agentUserId, 'session:', session && { userId: session.userId, activeOrgId: (session as any).activeOrgId });
+      console.debug('[api/zones/[id]/managers PATCH] missing orgId, attempted sources: header|cookie|body|session|zone|work_zones|user_membership, body:', body, 'resolved agentUserId:', agentUserId, 'session:', session && { userId: session.userId, activeOrgId: session.activeOrgId });
       return NextResponse.json({ success: false, data: null, error: 'Active organization not found. Provide orgId in request body or x-organization-id header, or ensure the zone is linked to an organization.' }, { status: 400 });
     }
 
     // Ensure orgId is a plain string (defensive in case a caller sent an object)
-    function normalizeOrgId(raw: any): string | undefined {
+    function normalizeOrgId(raw: unknown): string | undefined {
       if (!raw && raw !== 0) return undefined;
       // If it's a JSON string like '{"organizationId":"...","role":"ADMIN"}', try parse it
       if (typeof raw === 'string') {
@@ -166,12 +166,13 @@ export async function PATCH(req: Request) {
         }
         return raw;
       }
-      if (typeof raw === 'object') {
-        if (raw.organizationId) return String(raw.organizationId);
-        if (raw.organization && (raw.organization.id || raw.organization.organizationId)) return String(raw.organization.id || raw.organization.organizationId);
+      if (typeof raw === 'object' && raw !== null) {
+        const obj = raw as { organizationId?: unknown; organization?: { id?: unknown; organizationId?: unknown } } & Record<string, unknown>;
+        if (obj.organizationId) return String(obj.organizationId);
+        if (obj.organization && (obj.organization.id || obj.organization.organizationId)) return String(obj.organization.id || obj.organization.organizationId);
         // If it's a DB row-like object { organizationId: '...', role: 'ADMIN' }
-        for (const key of Object.keys(raw)) {
-          const v = raw[key];
+        for (const key of Object.keys(obj)) {
+          const v = obj[key];
           if (typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v)) return v;
         }
       }
@@ -180,7 +181,7 @@ export async function PATCH(req: Request) {
 
     const normalizedOrg = normalizeOrgId(orgId);
     if (!normalizedOrg) {
-      console.error('[api/zones/[id]/managers PATCH] invalid orgId value (cannot normalize):', orgId, 'headers:', { 'x-organization-id': (req.headers as any).get && (req.headers as any).get('x-organization-id'), cookie: (req.headers as any).get && (req.headers as any).get('cookie') });
+      console.error('[api/zones/[id]/managers PATCH] invalid orgId value (cannot normalize):', orgId, 'headers:', { 'x-organization-id': req.headers.get('x-organization-id'), cookie: req.headers.get('cookie') });
       return NextResponse.json({ success: false, data: null, error: 'Invalid organization id provided. Send plain organization id string or x-organization-id header.' }, { status: 400 });
     }
     orgId = normalizedOrg;
