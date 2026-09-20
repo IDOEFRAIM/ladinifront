@@ -10,8 +10,8 @@ import { userOrganizations, zones } from '@/src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { buildAccessContext, type AccessContext } from '@/lib/access-context';
 import { getSessionFromRequest } from '@/lib/session';
-import { isTransientDbError } from '@/lib/db-retry';
-import { asError } from '@/lib/errors';
+import { dbErrorResponse } from '@/lib/db-http';
+import { classifyDbError } from '@/lib/db-errors';
 
 export type { AccessContext };
 
@@ -44,8 +44,14 @@ export interface AuthenticatedUser {
  */
 export async function getAccessContext(
   requiredRoles?: SystemRole[],
-  requiredPermissions?: string[]
+  requiredPermissions?: string[],
+  options: { fresh?: boolean } = {}
 ): Promise<{ ctx: AccessContext | null; error: NextResponse | null }> {
+  // Actions sensibles (routes réservées aux admins, ou demandé explicitement) : jamais de cache, DB relue.
+  // Aucune décision d'autorisation n'est prise sur une donnée périmée (voir lib/access-context.ts).
+  const fresh =
+    options.fresh ??
+    Boolean(requiredRoles?.length && requiredRoles.every((r) => r === 'ADMIN' || r === 'SUPERADMIN'));
   const cookieStore = await cookies();
   const headerStore = await headers(); // Next.js 15 nécessite await
 
@@ -71,7 +77,7 @@ export async function getAccessContext(
   }
 
   try {
-    const ctx = await buildAccessContext(userId);
+    const ctx = await buildAccessContext(userId, { fresh });
 
     // 1. Bypass SUPERADMIN
     if (ctx.role === 'SUPERADMIN') return { ctx, error: null };
@@ -100,21 +106,12 @@ export async function getAccessContext(
 
     return { ctx, error: null };
   } catch (err) {
-    if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
+    const info = classifyDbError(err);
+    if (info.errorClass === 'not_found') {
       return { ctx: null, error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }) };
     }
-    if (isTransientDbError(err)) {
-      console.warn('[getAccessContext] base indisponible (transitoire):', asError(err).message);
-      return {
-        ctx: null,
-        error: NextResponse.json(
-          { error: 'Service momentanément indisponible, réessayez dans quelques secondes.' },
-          { status: 503, headers: { 'Retry-After': '3' } }
-        ),
-      };
-    }
-    console.error('[getAccessContext] Fatal error:', err);
-    return { ctx: null, error: NextResponse.json({ error: "Erreur serveur d'authentification." }, { status: 500 }) };
+    // Fail closed : DB indisponible ⇒ aucune autorisation accordée (503), jamais un accès « par défaut ».
+    return { ctx: null, error: dbErrorResponse(err, 'getAccessContext') };
   }
 }
 

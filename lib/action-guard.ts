@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { getAccessContext, type SystemRole } from '@/lib/api-guard';
 import type { AccessContext } from '@/lib/access-context';
 import { ok, fail, errorMessage, type ApiResult } from '@/lib/api-result';
+import { classifyDbError } from '@/lib/db-errors';
 
 /** Rôles autorisés — mêmes valeurs que middleware.ts / getAccessContext. */
 export const ADMIN_ROLES: readonly SystemRole[] = ['ADMIN', 'SUPERADMIN'];
@@ -50,6 +51,11 @@ interface GuardOptions {
   roles?: readonly SystemRole[];
   /** Règle d'accès métier nommée (en plus, ou à la place, de `roles`). */
   access?: 'producer';
+  /**
+   * Action sensible (paiement, suppression, changement de rôle, validation financière, accès tenant critique) :
+   * le contexte d'accès est relu en base à chaque appel — jamais depuis le cache. Implicite pour les actions ADMIN.
+   */
+  sensitive?: boolean;
   /** Action volontairement publique (login, inscription) : aucune session exigée. */
   public?: boolean;
   /** Schéma Zod du tuple d'arguments. */
@@ -77,10 +83,15 @@ export async function secureAction<TArgs extends unknown[], R>(
   try {
     if (!options.public) {
       const { ctx, error } = await getAccessContext(
-        options.roles ? [...options.roles] : undefined
+        options.roles ? [...options.roles] : undefined,
+        undefined,
+        options.sensitive ? { fresh: true } : {}
       );
       if (error || !ctx) {
-        return fail(error?.status === 403 ? 'Accès non autorisé.' : 'Authentification requise.');
+        // Fail closed : 503 (DB indisponible) ≠ 401 (non authentifié) ≠ 403 (refusé) — messages distincts.
+        if (error?.status === 403) return fail('Accès non autorisé.');
+        if (error?.status === 503) return fail('Service momentanément indisponible, réessayez dans quelques secondes.');
+        return fail('Authentification requise.');
       }
       if (options.access === 'producer' && !hasProducerAccess(ctx)) {
         return fail('Profil producteur requis.');
@@ -94,8 +105,14 @@ export async function secureAction<TArgs extends unknown[], R>(
 
     return normalize(await handler(...args)) as ApiResult<Payload<R>>;
   } catch (err) {
-    console.error('[secureAction]', err);
-    return fail(errorMessage(err, 'Erreur serveur.'));
+    const info = classifyDbError(err);
+    console.error('[secureAction]', info.errorClass, info.code);
+    // Jamais de SQL, de paramètres ou d'URL vers le client : les erreurs DB reçoivent un message générique.
+    if (info.transient) return fail('Service momentanément indisponible, réessayez dans quelques secondes.');
+    if (info.errorClass === 'conflict') return fail('Conflit : la donnée a été modifiée. Rechargez puis recommencez.');
+    const message = errorMessage(err, 'Erreur serveur.');
+    if (/^Failed query/i.test(message)) return fail('Erreur serveur.');
+    return fail(message);
   }
 }
 

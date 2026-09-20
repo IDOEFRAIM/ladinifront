@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Leaf, MapPin, Heart, Mail, Phone } from 'lucide-react';
 import { C, F } from '@/components/home/tokens';
+import { COMPANY, companyRegistrationLines } from '@/lib/company';
 
 const footerLink = { color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '0.9rem', fontFamily: F.body } as const;
 const footerTitle = { fontFamily: F.heading, fontSize: '1.05rem', fontWeight: 700, marginBottom: 16, color: C.amber } as const;
@@ -21,6 +22,9 @@ export default function Footer() {
             <p style={{ fontFamily: F.body, color: 'rgba(255,255,255,0.75)', fontSize: '0.9rem', lineHeight: 1.6 }}>
               Le marché agricole direct. Nous connectons la terre et la table pour une rémunération juste des producteurs et des produits locaux d&apos;exception.
             </p>
+            <p style={{ fontFamily: F.body, color: 'rgba(255,255,255,0.75)', fontSize: '0.85rem', lineHeight: 1.6, marginTop: 12 }}>
+              LADINI est édité et exploité par <strong style={{ color: '#fff' }}>{COMPANY.legalName}</strong>.
+            </p>
           </div>
 
           <nav aria-label="Navigation">
@@ -35,6 +39,7 @@ export default function Footer() {
           <nav aria-label="Informations légales">
             <h2 style={footerTitle}>Légal &amp; Confidentialité</h2>
             <ul style={footerList}>
+              <li><Link className="footer-link" href="/mentions-legales" style={footerLink}>Mentions légales</Link></li>
               <li><Link className="footer-link" href="/cgu" style={footerLink}>Conditions Générales d&apos;Utilisation (CGU)</Link></li>
               <li><Link className="footer-link" href="/cluf" style={footerLink}>Contrat de Licence Utilisateur (CLUF)</Link></li>
               <li><Link className="footer-link" href="/privacy" style={footerLink}>Politique de Confidentialité</Link></li>
@@ -44,15 +49,15 @@ export default function Footer() {
           <div>
             <h2 style={footerTitle}>Contactez-nous</h2>
             <address style={{ fontStyle: 'normal', display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.9rem', fontFamily: F.body, color: 'rgba(255,255,255,0.85)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Phone size={16} color={C.emerald} /><span>+226 01 47 98 00 / +226 68 81 52 99</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Mail size={16} color={C.emerald} /><span>contact@ladini.com</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><MapPin size={16} color={C.emerald} /><span>Burkina Faso</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Phone size={16} color={C.emerald} /><span>{COMPANY.phones.join(' / ')}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Mail size={16} color={C.emerald} /><span>{COMPANY.email}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><MapPin size={16} color={C.emerald} /><span>{COMPANY.address ? `${COMPANY.legalName}, ${COMPANY.address}` : `${COMPANY.legalName}, ${COMPANY.country}`}</span></div>
             </address>
           </div>
         </div>
 
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ fontFamily: F.body, fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>© {new Date().getFullYear()} LADINI. Tous droits réservés.</p>
+          <p style={{ fontFamily: F.body, fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>© {new Date().getFullYear()} {COMPANY.legalName}. Tous droits réservés.{companyRegistrationLines().length > 0 && ` ${companyRegistrationLines().join(' · ')}`}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: F.body, fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
             <span>Fait avec</span>
             <Heart size={14} color="#ef4444" fill="#ef4444" />

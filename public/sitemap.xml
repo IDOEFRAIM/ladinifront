@@ -5,6 +5,7 @@
 <url><loc>https://ladini.tech</loc><changefreq>daily</changefreq><priority>1</priority></url>
 <url><loc>https://ladini.tech/cgu</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 <url><loc>https://ladini.tech/cluf</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+<url><loc>https://ladini.tech/mentions-legales</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 <url><loc>https://ladini.tech/privacy</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 <url><loc>https://ladini.tech/auction</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 <url><loc>https://ladini.tech/distributions</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>

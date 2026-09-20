@@ -110,7 +110,7 @@ export default function EULAPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Mail size={16} color="#059669" />
-                <span>contact@ladini.com</span>
+                <span>contact@ladini.tech</span>
               </div>
             </div>
           </div>

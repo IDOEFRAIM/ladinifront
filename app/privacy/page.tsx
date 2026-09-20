@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Introduction</h2>
             <p>
-              Bienvenue sur <strong>Ladini </strong>. La protection de vos données personnelles est une priorité pour nous. 
+              Bienvenue sur <strong>Ladini</strong>, plateforme éditée et exploitée par <strong>Ladini SARL</strong>. La protection de vos données personnelles est une priorité pour nous. 
               La présente Politique de Confidentialité explique comment nous collectons, utilisons, protégeons et partageons vos informations 
               lorsque vous utilisez notre plateforme web, ainsi que nos services de messagerie et de commande (via WhatsApp et SMS).
             </p>
@@ -77,8 +77,8 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Contact</h2>
             <p>
               Pour toute question relative à cette politique de confidentialité ou à la gestion de vos données sur Ladini, vous pouvez nous joindre à l&apos;adresse suivante :{" "}
-              <a href="mailto:idoefraim06@gmail.com" className="text-emerald-600 underline hover:text-emerald-700 mr-2">
-                contact@Ladini.org
+              <a href="mailto:contact@ladini.tech" className="text-emerald-600 underline hover:text-emerald-700 mr-2">
+                contact@ladini.tech
               </a>
               <a href="https://wa.me/+22601479800" className="text-emerald-600 underline hover:text-emerald-700 mr-2"></a>
             </p>
@@ -88,7 +88,7 @@ export default function PrivacyPolicyPage() {
 
         {/* Pied de page */}
         <div className="border-t border-gray-100 mt-10 pt-6 text-center text-sm text-gray-400">
-          <p>© {new Date().getFullYear()} Ladini . Tous droits réservés.</p>
+          <p>© {new Date().getFullYear()} Ladini SARL. Tous droits réservés. <Link href="/mentions-legales" className="underline">Mentions légales</Link></p>
         </div>
 
       </div>

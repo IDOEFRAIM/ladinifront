@@ -1,3 +1,4 @@
+import { invalidateAccessContext } from '@/lib/access-context';
 // app/actions/admin.server.ts
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
@@ -32,6 +33,8 @@ export async function getAdminUser(userId: string) {
 
 export async function updateUserRole(targetUserId: string, role: string) {
   const [updated] = await db.update(schema.users).set({ role: role as any }).where(eq(schema.users.id, targetUserId)).returning();
+  // Le rôle est une donnée d'AUTORISATION : purge immédiate du cache local (les autres instances expirent en ≤ AUTHZ_CACHE_TTL_MS).
+  invalidateAccessContext(targetUserId);
   return updated;
 }
 

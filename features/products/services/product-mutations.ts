@@ -1,7 +1,8 @@
 import { codedError } from '@/lib/errors';
+import { OptimisticConflictError } from '@/lib/db-errors';
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { validateProductFormData, validateProductUpdateFormData } from '@/features/products/services/product-form-parse';
 import { processProductImages, processProductAudio, updateProductImages, updateProductAudio } from '@/features/products/services/product-media';
 
@@ -47,6 +48,13 @@ export async function updateProductFromForm(formData: FormData, actorProducerId?
     throw codedError('FORBIDDEN');
   }
 
+  // Précondition optionnelle (verrouillage optimiste) : `expectedUpdatedAt` = la valeur lue par l'éditeur.
+  // Comparaison à la milliseconde (le JS tronque les microsecondes de PostgreSQL). Limite : ne détecte que les
+  // écritures qui font avancer updated_at ; une vraie colonne `version` exigerait une migration (voir rapport).
+  const expectedRaw = formData.get('expectedUpdatedAt');
+  const expectedUpdatedAt = typeof expectedRaw === 'string' && expectedRaw ? new Date(expectedRaw) : null;
+  if (expectedUpdatedAt && Number.isNaN(expectedUpdatedAt.getTime())) throw codedError('INVALID_EXPECTED_UPDATED_AT');
+
   const finalImages = await updateProductImages(formData, oldProduct.images);
   const audioName = await updateProductAudio(formData, oldProduct.audioUrl);
   const formDataValues = await validateProductUpdateFormData(formData);
@@ -58,7 +66,13 @@ export async function updateProductFromForm(formData: FormData, actorProducerId?
     unit: formDataValues.unit as UnitValue | undefined,
     images: finalImages,
     audioUrl: audioName,
-  }).where(eq(schema.products.id, productId)).returning();
+  }).where(and(
+    eq(schema.products.id, productId),
+    expectedUpdatedAt ? sql`date_trunc('milliseconds', ${schema.products.updatedAt}) = ${expectedUpdatedAt.toISOString()}::timestamp` : undefined,
+  )).returning();
+
+  // 0 ligne alors que le produit existait : quelqu'un (site ou agent) l'a modifié entre-temps → 409, pas d'écrasement silencieux.
+  if (!updated) throw new OptimisticConflictError('product');
 
   return updated;
 }

@@ -60,22 +60,26 @@ export async function verifyBuyerProfile(input: {
 
   // 4. Mise à jour atomique
   const now = new Date();
-  const [updated] = await db.update(schema.buyerProfiles)
-    .set({
-      isVerified: true,
-      trustBadge: badge,
-      verifiedAt: now,
-      verifiedById: adminUserId,
-    })
-    .where(eq(schema.buyerProfiles.id, buyerProfileId))
-    .returning();
+  // Écritures liées (profil acheteur + drapeau identité de l'utilisateur) : tout ou rien.
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx.update(schema.buyerProfiles)
+      .set({
+        isVerified: true,
+        trustBadge: badge,
+        verifiedAt: now,
+        verifiedById: adminUserId,
+      })
+      .where(eq(schema.buyerProfiles.id, buyerProfileId))
+      .returning();
 
-  // 5. Marquer aussi l'utilisateur comme vérifié si CNIB
-  if (verificationType === 'CNIB' && profile.user?.id) {
-    await db.update(schema.users)
-      .set({ identityVerified: true })
-      .where(eq(schema.users.id, profile.user.id));
-  }
+    // 5. Marquer aussi l'utilisateur comme vérifié si CNIB
+    if (verificationType === 'CNIB' && profile.user?.id) {
+      await tx.update(schema.users)
+        .set({ identityVerified: true })
+        .where(eq(schema.users.id, profile.user.id));
+    }
+    return row;
+  });
 
   // 6. Audit
   await audit({

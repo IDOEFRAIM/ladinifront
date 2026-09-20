@@ -51,7 +51,7 @@ export default function CGUPage() {
           </div>
 
           <p style={{ lineHeight: 1.7, color: "#334155", marginBottom: 20 }}>
-            Les présentes Conditions Générales d'Utilisation encadrent l'accès et l'utilisation de la plateforme <strong>LADINI</strong>. En naviguant sur le site ou en utilisant nos services (Web, WhatsApp, SMS), tout utilisateur accepte pleinement et sans réserve les règles définies ci-dessous.
+            Les présentes Conditions Générales d'Utilisation encadrent l'accès et l'utilisation de la plateforme <strong>LADINI</strong>, éditée et exploitée par <strong>Ladini SARL</strong>. En naviguant sur le site ou en utilisant nos services (Web, WhatsApp, SMS), tout utilisateur accepte pleinement et sans réserve les règles définies ci-dessous.
           </p>
 
           <strong style={{ display: "block", color: "#064E3B", marginTop: 24, marginBottom: 8, fontSize: "1.1rem" }}>
@@ -104,7 +104,7 @@ export default function CGUPage() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Mail size={16} color="#059669" />
-                <span>contact@ladini.com</span>
+                <span>contact@ladini.tech</span>
               </div>
             </div>
           </div>

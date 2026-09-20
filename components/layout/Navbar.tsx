@@ -80,7 +80,7 @@ export default function Navbar() {
             <div className="relative bg-gradient-to-br from-emerald-900 to-emerald-500 p-1.5 rounded-xl text-white shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform overflow-hidden w-11 h-11 flex items-center justify-center">
               <Image 
                 src="/images/logo.jpeg"
-                alt="Logo LadiNi"
+                alt="Logo LADINI SARL"
                 width={40}
                 height={40}
                 className="object-contain rounded-lg"

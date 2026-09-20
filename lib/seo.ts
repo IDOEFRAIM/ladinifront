@@ -1,4 +1,5 @@
 // lib/seo.ts — constantes et générateurs JSON-LD (schema.org) partagés.
+import { COMPANY } from '@/lib/company';
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://ladini.tech').replace(/\/$/, '');
 export const SITE_NAME = 'Ladini';
@@ -23,10 +24,14 @@ export function organizationJsonLd() {
     '@type': 'Organization',
     '@id': `${SITE_URL}/#organization`,
     name: SITE_NAME,
+    legalName: COMPANY.legalName,
     url: SITE_URL,
     logo: absoluteUrl('/icons/icon-512.png'),
     description: SITE_DESCRIPTION,
     areaServed: { '@type': 'Country', name: 'Burkina Faso' },
+    email: COMPANY.email,
+    telephone: COMPANY.phones[0],
+    ...(COMPANY.address ? { address: { '@type': 'PostalAddress', streetAddress: COMPANY.address, addressCountry: 'BF' } } : {}),
   };
 }
 

@@ -43,29 +43,32 @@ export async function createFarm(data: {
     }
 
     try {
-        let producer = await db.query.producers.findFirst({ where: eq(schema.producers.userId, userId) });
+        // Création éventuelle du profil producteur + de la ferme : atomique (pas de producteur orphelin).
+        const outcome = await db.transaction(async (tx) => {
+            let producer = await tx.query.producers.findFirst({ where: eq(schema.producers.userId, userId) });
 
-        if (!producer) {
-            const user = await db.query.users.findFirst({
-                where: eq(schema.users.id, userId),
-                columns: { id: true, role: true, name: true }
-            });
+            if (!producer) {
+                const user = await tx.query.users.findFirst({
+                    where: eq(schema.users.id, userId),
+                    columns: { id: true, role: true, name: true }
+                });
+                if (!user) return null;
 
-            if (!user) {
-                return { success: false, error: "Utilisateur introuvable." };
+                [producer] = await tx.insert(schema.producers).values({
+                    userId: user.id,
+                    businessName: user.name || "Mon Agrobusiness",
+                }).returning();
             }
 
-            [producer] = await db.insert(schema.producers).values({
-                userId: user.id,
-                businessName: user.name || "Mon Agrobusiness",
+            const [created] = await tx.insert(schema.farms).values({
+                ...validation.data,
+                zoneId: data.zoneId || undefined,
+                producerId: producer.id
             }).returning();
-        }
-
-        const [farm] = await db.insert(schema.farms).values({
-            ...validation.data,
-            zoneId: data.zoneId || undefined,
-            producerId: producer.id
-        }).returning();
+            return created;
+        });
+        if (!outcome) return { success: false, error: "Utilisateur introuvable." };
+        const farm = outcome;
         return { success: true, data: farm };
     } catch (error) {
         console.error("Erreur création ferme:", error);

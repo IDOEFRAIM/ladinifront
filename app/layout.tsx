@@ -19,6 +19,8 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
+  publisher: 'Ladini SARL',
+  authors: [{ name: 'Ladini SARL', url: SITE_URL }],
   keywords: ['marché agricole Burkina Faso', 'produits agricoles', 'acheter céréales Ouagadougou', 'coopératives agricoles', 'légumes frais Burkina', 'Ladini'],
   alternates: { canonical: '/' }, // les pages enfants surchargent avec leur propre canonical
   openGraph: {

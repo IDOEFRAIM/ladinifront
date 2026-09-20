@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchWithRetry } from '@/lib/client-retry';
 import Cookies from 'js-cookie';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 import { registerUser, loginUser, logoutUser } from '@/features/auth/actions/auth.actions';
@@ -107,17 +108,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (isDev) console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
-        let res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
+        // 503/429 : 2 réessais max avec backoff court (Retry-After respecté). 500 : aucun retry. 401 : flux normal.
+        let res = await fetchWithRetry(
+          () => fetch('/api/me', { credentials: 'same-origin', signal: controller.signal }),
+          { maxRetries: 2, signal: controller.signal }
+        );
 
         if (!res.ok && res.status === 401) {
           if (isDev) console.debug('[Auth] /api/me returned 401; retrying after delay');
           await delay(300);
-          res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
-        }
-
-        // Base momentanément indisponible (503) : on réessaie 2 fois avant de se rabattre sur les cookies UI.
-        for (let i = 0; i < 2 && res.status === 503 && mounted; i++) {
-          await delay(3000 * (i + 1));
           res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
         }
 
@@ -140,7 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const fallbackRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
+        // Repli sur les cookies d'AFFICHAGE uniquement si le serveur est temporairement indisponible (503/429).
+        // Sur 401/403/500 on ne présente JAMAIS l'utilisateur comme connecté d'après un cookie forgeable ;
+        // l'autorité reste le serveur (chaque action est revérifiée en base, voir lib/access-context.ts).
+        const fallbackRole = (res.status === 503 || res.status === 429)
+          ? (Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined)
+          : undefined;
         if (fallbackRole && mounted) {
           const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
           const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);

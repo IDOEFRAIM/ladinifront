@@ -1,40 +1,46 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from './schema';
 import fs from 'fs';
 import path from 'path';
+import { resolveDbConfig, redactSecrets } from './config';
 
 type PostgresClient = ReturnType<typeof postgres>;
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __frontag_postgres_client__: PostgresClient | undefined;
+interface DbGlobals {
+  client?: PostgresClient;
+  authClient?: PostgresClient;
+  counters: { connectionsClosed: number };
+  logged?: boolean;
 }
-//dfgh 
+
+// UN seul jeu de pools par process, quel que soit le nombre de fois où ce module est évalué :
+// Next/webpack peut dupliquer un module entre bundles de routes ; sans globalThis (y compris en production),
+// chaque copie ouvrirait son propre pool et le budget de connexions serait multiplié silencieusement.
+const g = globalThis as unknown as { __ladini_db__?: DbGlobals };
+const state: DbGlobals = (g.__ladini_db__ ??= { counters: { connectionsClosed: 0 } });
+
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error('DATABASE_URL is not set');
 }
 
-// ── CONFIGURATION SSL INTELLIGENTE & ROBUSTE ──────────────────────────────
-const sslOptions: Partial<postgres.Options<any>> = {};
+export const dbConfig = resolveDbConfig(process.env);
+
+// ── SSL ───────────────────────────────────────────────────────────────────
+const sslOptions: { ssl?: postgres.Options<Record<string, never>>['ssl'] } = {};
 const caPath = process.env.DB_SSL_CA_PATH || process.env.DATABASE_SSL_CA_PATH;
 const caInline = process.env.DB_SSL_CA || process.env.DATABASE_SSL_CA;
-
 const isProduction = process.env.NODE_ENV === 'production';
-const isVercel = !!process.env.VERCEL;
 
-// `sslmode` peut valoir require|no-verify|prefer|allow|disable|verify-full — pas
-// seulement "require" (ex: Heroku Postgres émet `sslmode=no-verify`). On extrait
-// la valeur réelle plutôt que de ne matcher qu'un seul littéral.
+// `sslmode` peut valoir require|no-verify|prefer|allow|disable|verify-full (ex: Heroku émet `no-verify`).
 const sslModeMatch = connectionString.match(/[?&]sslmode=([^&]+)/i);
 const sslMode = sslModeMatch ? decodeURIComponent(sslModeMatch[1]).toLowerCase() : null;
 
 if (caPath && fs.existsSync(path.resolve(caPath))) {
-  // 1. Certificat via fichier (Production stricte)
   sslOptions.ssl = { rejectUnauthorized: true, ca: fs.readFileSync(path.resolve(caPath), 'utf8') };
 } else if (caInline) {
-  // 2. Certificat en ligne (Inline Base64 ou texte brut)
   const raw = caInline.trim();
   sslOptions.ssl = { rejectUnauthorized: true, ca: raw.includes('BEGIN CERT') ? raw : Buffer.from(raw, 'base64').toString('utf8') };
 } else if (
@@ -43,47 +49,73 @@ if (caPath && fs.existsSync(path.resolve(caPath))) {
   (sslMode && sslMode !== 'disable') ||
   connectionString.includes('supabase') || connectionString.includes('neon.tech')
 ) {
-  // 3. Auto-fallback si certificat auto-signé requis (Render, Supabase, Neon, Heroku)
   sslOptions.ssl = { rejectUnauthorized: false };
 } else if (!isProduction && !sslMode) {
-  // 4. En local sans SSL : On force la désactivation pour éviter les fausses alertes
   sslOptions.ssl = false;
 }
 
-// ── CONFIGURATION DU POOL DE CONNEXIONS ──────────────────────────────────
-const poolMax = parseInt(process.env.DB_POOL_MAX || '', 10) || (isVercel ? 5 : 10);
-
-// La query string (`sslmode`, `pgbouncer`, …) est un hint pour de vrais outils
-// (psql, un PgBouncer en amont) — `postgres-js` la relaie telle quelle comme
-// paramètres de session Postgres au driver, qui rejette tout nom qu'il ne
-// reconnaît pas (`unrecognized configuration parameter "pgbouncer"`, observé
-// contre Heroku Postgres). Le SSL est déjà entièrement piloté par sslOptions
-// ci-dessus ; on connecte donc sur l'URL nue, comme le fait déjà le backend
-// Python (`core/database.py` : `DATABASE_URL.split("?")[0]`).
+// La query string (`sslmode`, `pgbouncer`, …) n'est pas comprise par postgres-js (elle serait relayée comme
+// paramètre de session et rejetée) : on connecte sur l'URL nue. NB : `pgbouncer=true` dans l'URL n'active rien —
+// l'hôte actuel est un RDS direct, pas un PgBouncer.
 const bareConnectionString = connectionString.split('?')[0];
 
-const client: PostgresClient =
-  globalThis.__frontag_postgres_client__ ??
-  postgres(bareConnectionString, {
-    max: poolMax,
-    prepare: false, // Requis pour les architectures Serverless / PgBouncer
-    // Une reconnexion SSL vers RDS coûte ~1,5 s : on garde les connexions chaudes plus longtemps hors serverless.
-    idle_timeout: isVercel ? 20 : 120,
-    connect_timeout: 10,
-    max_lifetime: isVercel ? 60 : 1800,
-    // Filet de sécurité sous forte charge : une requête (ex. scan non borné,
-    // verrou en attente) ne doit jamais monopoliser une connexion du pool
-    // indéfiniment — avec seulement 5-10 connexions dispo (poolMax), quelques
-    // requêtes bloquées suffisent à affamer tout le reste du trafic.
-    connection: { statement_timeout: 15000 },
+function createClient(max: number, statementTimeoutMs: number, application: string): PostgresClient {
+  return postgres(bareConnectionString, {
+    max,
+    prepare: false,
+    idle_timeout: dbConfig.idleTimeoutSec,
+    connect_timeout: dbConfig.connectTimeoutSec,
+    max_lifetime: dbConfig.maxLifetimeSec,
+    // statement_timeout côté SERVEUR : filet de sécurité pour ne jamais monopoliser une connexion.
+    // application_name permet d'identifier le site dans pg_stat_activity (partagé avec FastAPI/workers).
+    connection: { statement_timeout: statementTimeoutMs, application_name: application },
+    // Fermetures de connexions physiques : mesure le « churn » (chaque reconnexion SSL coûte ≈ 1,4 s).
+    // Les OUVERTURES ne sont pas comptées ici : `onparameter` ne se déclenche que pour la 1re connexion
+    // (postgres-js dédoublonne les paramètres partagés) — l'état réel vient de pg_stat_activity (getServerConnectionStats).
+    onclose: () => { state.counters.connectionsClosed++; },
     ...sslOptions,
   });
+}
 
-// En développement, on attache le client au scope global pour le Hot Reload (évite les fuites de pool)
-if (!isProduction) {
-  globalThis.__frontag_postgres_client__ = client;
+// Bulkhead : le trafic auth/permissions a son propre mini-pool et un timeout strict, pour qu'une rafale
+// de requêtes métier lentes ne prive jamais l'authentification de connexions (et inversement).
+const client = (state.client ??= createClient(dbConfig.business.max, dbConfig.business.statementTimeoutMs, 'ladini-site'));
+const authClient = (state.authClient ??= createClient(dbConfig.auth.max, dbConfig.auth.statementTimeoutMs, 'ladini-site-auth'));
+
+if (!state.logged) {
+  state.logged = true;
+  // Jamais d'URL ni d'identifiants dans ce log.
+  console.info(redactSecrets(JSON.stringify({
+    event: 'db_pool_init', mode: dbConfig.mode, business_max: dbConfig.business.max, auth_max: dbConfig.auth.max,
+    connect_timeout_s: dbConfig.connectTimeoutSec, idle_timeout_s: dbConfig.idleTimeoutSec, max_lifetime_s: dbConfig.maxLifetimeSec,
+    site_instances: dbConfig.siteInstances, theoretical_site_connections: dbConfig.theoreticalSiteConnections,
+  })));
 }
 
 export const db = drizzle(client, { schema });
+/** Client réservé à l'authentification / aux permissions (pool séparé, timeout strict). */
+export const dbAuth = drizzle(authClient, { schema });
+export const dbCounters = state.counters;
+
+/** Vue SERVEUR des connexions, par application_name (site, site-auth, et TOUS les autres clients de la base). */
+export async function getServerConnectionStats() {
+  const rows = (await dbAuth.execute(sql`
+    select coalesce(nullif(application_name, ''), '(sans nom)') as app, coalesce(state, 'none') as state, count(*)::int as n
+    from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() group by 1, 2 order by n desc
+  `)) as unknown as Array<{ app: string; state: string; n: number }>;
+  return rows;
+}
 export { schema };
 export type DB = typeof db;
+
+/**
+ * Exécute `fn` dans une transaction avec un statement_timeout dédié — pour les opérations LONGUES explicites
+ * (exports, agrégats), jamais pour le trafic interactif.
+ */
+export function withStatementTimeout<T>(ms: number, fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>): Promise<T> {
+  const safeMs = Math.max(1, Math.floor(ms));
+  return db.transaction(async (tx) => {
+    await tx.execute(sql.raw(`SET LOCAL statement_timeout = ${safeMs}`));
+    return fn(tx);
+  });
+}
