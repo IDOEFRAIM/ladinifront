@@ -20,8 +20,8 @@ export default function BuyerLayout({ children }: { children: React.ReactNode })
       */}
       <SyncProvider />
 
-      {/* NAVBAR — Desktop uniquement */}
-      <header className="hidden md:block sticky top-0 z-40 w-full">
+      {/* NAVBAR — visible sur tous les écrans (sur mobile : logo + menu compte, la navigation est dans la TabBar du bas) */}
+      <header className="sticky top-0 z-40 w-full">
         <BuyerNavbar />
       </header>
 

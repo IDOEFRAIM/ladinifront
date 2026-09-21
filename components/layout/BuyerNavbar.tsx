@@ -53,11 +53,11 @@ export default function BuyerNavbar() {
           : 'bg-white border-emerald-900/5'
       }`}
     >
-      <div className="max-w-[1400px] mx-auto px-6 w-full">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 w-full">
         <div className="flex justify-between items-center">
 
           {/* SECTION DE GAUCHE : LOGO & LIENS */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3 sm:gap-8 min-w-0">
             <Link 
               href="/catalogue" 
               className="flex items-center gap-2.5 no-underline group active:scale-95 transition-transform"
@@ -65,7 +65,7 @@ export default function BuyerNavbar() {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-900 to-emerald-50 flex items-center justify-center shadow-[0_4px_12px_rgba(16,185,129,0.2)] group-hover:rotate-3 transition-transform">
                 <Store size={20} className="text-white" />
               </div>
-              <span className="font-['Space_Grotesk'] font-800 text-xl tracking-tight text-emerald-950">
+              <span className="font-['Space_Grotesk'] font-800 text-lg sm:text-xl tracking-tight text-emerald-950 truncate">
                 Agri<span className="text-emerald-500">Market</span>
               </span>
             </Link>
@@ -98,10 +98,10 @@ export default function BuyerNavbar() {
               <div className="relative group">
                 {/* BOUTON COMPTE DROPDOWN */}
                 <button 
-                  className="flex items-center gap-2.5 pl-3.5 pr-1.5 py-1.5 rounded-full border border-emerald-900/10 bg-white cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:border-emerald-500 hover:shadow-md transition-all duration-300"
+                  className="flex items-center gap-2.5 pl-1.5 sm:pl-3.5 pr-1.5 py-1.5 rounded-full border border-emerald-900/10 bg-white cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:border-emerald-500 hover:shadow-md transition-all duration-300"
                   aria-haspopup="true"
                 >
-                  <span className="font-['Inter'] text-xs font-bold text-emerald-950">
+                  <span className="hidden sm:inline font-['Inter'] text-xs font-bold text-emerald-950">
                     {shortName}
                   </span>
                   <div className="w-8 h-8 rounded-full bg-emerald-500/5 flex items-center justify-center border border-emerald-900/10">
@@ -110,7 +110,7 @@ export default function BuyerNavbar() {
                 </button>
 
                 {/* PANNEAU DROPDOWN (Affichage géré en CSS natif) */}
-                <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-2xl border border-emerald-900/10 shadow-[0_15px_45px_rgba(6,78,59,0.12)] p-2 opacity-0 pointer-events-none translate-y-2 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 transition-all duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] z-50">
+                <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-2xl border border-emerald-900/10 shadow-[0_15px_45px_rgba(6,78,59,0.12)] p-2 opacity-0 pointer-events-none translate-y-2 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 transition-all duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] z-50">
                   
                   <div className="px-3.5 py-3 border-b border-emerald-900/10 mb-1">
                     <p className="m-0 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Connecté en tant que</p>

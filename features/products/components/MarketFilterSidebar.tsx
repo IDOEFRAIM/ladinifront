@@ -18,7 +18,7 @@ export default function FilterSidebar({ onFilterChange }: FilterSidebarProps) {
     };
 
     return (
-        <div style={{ padding: '20px', borderRight: '1px solid #e0e0e0', minWidth: '250px' }}>
+        <div className="w-full md:w-[250px] md:min-w-[250px] md:shrink-0 border-b md:border-b-0 md:border-r border-[#e0e0e0] p-4 md:p-5 box-border">
             <h3 style={{ marginBottom: '20px', color: '#333' }}>Filtres du Marché</h3>
 
             {/* Filtre Catégorie */}

@@ -56,16 +56,16 @@ export default function MarketPage() {
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.sand }}>
+    <div className="flex flex-col md:flex-row" style={{ minHeight: '100vh', background: C.sand }}>
       <FilterSidebar onFilterChange={setCurrentFilters} />
 
-      <main style={{ flex: 1, padding: '24px' }} className="md:p-8">
+      <main style={{ flex: 1, padding: '16px', minWidth: 0 }} className="md:p-8">
         <motion.header initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: `linear-gradient(135deg, ${C.forest}, ${C.emerald})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ShoppingBag size={22} color="white" />
             </div>
-            <h1 style={{ fontFamily: F.heading, fontSize: '1.6rem', fontWeight: 800, color: C.forest, margin: 0 }}>Le Marche FrontAg</h1>
+            <h1 style={{ fontFamily: F.heading, fontSize: 'clamp(1.25rem, 5vw, 1.6rem)', fontWeight: 800, color: C.forest, margin: 0 }}>Le Marche FrontAg</h1>
           </div>
           <p style={{ fontFamily: F.body, color: C.muted, fontSize: '0.9rem' }}>
             <span style={{ fontWeight: 800, color: C.emerald }}>{filteredProducts.length}</span> produits disponibles
