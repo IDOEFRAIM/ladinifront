@@ -321,15 +321,16 @@ export function ValuesSection() {
 
 /* ======= RÉSEAU / PARTENAIRES (carrousel = seul îlot client) ======= */
 
+// Données normalisées (orthographe, casse, une filière par entrée) — l'affichage n'a plus à « nettoyer » du texte brut.
 const COOPERATIVES: Cooperative[] = [
-  { name: 'AFEN', type: 'AGROALIMENTAIRE', location: 'KADIOGO', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  { name: 'Coopérative Namaneb zanga', type: 'Maraichers', location: 'OUAGADOUGOU', color: '#d97706', bg: 'rgba(217,119,6,0.12)' },
-  { name: 'Fromagerie Gariko', type: 'Laitiers', location: 'KADIOGO', color: '#84cc16', bg: 'rgba(132,204,22,0.12)' },
-  { name: 'Coopérative Soulama', type: 'Transformation', location: 'Ouagadougou ', color: '#0ea5e9', bg: 'rgba(14,165,233,0.12)' },
-  { name: 'COOP-Bendia', type: 'maraichers+transformation ', location: 'OUAGADOUGOU', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-  { name: 'UPPA', type: 'CEREALES , Maraichers, fruits et légumes ,', location: 'Kenedougou', color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
-  { name: 'Kosam', type: 'Laitiers', location: 'OUAGADOUGOU', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
-  { name: 'CARTPL(en cours de négociation) ', type: 'Transformation', location: 'OUAGADOUGOU', color: '#eab308', bg: 'rgba(234,179,8,0.12)' },
+  { name: 'AFEN', types: ['Agroalimentaire'], location: 'Kadiogo' },
+  { name: 'Coopérative Namaneb zanga', types: ['Maraîchers'], location: 'Ouagadougou' },
+  { name: 'Fromagerie Gariko', types: ['Laitiers'], location: 'Kadiogo' },
+  { name: 'Coopérative Soulama', types: ['Transformation'], location: 'Ouagadougou' },
+  { name: 'COOP-Bendia', types: ['Maraîchers', 'Transformation'], location: 'Ouagadougou' },
+  { name: 'UPPA', types: ['Céréales', 'Maraîchers', 'Fruits et légumes'], location: 'Kénédougou' },
+  { name: 'Kosam', types: ['Laitiers'], location: 'Ouagadougou' },
+  { name: 'CARTPL', types: ['Transformation'], location: 'Ouagadougou', note: 'En cours de négociation' },
 ];
 
 export function PartnersSection() {

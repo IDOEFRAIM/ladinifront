@@ -380,6 +380,12 @@ export const orders = marketplaceSchema.table('orders', {
   deliveryOtp: text('delivery_otp'),
   paymentExpiresAt: timestamp('payment_expires_at'),
   lockedAmount: numeric('locked_amount', { precision: 14, scale: 2 }),
+  // Anti-force-brute du code de livraison + corrélation de checkout : colonnes
+  // ajoutées côté Python (SCHEMA_COLUMN_DDL) et déjà présentes en base ; miroir ici
+  // pour que Drizzle ne les ignore pas / ne tente pas de les supprimer.
+  deliveryOtpAttempts: integer('delivery_otp_attempts').default(0).notNull(),
+  deliveryOtpLockedUntil: timestamp('delivery_otp_locked_until'),
+  checkoutGroupId: uuid('checkout_group_id'),
 
   auctionId: uuid('auction_id').references(() => auctions.id),
   winningBidId: uuid('winning_bid_id').references(() => bids.id),
