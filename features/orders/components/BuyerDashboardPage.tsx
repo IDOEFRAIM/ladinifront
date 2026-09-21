@@ -57,7 +57,7 @@ export default function BuyerDashboardPage() {
 
       <StatCards activeOrders={activeOrders} auctions={auctions} billingSummary={billingSummary} preorders={preorders} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32, alignItems: 'start' }}>
+      <div className="ladini-split" style={{ alignItems: 'start' }}>
         <section>
           <ActiveOrdersSection activeOrders={activeOrders} />
           <PreordersSection preorders={preorders} />

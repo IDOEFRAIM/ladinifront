@@ -82,7 +82,7 @@ export default async function SettingsPage() {
       <div style={{ padding: 24 }}>
         <div style={{ background: C.glass, backdropFilter: 'blur(20px)', borderRadius: 24, border: `1px solid ${C.border}`, padding: 28 }}>
           <h2 style={{ fontFamily: F.heading, fontSize: '1.15rem', fontWeight: 800, color: C.text, marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>Informations du Compte</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24 }}>
+          <div className="ladini-split">
             <div>
               <ProducerSettingsForm initialData={initialData} producerId={producer.id} />
             </div>
