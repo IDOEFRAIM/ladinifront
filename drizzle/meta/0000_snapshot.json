@@ -1,5 +1,5 @@
 {
-  "id": "2e8db82a-95e2-4db8-9cf0-c31d339565ce",
+  "id": "d166b2ca-7689-4f7a-97b7-9534a24beb2d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -120,7 +120,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "accounts_user_id_users_id_fk": {
+          "name": "accounts_user_id_users_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -174,7 +189,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "sessions_session_token_unique": {
@@ -252,6 +282,12 @@
         "longitude": {
           "name": "longitude",
           "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_updated_at": {
+          "name": "location_updated_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -390,7 +426,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_zone_id_zones_id_fk": {
+          "name": "users_zone_id_zones_id_fk",
+          "tableFrom": "users",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "users_email_unique": {
@@ -596,108 +647,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "governance.overlay_layers": {
-      "name": "overlay_layers",
-      "schema": "governance",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "zone_id": {
-          "name": "zone_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "settings": {
-          "name": "settings",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "overlay_layers_zone_key_unique": {
-          "name": "overlay_layers_zone_key_unique",
-          "columns": [
-            {
-              "expression": "zone_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "overlay_layers_zone_idx": {
-          "name": "overlay_layers_zone_idx",
-          "columns": [
-            {
-              "expression": "zone_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -929,7 +878,50 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "standard_prices_sub_category_id_sub_categories_id_fk": {
+          "name": "standard_prices_sub_category_id_sub_categories_id_fk",
+          "tableFrom": "standard_prices",
+          "tableTo": "sub_categories",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "sub_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "standard_prices_zone_id_zones_id_fk": {
+          "name": "standard_prices_zone_id_zones_id_fk",
+          "tableFrom": "standard_prices",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "standard_prices_updated_by_id_users_id_fk": {
+          "name": "standard_prices_updated_by_id_users_id_fk",
+          "tableFrom": "standard_prices",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "updated_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -965,6 +957,30 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::text[]"
+        },
+        "minimum_order_quantity": {
+          "name": "minimum_order_quantity",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "minimum_order_unit": {
+          "name": "minimum_order_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority_unit": {
+          "name": "priority_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "allowed_units": {
+          "name": "allowed_units",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1002,9 +1018,40 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ix_subcategories_name_trgm": {
+          "name": "ix_subcategories_name_trgm",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "sub_categories_category_id_categories_id_fk": {
+          "name": "sub_categories_category_id_categories_id_fk",
+          "tableFrom": "sub_categories",
+          "tableTo": "categories",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1075,9 +1122,111 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_org_user_idx": {
+          "name": "user_org_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_org_role_idx": {
+          "name": "user_org_role_idx",
+          "columns": [
+            {
+              "expression": "role_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_org_org_idx": {
+          "name": "user_org_org_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "user_organizations_user_id_users_id_fk": {
+          "name": "user_organizations_user_id_users_id_fk",
+          "tableFrom": "user_organizations",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_organizations_organization_id_organizations_id_fk": {
+          "name": "user_organizations_organization_id_organizations_id_fk",
+          "tableFrom": "user_organizations",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_organizations_role_id_role_definitions_id_fk": {
+          "name": "user_organizations_role_id_role_definitions_id_fk",
+          "tableFrom": "user_organizations",
+          "tableTo": "role_definitions",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "user_organizations_managed_zone_id_zones_id_fk": {
+          "name": "user_organizations_managed_zone_id_zones_id_fk",
+          "tableFrom": "user_organizations",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "managed_zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1187,176 +1336,50 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "governance.zone_metrics": {
-      "name": "zone_metrics",
-      "schema": "governance",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "zone_id": {
-          "name": "zone_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "date": {
-          "name": "date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "metric_name": {
-          "name": "metric_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "zone_metrics_composite_idx": {
-          "name": "zone_metrics_composite_idx",
-          "columns": [
-            {
-              "expression": "zone_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "metric_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
+      "foreignKeys": {
+        "work_zones_organization_id_organizations_id_fk": {
+          "name": "work_zones_organization_id_organizations_id_fk",
+          "tableFrom": "work_zones",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
           ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "governance.zone_settings": {
-      "name": "zone_settings",
-      "schema": "governance",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "zone_id": {
-          "name": "zone_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "zone_settings_zone_key_unique": {
-          "name": "zone_settings_zone_key_unique",
-          "columns": [
-            {
-              "expression": "zone_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
+          "columnsTo": [
+            "id"
           ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
-        "zone_settings_zone_idx": {
-          "name": "zone_settings_zone_idx",
-          "columns": [
-            {
-              "expression": "zone_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
+        "work_zones_zone_id_zones_id_fk": {
+          "name": "work_zones_zone_id_zones_id_fk",
+          "tableFrom": "work_zones",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
           ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "work_zones_manager_id_users_id_fk": {
+          "name": "work_zones_manager_id_users_id_fk",
+          "tableFrom": "work_zones",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "manager_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1526,9 +1549,68 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ix_zones_name_trgm": {
+          "name": "ix_zones_name_trgm",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "zones_climatic_region_id_climatic_regions_id_fk": {
+          "name": "zones_climatic_region_id_climatic_regions_id_fk",
+          "tableFrom": "zones",
+          "tableTo": "climatic_regions",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "climatic_region_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "zones_organization_id_organizations_id_fk": {
+          "name": "zones_organization_id_organizations_id_fk",
+          "tableFrom": "zones",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "zones_parent_id_zones_id_fk": {
+          "name": "zones_parent_id_zones_id_fk",
+          "tableFrom": "zones",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "zones_name_unique": {
@@ -1706,6 +1788,13 @@
           "notNull": true,
           "default": 0
         },
+        "images": {
+          "name": "images",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1727,6 +1816,21 @@
           "columns": [
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "auctions_subcategory_idx": {
+          "name": "auctions_subcategory_idx",
+          "columns": [
+            {
+              "expression": "sub_category_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1798,112 +1902,66 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "auctions_buyer_id_buyer_profiles_id_fk": {
+          "name": "auctions_buyer_id_buyer_profiles_id_fk",
+          "tableFrom": "auctions",
+          "tableTo": "buyer_profiles",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "buyer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "auctions_sub_category_id_sub_categories_id_fk": {
+          "name": "auctions_sub_category_id_sub_categories_id_fk",
+          "tableFrom": "auctions",
+          "tableTo": "sub_categories",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "sub_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "auctions_winner_bid_id_bids_id_fk": {
+          "name": "auctions_winner_bid_id_bids_id_fk",
+          "tableFrom": "auctions",
+          "tableTo": "bids",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "winner_bid_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "auctions_target_zone_id_zones_id_fk": {
+          "name": "auctions_target_zone_id_zones_id_fk",
+          "tableFrom": "auctions",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "target_zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "marketplace.batches": {
-      "name": "batches",
-      "schema": "marketplace",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "stock_id": {
-          "name": "stock_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "batch_number": {
-          "name": "batch_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "origin_farm_id": {
-          "name": "origin_farm_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "numeric(14, 3)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "batches_stock_idx": {
-          "name": "batches_stock_idx",
-          "columns": [
-            {
-              "expression": "stock_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "batches_org_idx": {
-          "name": "batches_org_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "batches_batch_number_unique": {
-          "name": "batches_batch_number_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "batch_number"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1980,6 +2038,13 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "images": {
+          "name": "images",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
         },
         "created_at": {
           "name": "created_at",
@@ -2077,9 +2142,68 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "bids_one_winner_per_auction_uq": {
+          "name": "bids_one_winner_per_auction_uq",
+          "columns": [
+            {
+              "expression": "auction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"marketplace\".\"bids\".\"is_winner\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "bids_auction_id_auctions_id_fk": {
+          "name": "bids_auction_id_auctions_id_fk",
+          "tableFrom": "bids",
+          "tableTo": "auctions",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "auction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "bids_producer_id_producers_id_fk": {
+          "name": "bids_producer_id_producers_id_fk",
+          "tableFrom": "bids",
+          "tableTo": "producers",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "producer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "bids_linked_stock_id_stocks_id_fk": {
+          "name": "bids_linked_stock_id_stocks_id_fk",
+          "tableFrom": "bids",
+          "tableTo": "stocks",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "linked_stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2227,7 +2351,50 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "buyer_profiles_user_id_users_id_fk": {
+          "name": "buyer_profiles_user_id_users_id_fk",
+          "tableFrom": "buyer_profiles",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "buyer_profiles_buyer_type_id_buyer_types_id_fk": {
+          "name": "buyer_profiles_buyer_type_id_buyer_types_id_fk",
+          "tableFrom": "buyer_profiles",
+          "tableTo": "buyer_types",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "buyer_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "buyer_profiles_verified_by_id_users_id_fk": {
+          "name": "buyer_profiles_verified_by_id_users_id_fk",
+          "tableFrom": "buyer_profiles",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "verified_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "buyer_profiles_user_id_unique": {
@@ -2431,7 +2598,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "clients_producer_id_producers_id_fk": {
+          "name": "clients_producer_id_producers_id_fk",
+          "tableFrom": "clients",
+          "tableTo": "producers",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "producer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2635,7 +2817,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "deliveries_order_id_orders_id_fk": {
+          "name": "deliveries_order_id_orders_id_fk",
+          "tableFrom": "deliveries",
+          "tableTo": "orders",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "deliveries_delivery_agent_id_delivery_agents_id_fk": {
+          "name": "deliveries_delivery_agent_id_delivery_agents_id_fk",
+          "tableFrom": "deliveries",
+          "tableTo": "delivery_agents",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "delivery_agent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2731,7 +2942,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "delivery_agents_user_id_users_id_fk": {
+          "name": "delivery_agents_user_id_users_id_fk",
+          "tableFrom": "delivery_agents",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "delivery_agents_zone_id_zones_id_fk": {
+          "name": "delivery_agents_zone_id_zones_id_fk",
+          "tableFrom": "delivery_agents",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "delivery_agents_user_id_unique": {
@@ -2837,7 +3077,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "expenses_farm_id_farms_id_fk": {
+          "name": "expenses_farm_id_farms_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "farms",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "farm_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -3200,6 +3455,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ix_market_offers_label_trgm": {
+          "name": "ix_market_offers_label_trgm",
+          "columns": [
+            {
+              "expression": "product_label",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3230,186 +3501,19 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "marketplace.marketplace_ratings": {
-      "name": "marketplace_ratings",
-      "schema": "marketplace",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
         },
-        "order_id": {
-          "name": "order_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_type": {
-          "name": "author_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_id": {
-          "name": "author_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_type": {
-          "name": "target_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_id": {
-          "name": "target_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rating_product_quality": {
-          "name": "rating_product_quality",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rating_packaging": {
-          "name": "rating_packaging",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rating_reception_speed": {
-          "name": "rating_reception_speed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rating_communication": {
-          "name": "rating_communication",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rating_reliability": {
-          "name": "rating_reliability",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "global_rating": {
-          "name": "global_rating",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "comment": {
-          "name": "comment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "mr_order_idx": {
-          "name": "mr_order_idx",
-          "columns": [
-            {
-              "expression": "order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "mr_author_idx": {
-          "name": "mr_author_idx",
-          "columns": [
-            {
-              "expression": "author_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "mr_target_idx": {
-          "name": "mr_target_idx",
-          "columns": [
-            {
-              "expression": "target_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "mr_order_author_unique": {
-          "name": "mr_order_author_unique",
-          "columns": [
-            {
-              "expression": "order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "author_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "marketplace_ratings_order_id_orders_id_fk": {
-          "name": "marketplace_ratings_order_id_orders_id_fk",
-          "tableFrom": "marketplace_ratings",
-          "tableTo": "orders",
-          "schemaTo": "marketplace",
+        "market_offers_sub_category_id_sub_categories_id_fk": {
+          "name": "market_offers_sub_category_id_sub_categories_id_fk",
+          "tableFrom": "market_offers",
+          "tableTo": "sub_categories",
+          "schemaTo": "governance",
           "columnsFrom": [
-            "order_id"
+            "sub_category_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -3450,7 +3554,7 @@
         },
         "reason_category": {
           "name": "reason_category",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -3469,7 +3573,7 @@
         },
         "requested_solution": {
           "name": "requested_solution",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -3482,14 +3586,14 @@
         },
         "escrow_payout_status": {
           "name": "escrow_payout_status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'HELD'"
         },
         "status": {
           "name": "status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
@@ -3597,6 +3701,20 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "order_disputes_raised_by_id_users_id_fk": {
+          "name": "order_disputes_raised_by_id_users_id_fk",
+          "tableFrom": "order_disputes",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "raised_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3639,6 +3757,18 @@
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "tier_id": {
+          "name": "tier_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_unit_quantity": {
+          "name": "base_unit_quantity",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3728,20 +3858,20 @@
         },
         "type": {
           "name": "type",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "channel": {
           "name": "channel",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'WHATSAPP'"
         },
         "status": {
           "name": "status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'SCHEDULED'"
@@ -3865,19 +3995,19 @@
         },
         "status_type": {
           "name": "status_type",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "from_status": {
           "name": "from_status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "to_status": {
           "name": "to_status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -4013,33 +4143,33 @@
         },
         "customer_name": {
           "name": "customer_name",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "customer_phone": {
           "name": "customer_phone",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "payment_method": {
           "name": "payment_method",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'CASH'"
         },
         "payment_status": {
           "name": "payment_status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "city": {
           "name": "city",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -4063,34 +4193,34 @@
         },
         "audio_url": {
           "name": "audio_url",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "status": {
           "name": "status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "delivery_status": {
           "name": "delivery_status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "source": {
           "name": "source",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'APP'"
         },
         "whatsapp_id": {
           "name": "whatsapp_id",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -4129,7 +4259,7 @@
         },
         "currency": {
           "name": "currency",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'XOF'"
@@ -4143,12 +4273,55 @@
         },
         "cancellation_role": {
           "name": "cancellation_role",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "escrow_wallet_id": {
           "name": "escrow_wallet_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paydunya_invoice_token": {
+          "name": "paydunya_invoice_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_otp": {
+          "name": "delivery_otp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_expires_at": {
+          "name": "payment_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locked_amount": {
+          "name": "locked_amount",
+          "type": "numeric(14, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_otp_attempts": {
+          "name": "delivery_otp_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "delivery_otp_locked_until": {
+          "name": "delivery_otp_locked_until",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checkout_group_id": {
+          "name": "checkout_group_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -4167,7 +4340,7 @@
         },
         "order_type": {
           "name": "order_type",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'STANDARD'"
@@ -4217,6 +4390,21 @@
           "columns": [
             {
               "expression": "buyer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_client_idx": {
+          "name": "orders_client_idx",
+          "columns": [
+            {
+              "expression": "client_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4412,6 +4600,54 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ix_orders_paydunya_token": {
+          "name": "ix_orders_paydunya_token",
+          "columns": [
+            {
+              "expression": "paydunya_invoice_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"marketplace\".\"orders\".\"paydunya_invoice_token\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_orders_payment_expires_at": {
+          "name": "ix_orders_payment_expires_at",
+          "columns": [
+            {
+              "expression": "payment_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"marketplace\".\"orders\".\"payment_status\" = 'PENDING'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_orders_checkout_group": {
+          "name": "ix_orders_checkout_group",
+          "columns": [
+            {
+              "expression": "checkout_group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"marketplace\".\"orders\".\"checkout_group_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -4545,34 +4781,34 @@
         },
         "currency": {
           "name": "currency",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'XOF'"
         },
         "method": {
           "name": "method",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'CASH'"
         },
         "status": {
           "name": "status",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'PENDING'"
         },
         "provider": {
           "name": "provider",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "provider_ref": {
           "name": "provider_ref",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -4850,7 +5086,50 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "producers_user_id_users_id_fk": {
+          "name": "producers_user_id_users_id_fk",
+          "tableFrom": "producers",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "producers_organization_id_organizations_id_fk": {
+          "name": "producers_organization_id_organizations_id_fk",
+          "tableFrom": "producers",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "producers_zone_id_zones_id_fk": {
+          "name": "producers_zone_id_zones_id_fk",
+          "tableFrom": "producers",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "producers_user_id_unique": {
@@ -5148,9 +5427,39 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ix_products_name_trgm": {
+          "name": "ix_products_name_trgm",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
         }
       },
       "foreignKeys": {
+        "products_sub_category_id_sub_categories_id_fk": {
+          "name": "products_sub_category_id_sub_categories_id_fk",
+          "tableFrom": "products",
+          "tableTo": "sub_categories",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "sub_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
         "products_producer_id_producers_id_fk": {
           "name": "products_producer_id_producers_id_fk",
           "tableFrom": "products",
@@ -5163,6 +5472,20 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "products_verified_by_id_users_id_fk": {
+          "name": "products_verified_by_id_users_id_fk",
+          "tableFrom": "products",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "verified_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -5416,6 +5739,20 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "seed_distribution_attempts_actor_id_users_id_fk": {
+          "name": "seed_distribution_attempts_actor_id_users_id_fk",
+          "tableFrom": "seed_distribution_attempts",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -5768,7 +6105,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "stock_movements_stock_id_stocks_id_fk": {
+          "name": "stock_movements_stock_id_stocks_id_fk",
+          "tableFrom": "stock_movements",
+          "tableTo": "stocks",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "stock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -5935,7 +6287,64 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "stocks_farm_id_farms_id_fk": {
+          "name": "stocks_farm_id_farms_id_fk",
+          "tableFrom": "stocks",
+          "tableTo": "farms",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "farm_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "stocks_warehouse_id_warehouses_id_fk": {
+          "name": "stocks_warehouse_id_warehouses_id_fk",
+          "tableFrom": "stocks",
+          "tableTo": "warehouses",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "warehouse_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "stocks_organization_id_organizations_id_fk": {
+          "name": "stocks_organization_id_organizations_id_fk",
+          "tableFrom": "stocks",
+          "tableTo": "organizations",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "stocks_verified_by_id_users_id_fk": {
+          "name": "stocks_verified_by_id_users_id_fk",
+          "tableFrom": "stocks",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "verified_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6015,7 +6424,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "warehouses_zone_id_zones_id_fk": {
+          "name": "warehouses_zone_id_zones_id_fk",
+          "tableFrom": "warehouses",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6138,6 +6562,21 @@
           "method": "btree",
           "with": {}
         },
+        "agent_actions_user_idx": {
+          "name": "agent_actions_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "agent_actions_batch_idx": {
           "name": "agent_actions_batch_idx",
           "columns": [
@@ -6205,218 +6644,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "intelligence.agent_context_memory": {
-      "name": "agent_context_memory",
-      "schema": "intelligence",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+      "foreignKeys": {
+        "agent_actions_order_id_orders_id_fk": {
+          "name": "agent_actions_order_id_orders_id_fk",
+          "tableFrom": "agent_actions",
+          "tableTo": "orders",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "market_offer_id": {
-          "name": "market_offer_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "context_key": {
-          "name": "context_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "context_value": {
-          "name": "context_value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'AGENT'"
-        },
-        "confidence": {
-          "name": "confidence",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+        "agent_actions_user_id_users_id_fk": {
+          "name": "agent_actions_user_id_users_id_fk",
+          "tableFrom": "agent_actions",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
-      "indexes": {
-        "acm_user_idx": {
-          "name": "acm_user_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acm_key_idx": {
-          "name": "acm_key_idx",
-          "columns": [
-            {
-              "expression": "context_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acm_user_key_unique": {
-          "name": "acm_user_key_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "context_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "intelligence.ai_rating_reasonings": {
-      "name": "ai_rating_reasonings",
-      "schema": "intelligence",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "trust_score_id": {
-          "name": "trust_score_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "agent_name": {
-          "name": "agent_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "justification": {
-          "name": "justification",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "data_points": {
-          "name": "data_points",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "ai_rating_trust_idx": {
-          "name": "ai_rating_trust_idx",
-          "columns": [
-            {
-              "expression": "trust_score_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "ai_rating_agent_idx": {
-          "name": "ai_rating_agent_idx",
-          "columns": [
-            {
-              "expression": "agent_name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6537,7 +6794,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "audit_logs_actor_id_users_id_fk": {
+          "name": "audit_logs_actor_id_users_id_fk",
+          "tableFrom": "audit_logs",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6747,7 +7019,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "conversations_user_id_users_id_fk": {
+          "name": "conversations_user_id_users_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "conversations_zone_id_zones_id_fk": {
+          "name": "conversations_zone_id_zones_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6856,7 +7157,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "demand_signals_user_id_users_id_fk": {
+          "name": "demand_signals_user_id_users_id_fk",
+          "tableFrom": "demand_signals",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "demand_signals_zone_id_zones_id_fk": {
+          "name": "demand_signals_zone_id_zones_id_fk",
+          "tableFrom": "demand_signals",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6965,7 +7295,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "moderation_events_user_id_users_id_fk": {
+          "name": "moderation_events_user_id_users_id_fk",
+          "tableFrom": "moderation_events",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -7133,7 +7478,36 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "notification_outbox_solicitation_id_solicitations_id_fk": {
+          "name": "notification_outbox_solicitation_id_solicitations_id_fk",
+          "tableFrom": "notification_outbox",
+          "tableTo": "solicitations",
+          "schemaTo": "intelligence",
+          "columnsFrom": [
+            "solicitation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "notification_outbox_recipient_user_id_users_id_fk": {
+          "name": "notification_outbox_recipient_user_id_users_id_fk",
+          "tableFrom": "notification_outbox",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "recipient_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -7307,7 +7681,92 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "solicitations_auction_id_auctions_id_fk": {
+          "name": "solicitations_auction_id_auctions_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "auctions",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "auction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "solicitations_market_offer_id_market_offers_id_fk": {
+          "name": "solicitations_market_offer_id_market_offers_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "market_offers",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "market_offer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "solicitations_target_producer_id_producers_id_fk": {
+          "name": "solicitations_target_producer_id_producers_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "producers",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "target_producer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "solicitations_target_buyer_id_buyer_profiles_id_fk": {
+          "name": "solicitations_target_buyer_id_buyer_profiles_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "buyer_profiles",
+          "schemaTo": "marketplace",
+          "columnsFrom": [
+            "target_buyer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "solicitations_sub_category_id_sub_categories_id_fk": {
+          "name": "solicitations_sub_category_id_sub_categories_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "sub_categories",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "sub_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "solicitations_zone_id_zones_id_fk": {
+          "name": "solicitations_zone_id_zones_id_fk",
+          "tableFrom": "solicitations",
+          "tableTo": "zones",
+          "schemaTo": "governance",
+          "columnsFrom": [
+            "zone_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -7382,7 +7841,22 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "trust_scores_user_id_users_id_fk": {
+          "name": "trust_scores_user_id_users_id_fk",
+          "tableFrom": "trust_scores",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "trust_scores_user_id_unique": {
@@ -7393,6 +7867,385 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.agri_workspaces": {
+      "name": "agri_workspaces",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "workspace_type": {
+          "name": "workspace_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'producer'"
+        },
+        "active_agent": {
+          "name": "active_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'market'"
+        },
+        "active_goal": {
+          "name": "active_goal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "active_form": {
+          "name": "active_form",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locked_agent": {
+          "name": "locked_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "langgraph_state": {
+          "name": "langgraph_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "marketplace.mcp_idempotency_records": {
+      "name": "mcp_idempotency_records",
+      "schema": "marketplace",
+      "columns": {
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tool_name": {
+          "name": "tool_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_result": {
+          "name": "external_result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "mcp_idempotency_records_idempotency_key_tool_name_pk": {
+          "name": "mcp_idempotency_records_idempotency_key_tool_name_pk",
+          "columns": [
+            "idempotency_key",
+            "tool_name"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "marketplace.preorder_drafts": {
+      "name": "preorder_drafts",
+      "schema": "marketplace",
+      "columns": {
+        "draft_id": {
+          "name": "draft_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ix_preorder_drafts_conversation": {
+          "name": "ix_preorder_drafts_conversation",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_preorder_drafts_order_id": {
+          "name": "ix_preorder_drafts_order_id",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"marketplace\".\"preorder_drafts\".\"order_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "marketplace.procurement_drafts": {
+      "name": "procurement_drafts",
+      "schema": "marketplace",
+      "columns": {
+        "draft_id": {
+          "name": "draft_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ix_procurement_drafts_conversation": {
+          "name": "ix_procurement_drafts_conversation",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "marketplace.sales_publish_drafts": {
+      "name": "sales_publish_drafts",
+      "schema": "marketplace",
+      "columns": {
+        "draft_id": {
+          "name": "draft_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ix_sales_publish_drafts_conversation": {
+          "name": "ix_sales_publish_drafts_conversation",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

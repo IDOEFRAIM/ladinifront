@@ -1,126 +1,59 @@
-# Drizzle Migration Workflow
+# Drizzle — source de vérité du schéma PostgreSQL
 
-## 1. Context
+**Drizzle (`src/db/schema/*.ts`) est la SEULE définition du schéma PostgreSQL de Ladini.**
+Le backend Python (SQLAlchemy) n'en est qu'un miroir vérifié automatiquement ; il ne crée ni ne modifie jamais rien.
 
-- La base de données PostgreSQL de production contient déjà 47 tables sur les schémas `auth`, `governance`, `marketplace`, `intelligence` et `public`.
-- Le snapshot `drizzle/meta/0000_snapshot.json` et le fichier `drizzle/0000_ambiguous_firedrake.sql` reflètent l'état actuel de `src/db/schema`.
-- `drizzle-kit generate` et `drizzle-kit check` valident qu'il n'y a **aucune divergence** entre le code et le snapshot.
-- L'objectif est de faire reconnaître à Drizzle que la base est déjà à jour, puis de n'appliquer que des migrations **additives**.
-
-## 2. Scripts disponibles
-
-```json
-{
-  "generate": "drizzle-kit generate",
-  "db:push": "drizzle-kit push",
-  "db:studio": "drizzle-kit studio",
-  "db:seed": "tsx scripts/seed.ts",
-  "db:baseline": "tsx scripts/baseline-drizzle.ts",
-  "db:migrate": "tsx scripts/run-migrations.ts",
-  "db:introspect": "drizzle-kit introspect --config=drizzle.config.ts"
-}
+```
+src/db/schema/*.ts ──drizzle-kit generate──▶ drizzle/NNNN_*.sql + meta/  ──npm run db:migrate──▶ PostgreSQL
+                                                     │
+                                                     └─ copie synchronisée dans le backend : backend/schema_contract/
+                                                        (tests : Drizzle == PostgreSQL == SQLAlchemy)
 ```
 
-## 3. Procédure de synchronisation initiale (production, sans perte)
+## Historique : baseline du 2026-09-21
 
-### 3.1 Vérifier la cohérence code ↔ snapshot
+L'ancien historique (`0000`…`0007`) reflétait des ajouts manuels, du DDL exécuté par le backend au démarrage et des
+FK jamais créées : il a été remplacé par **un baseline unique `0000_baseline.sql`** (base vide → schéma complet).
+Il crée aussi les schémas (`auth`, `governance`, `marketplace`, `intelligence`) et l'extension `pg_trgm`.
+Une base construite avant ce baseline doit être **recréée** (elle n'a plus de journal de migration compatible).
 
-```bash
-npx drizzle-kit check --config=drizzle.config.ts
-npx drizzle-kit generate --config=drizzle.config.ts
-```
+## Flux de travail
 
-Si `generate` répond `No schema changes, nothing to migrate`, le code est aligné avec le snapshot.  
-S'il génère un fichier `0001_...`, **ne pas l'appliquer** : relire le SQL généré et corriger `src/db/schema` pour qu'il ne génère que des changements intentionnels.
+1. Modifier `src/db/schema/*.ts` (une FK = `.references((): AnyPgColumn => table.col, { onDelete: '...' })`).
+2. `npx drizzle-kit generate --name=<verbe_objet>` puis **relire le SQL** (aucun `DROP` non voulu).
+3. `npm run db:schema-check` : le schéma TS et les migrations commitées doivent être identiques.
+4. Appliquer sur une base jetable : `npm run db:migrate` (2 fois : la seconde doit être un no-op).
+5. **Synchroniser le contrat backend** (dépôt `ladini`) :
+   `python backend/tests/schema/sync_contract.py --frontend <chemin de ce dépôt>` puis mettre à jour le miroir
+   SQLAlchemy (`domain/*/models.py`, `domain/runtime_tables.py`) jusqu'à ce que `pytest backend/tests/schema` soit vert.
+6. Déployer : `npm run db:migrate` **avant** le nouveau code backend (expand → migrate → contract, voir
+   `docs/runbooks/migrations.md` du dépôt backend).
 
-### 3.2 Baseline : indiquer à Drizzle que `0000` est déjà appliquée
+## Règles de conception (validées par les tests du backend)
 
-La base de données a été créée par `drizzle/0000_ambiguous_firedrake.sql` mais la table `__drizzle_migrations` peut être vide ou absente. On l'initialise avec un hash sans exécuter le SQL de `0000` (donc aucune donnée n'est touchée). Le schéma de suivi est `public.__drizzle_migrations` (configuré dans `drizzle.config.ts` et dans les scripts).
+- Toute FK métier existe **dans PostgreSQL** avec un `ON DELETE` explicite : `cascade` (données purement dérivées :
+  sessions, comptes, appartenances, scores), `set null` (références facultatives / audit), sinon `restrict`
+  (données transactionnelles : commandes, paiements, enchères, offres, produits).
+- Toute colonne FK est indexée (ou justifiée dans `FK_WITHOUT_INDEX_OK`, backend `tests/schema/`).
+- Toute unicité critique (idempotence, références fournisseur, gagnant d'enchère) est une contrainte/index UNIQUE
+  PostgreSQL — jamais seulement du code ou Redis.
+- Les statuts sont des `text` (pas d'enum PG). Si un `pgEnum` est ajouté, le miroir Python doit l'être aussi.
+- Tables « site-only » (sans miroir Python, ex. `seed_*`) : déclarées dans `SITE_ONLY_TABLES` (backend `tests/schema/conftest.py`).
+- **Le backend Python ne doit contenir aucun DDL** (`CREATE/ALTER/DROP`, `create_all`) : vérifié par un test.
 
-```bash
-npm run db:baseline
-```
+## Tables d'état runtime de l'agent (`src/db/schema/runtime.ts`)
 
-Ce que fait `scripts/baseline-drizzle.ts` :
+`marketplace.preorder_drafts`, `procurement_drafts`, `sales_publish_drafts`, `mcp_idempotency_records`,
+`public.agri_workspaces` : lues/écrites en SQL brut par le backend, **créées uniquement par les migrations**.
 
-1. Crée `public.__drizzle_migrations` si elle n'existe pas (`id`, `hash`, `created_at`).
-2. Lit le journal `drizzle/meta/_journal.json` pour récupérer le `when` de la migration `0000`.
-3. Calcule le SHA-256 du fichier `0000_ambiguous_firedrake.sql`.
-4. Insère le hash et le timestamp `when` dans `__drizzle_migrations` si ce n'est pas déjà fait.
+## Commandes interdites en production
 
-### 3.3 Vérifier que `migrate` ne déclenche rien
+- `drizzle-kit push` (compare le code à la base et peut supprimer des données) ; réservé à une base jetable.
+- Toute modification de schéma hors migration (psql manuel, script `apply-schema-updates.sql`, DDL applicatif).
 
-```bash
-npm run db:migrate
-```
+## Fichiers clés
 
-Attendu : `Migrations applied successfully.` sans aucune requête `CREATE`/`DROP` (la baseline `0000` est reconnue comme déjà appliquée).
-
-## 4. Workflow de migrations futures (additif uniquement)
-
-### 4.1 Ajouter une nouvelle table/colonne dans `src/db/schema`
-
-Ne jamais supprimer ni modifier une colonne existante. Exemple additif :
-
-```ts
-export const newFeature = marketplaceSchema.table('new_feature', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-```
-
-Puis exporter-la dans `src/db/schema/index.ts`.
-
-### 4.2 Générer la migration
-
-```bash
-npx drizzle-kit generate --config=drizzle.config.ts
-```
-
-Vérifier manuellement le fichier SQL généré dans `drizzle/0001_...sql` : il ne doit contenir que des `CREATE TABLE` ou des `ALTER TABLE ... ADD COLUMN`.  
-**Si un `DROP` ou un `ALTER TABLE ... DROP COLUMN` apparaît, ne pas l'appliquer.** Corriger le schéma et regénérer.
-
-### 4.3 Appliquer en production
-
-```bash
-npm run db:migrate
-```
-
-Cet appel :
-
-- Utilise `__drizzle_migrations` pour ne jamais rejouer une migration déjà appliquée.
-- Exécute les migrations manquantes dans une transaction.
-- Ne touche pas aux tables existantes si elles ne sont pas dans la nouvelle migration.
-
-### 4.4 Introspection ponctuelle (si la base a évolué en dehors de Drizzle)
-
-```bash
-npx drizzle-kit introspect --config=drizzle.config.ts
-```
-
-Cette commande génère un fichier `drizzle/schema.ts` à partir de la base. Utilisez-le pour comparer avec `src/db/schema` et ajouter **manuellement** les tables/colonnes manquantes dans le code (source de vérité : la base).  
-**Ne pas écraser `src/db/schema` directement**, sinon vous perdriez les types, enums et relations métier.
-
-## 5. Commandes à éviter en production
-
-- `drizzle-kit push --force` : supprime/recrée des tables et colonnes sans passer par les migrations. C'était la cause des erreurs `relation already exists`. Le script `db:push` a été corrigé pour ne plus contenir `--force`.
-- `drizzle-kit push` tout court en production : il compare le code à la base et propose des modifications destructrices. À réserver à un environnement de développement jetable.
-
-## 6. Checklist de sécurité
-
-Avant chaque `npm run db:migrate` ou `npx drizzle-kit generate` en production :
-
-- [ ] `drizzle-kit check` est OK.
-- [ ] `drizzle-kit generate` ne génère aucune requête `DROP`.
-- [ ] Un backup de la base a été fait.
-- [ ] Le fichier SQL généré est relu.
-- [ ] `public.__drizzle_migrations` contient bien `0000` après le baseline.
-
-## 7. Fichiers clés
-
-- `drizzle.config.ts` : `schemaFilter` inclut `['public', 'auth', 'governance', 'marketplace', 'intelligence']` ; `migrations` pointe sur `public.__drizzle_migrations`.
-- `drizzle/0000_ambiguous_firedrake.sql` : migration baseline.
-- `drizzle/meta/0000_snapshot.json` : snapshot utilisé pour générer les différences.
-- `scripts/baseline-drizzle.ts` : script de baseline.
-- `scripts/run-migrations.ts` : runner de migrations.
+- `drizzle.config.ts` — `schemaFilter` : `public`, `auth`, `governance`, `marketplace`, `intelligence` ; journal `public.__drizzle_migrations`.
+- `drizzle/0000_baseline.sql`, `drizzle/meta/` — migrations et snapshots.
+- `scripts/run-migrations.ts` — exécuteur ; `scripts/schema-drift-check.mjs` — contrôle de dérive.
+- `.github/workflows/schema.yml` — CI : dérive, base vide → migrations → rejeu no-op → seed.

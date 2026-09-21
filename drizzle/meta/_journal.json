@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1788248855100,
-      "tag": "0000_lively_triathlon",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1788275889312,
-      "tag": "0001_nice_ravenous",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1788325023933,
-      "tag": "0002_clear_harry_osborn",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1788325170061,
-      "tag": "0003_spotty_the_executioner",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1789786377013,
-      "tag": "0004_add_subcategory_unit_config",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1789833067700,
-      "tag": "0006_brave_ultragirl",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1789956903526,
-      "tag": "0007_orders_otp_lock_checkout_group",
+      "when": 1789962829776,
+      "tag": "0000_baseline",
       "breakpoints": true
     }
   ]

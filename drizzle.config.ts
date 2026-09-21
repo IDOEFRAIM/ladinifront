@@ -60,19 +60,6 @@ export default defineConfig({
   // 💡 MIS À JOUR : Ajout de 'auth' et inclusion automatique de tous tes schémas métiers
   schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence'],
 
-  // Tables possédées par le backend Python (créées/gérées via son propre DDL) :
-  // les exclure évite que `drizzle-kit push`/`introspect` les voie comme
-  // « inconnues » et propose de les supprimer.
-  tablesFilter: [
-    '!marketplace.preorder_drafts',
-    '!marketplace.procurement_drafts',
-    '!marketplace.sales_publish_drafts',
-    '!marketplace.mcp_idempotency_records',
-    '!public.agri_workspaces',
-    '!public.episodic_memories',
-    '!public.user_farm_profiles',
-  ],
-
   // Journal des migrations en public (pas de schema 'drizzle' interne) pour rester
   // cohérent avec la base existante et les scripts baseline/run-migrations.
   migrations: {

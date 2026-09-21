@@ -1,3 +1,11 @@
+-- Baseline Drizzle (2026-09-21) — repart d'une base vide ; remplace l'ancien historique 0000..0007.
+-- Prérequis créés ici (drizzle-kit ne les émet pas) : schémas métier + extension pg_trgm
+-- (index GIN trigram de recherche floue). Rien n'est créé par le backend Python au démarrage.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
+CREATE SCHEMA IF NOT EXISTS "auth";--> statement-breakpoint
+CREATE SCHEMA IF NOT EXISTS "governance";--> statement-breakpoint
+CREATE SCHEMA IF NOT EXISTS "marketplace";--> statement-breakpoint
+CREATE SCHEMA IF NOT EXISTS "intelligence";--> statement-breakpoint
 CREATE TABLE "auth"."accounts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -32,6 +40,7 @@ CREATE TABLE "auth"."users" (
 	"whatsapp_enabled" boolean DEFAULT true,
 	"latitude" double precision,
 	"longitude" double precision,
+	"location_updated_at" timestamp,
 	"cnib_number" text,
 	"role" text DEFAULT 'USER' NOT NULL,
 	"identity_verified" boolean DEFAULT false,
@@ -78,17 +87,6 @@ CREATE TABLE "governance"."organizations" (
 	CONSTRAINT "organizations_tax_id_unique" UNIQUE("tax_id")
 );
 --> statement-breakpoint
-CREATE TABLE "governance"."overlay_layers" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"zone_id" uuid NOT NULL,
-	"key" text NOT NULL,
-	"label" text NOT NULL,
-	"enabled" boolean DEFAULT false NOT NULL,
-	"settings" jsonb,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "governance"."prohibited_terms" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"term" text NOT NULL,
@@ -124,6 +122,10 @@ CREATE TABLE "governance"."sub_categories" (
 	"category_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"blocked_zone_ids" text[] DEFAULT '{}'::text[] NOT NULL,
+	"minimum_order_quantity" numeric(14, 3),
+	"minimum_order_unit" text,
+	"priority_unit" text,
+	"allowed_units" text[],
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -143,24 +145,6 @@ CREATE TABLE "governance"."work_zones" (
 	"zone_id" uuid NOT NULL,
 	"manager_id" uuid,
 	"role" text,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "governance"."zone_metrics" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"zone_id" uuid NOT NULL,
-	"date" timestamp DEFAULT now() NOT NULL,
-	"metric_name" text NOT NULL,
-	"value" double precision NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "governance"."zone_settings" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"zone_id" uuid NOT NULL,
-	"key" text NOT NULL,
-	"value" jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -208,20 +192,9 @@ CREATE TABLE "marketplace"."auctions" (
 	"cancellation_reason" text,
 	"target_zone_id" uuid,
 	"version" integer DEFAULT 0 NOT NULL,
+	"images" text[] DEFAULT '{}'::text[] NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "marketplace"."batches" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"stock_id" uuid NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"batch_number" text NOT NULL,
-	"origin_farm_id" uuid,
-	"quantity" numeric(14, 3) NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "batches_batch_number_unique" UNIQUE("batch_number")
 );
 --> statement-breakpoint
 CREATE TABLE "marketplace"."bids" (
@@ -236,6 +209,7 @@ CREATE TABLE "marketplace"."bids" (
 	"notified_at" timestamp,
 	"valid_until" timestamp,
 	"estimated_delivery_date" timestamp,
+	"images" text[] DEFAULT '{}'::text[] NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -361,35 +335,18 @@ CREATE TABLE "marketplace"."market_offers" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "marketplace"."marketplace_ratings" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"order_id" uuid NOT NULL,
-	"author_type" text NOT NULL,
-	"author_id" uuid NOT NULL,
-	"target_type" text NOT NULL,
-	"target_id" uuid NOT NULL,
-	"rating_product_quality" integer,
-	"rating_packaging" integer,
-	"rating_reception_speed" integer,
-	"rating_communication" integer,
-	"rating_reliability" integer NOT NULL,
-	"global_rating" double precision NOT NULL,
-	"comment" text,
-	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "marketplace"."order_disputes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
 	"escrow_wallet_id" uuid,
 	"raised_by_id" uuid NOT NULL,
-	"reason_category" varchar NOT NULL,
+	"reason_category" text NOT NULL,
 	"description" text NOT NULL,
 	"evidence_images" text[] DEFAULT '{}'::text[] NOT NULL,
-	"requested_solution" varchar NOT NULL,
+	"requested_solution" text NOT NULL,
 	"disputed_amount" numeric(14, 2) DEFAULT '0' NOT NULL,
-	"escrow_payout_status" varchar DEFAULT 'HELD' NOT NULL,
-	"status" varchar DEFAULT 'PENDING' NOT NULL,
+	"escrow_payout_status" text DEFAULT 'HELD' NOT NULL,
+	"status" text DEFAULT 'PENDING' NOT NULL,
 	"resolution_notes" text,
 	"resolved_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -401,15 +358,17 @@ CREATE TABLE "marketplace"."order_items" (
 	"order_id" uuid NOT NULL,
 	"product_id" uuid NOT NULL,
 	"quantity" numeric(14, 3) NOT NULL,
-	"price_at_sale" numeric(12, 2) NOT NULL
+	"price_at_sale" numeric(12, 2) NOT NULL,
+	"tier_id" text,
+	"base_unit_quantity" numeric(14, 3)
 );
 --> statement-breakpoint
 CREATE TABLE "marketplace"."order_reminders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
-	"type" varchar NOT NULL,
-	"channel" varchar DEFAULT 'WHATSAPP' NOT NULL,
-	"status" varchar DEFAULT 'SCHEDULED' NOT NULL,
+	"type" text NOT NULL,
+	"channel" text DEFAULT 'WHATSAPP' NOT NULL,
+	"status" text DEFAULT 'SCHEDULED' NOT NULL,
 	"scheduled_at" timestamp NOT NULL,
 	"sent_at" timestamp,
 	"attempts" integer DEFAULT 0 NOT NULL,
@@ -421,9 +380,9 @@ CREATE TABLE "marketplace"."order_reminders" (
 CREATE TABLE "marketplace"."order_status_history" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
-	"status_type" varchar NOT NULL,
-	"from_status" varchar,
-	"to_status" varchar NOT NULL,
+	"status_type" text NOT NULL,
+	"from_status" text,
+	"to_status" text NOT NULL,
 	"actor_id" uuid,
 	"note" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
@@ -435,31 +394,38 @@ CREATE TABLE "marketplace"."orders" (
 	"client_id" uuid,
 	"organization_id" uuid,
 	"zone_id" uuid,
-	"customer_name" varchar,
-	"customer_phone" varchar,
-	"payment_method" varchar DEFAULT 'CASH' NOT NULL,
-	"payment_status" varchar DEFAULT 'PENDING' NOT NULL,
-	"city" varchar,
+	"customer_name" text,
+	"customer_phone" text,
+	"payment_method" text DEFAULT 'CASH' NOT NULL,
+	"payment_status" text DEFAULT 'PENDING' NOT NULL,
+	"city" text,
 	"gps_lat" real,
 	"gps_lng" real,
 	"delivery_desc" text,
-	"audio_url" varchar,
-	"status" varchar DEFAULT 'PENDING' NOT NULL,
-	"delivery_status" varchar DEFAULT 'PENDING' NOT NULL,
-	"source" varchar DEFAULT 'APP' NOT NULL,
-	"whatsapp_id" varchar,
+	"audio_url" text,
+	"status" text DEFAULT 'PENDING' NOT NULL,
+	"delivery_status" text DEFAULT 'PENDING' NOT NULL,
+	"source" text DEFAULT 'APP' NOT NULL,
+	"whatsapp_id" text,
 	"total_amount" numeric(14, 2) NOT NULL,
 	"is_agent_order" boolean DEFAULT false NOT NULL,
 	"delivery_date" timestamp,
 	"subtotal" numeric(14, 2) DEFAULT '0' NOT NULL,
 	"tax_amount" numeric(14, 2) DEFAULT '0' NOT NULL,
-	"currency" varchar DEFAULT 'XOF' NOT NULL,
+	"currency" text DEFAULT 'XOF' NOT NULL,
 	"delivery_fee" numeric(14, 2) DEFAULT '0' NOT NULL,
-	"cancellation_role" varchar,
+	"cancellation_role" text,
 	"escrow_wallet_id" uuid,
+	"paydunya_invoice_token" text,
+	"delivery_otp" text,
+	"payment_expires_at" timestamp,
+	"locked_amount" numeric(14, 2),
+	"delivery_otp_attempts" integer DEFAULT 0 NOT NULL,
+	"delivery_otp_locked_until" timestamp,
+	"checkout_group_id" uuid,
 	"auction_id" uuid,
 	"winning_bid_id" uuid,
-	"order_type" varchar DEFAULT 'STANDARD' NOT NULL,
+	"order_type" text DEFAULT 'STANDARD' NOT NULL,
 	"market_offer_id" uuid,
 	"expected_fulfillment_date" timestamp,
 	"preorder_converted_at" timestamp,
@@ -472,11 +438,11 @@ CREATE TABLE "marketplace"."payments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
 	"amount" numeric(14, 2) NOT NULL,
-	"currency" varchar DEFAULT 'XOF' NOT NULL,
-	"method" varchar DEFAULT 'CASH' NOT NULL,
-	"status" varchar DEFAULT 'PENDING' NOT NULL,
-	"provider" varchar,
-	"provider_ref" varchar,
+	"currency" text DEFAULT 'XOF' NOT NULL,
+	"method" text DEFAULT 'CASH' NOT NULL,
+	"status" text DEFAULT 'PENDING' NOT NULL,
+	"provider" text,
+	"provider_ref" text,
 	"escrow_wallet_id" uuid,
 	"failure_reason" text,
 	"authorized_at" timestamp,
@@ -631,28 +597,6 @@ CREATE TABLE "intelligence"."agent_actions" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "intelligence"."agent_context_memory" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" uuid NOT NULL,
-	"market_offer_id" uuid,
-	"context_key" text NOT NULL,
-	"context_value" jsonb NOT NULL,
-	"source" text DEFAULT 'AGENT' NOT NULL,
-	"confidence" double precision,
-	"expires_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "intelligence"."ai_rating_reasonings" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"trust_score_id" uuid NOT NULL,
-	"agent_name" text NOT NULL,
-	"justification" text NOT NULL,
-	"data_points" jsonb NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "intelligence"."audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"actor_id" uuid NOT NULL,
@@ -759,12 +703,100 @@ CREATE TABLE "intelligence"."trust_scores" (
 	CONSTRAINT "trust_scores_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
+CREATE TABLE "agri_workspaces" (
+	"workspace_id" text PRIMARY KEY NOT NULL,
+	"workspace_type" text DEFAULT 'producer' NOT NULL,
+	"active_agent" text DEFAULT 'market' NOT NULL,
+	"active_goal" text DEFAULT '' NOT NULL,
+	"active_form" text,
+	"locked_agent" text,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"langgraph_state" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"updated_at" double precision DEFAULT 0 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "marketplace"."mcp_idempotency_records" (
+	"idempotency_key" text NOT NULL,
+	"tool_name" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"status" text NOT NULL,
+	"external_result" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "mcp_idempotency_records_idempotency_key_tool_name_pk" PRIMARY KEY("idempotency_key","tool_name")
+);
+--> statement-breakpoint
+CREATE TABLE "marketplace"."preorder_drafts" (
+	"draft_id" text PRIMARY KEY NOT NULL,
+	"conversation_id" text NOT NULL,
+	"version" integer NOT NULL,
+	"status" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"order_id" text
+);
+--> statement-breakpoint
+CREATE TABLE "marketplace"."procurement_drafts" (
+	"draft_id" text PRIMARY KEY NOT NULL,
+	"conversation_id" text NOT NULL,
+	"version" integer NOT NULL,
+	"status" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "marketplace"."sales_publish_drafts" (
+	"draft_id" text PRIMARY KEY NOT NULL,
+	"conversation_id" text NOT NULL,
+	"version" integer NOT NULL,
+	"status" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "auth"."accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth"."sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "auth"."users" ADD CONSTRAINT "users_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."standard_prices" ADD CONSTRAINT "standard_prices_sub_category_id_sub_categories_id_fk" FOREIGN KEY ("sub_category_id") REFERENCES "governance"."sub_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."standard_prices" ADD CONSTRAINT "standard_prices_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."standard_prices" ADD CONSTRAINT "standard_prices_updated_by_id_users_id_fk" FOREIGN KEY ("updated_by_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."sub_categories" ADD CONSTRAINT "sub_categories_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "governance"."categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."user_organizations" ADD CONSTRAINT "user_organizations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."user_organizations" ADD CONSTRAINT "user_organizations_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."user_organizations" ADD CONSTRAINT "user_organizations_role_id_role_definitions_id_fk" FOREIGN KEY ("role_id") REFERENCES "governance"."role_definitions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."user_organizations" ADD CONSTRAINT "user_organizations_managed_zone_id_zones_id_fk" FOREIGN KEY ("managed_zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."work_zones" ADD CONSTRAINT "work_zones_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."work_zones" ADD CONSTRAINT "work_zones_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."work_zones" ADD CONSTRAINT "work_zones_manager_id_users_id_fk" FOREIGN KEY ("manager_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."zones" ADD CONSTRAINT "zones_climatic_region_id_climatic_regions_id_fk" FOREIGN KEY ("climatic_region_id") REFERENCES "governance"."climatic_regions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."zones" ADD CONSTRAINT "zones_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "governance"."zones" ADD CONSTRAINT "zones_parent_id_zones_id_fk" FOREIGN KEY ("parent_id") REFERENCES "governance"."zones"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."auctions" ADD CONSTRAINT "auctions_buyer_id_buyer_profiles_id_fk" FOREIGN KEY ("buyer_id") REFERENCES "marketplace"."buyer_profiles"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."auctions" ADD CONSTRAINT "auctions_sub_category_id_sub_categories_id_fk" FOREIGN KEY ("sub_category_id") REFERENCES "governance"."sub_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."auctions" ADD CONSTRAINT "auctions_winner_bid_id_bids_id_fk" FOREIGN KEY ("winner_bid_id") REFERENCES "marketplace"."bids"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."auctions" ADD CONSTRAINT "auctions_target_zone_id_zones_id_fk" FOREIGN KEY ("target_zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."bids" ADD CONSTRAINT "bids_auction_id_auctions_id_fk" FOREIGN KEY ("auction_id") REFERENCES "marketplace"."auctions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."bids" ADD CONSTRAINT "bids_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."bids" ADD CONSTRAINT "bids_linked_stock_id_stocks_id_fk" FOREIGN KEY ("linked_stock_id") REFERENCES "marketplace"."stocks"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."buyer_profiles" ADD CONSTRAINT "buyer_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."buyer_profiles" ADD CONSTRAINT "buyer_profiles_buyer_type_id_buyer_types_id_fk" FOREIGN KEY ("buyer_type_id") REFERENCES "marketplace"."buyer_types"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."buyer_profiles" ADD CONSTRAINT "buyer_profiles_verified_by_id_users_id_fk" FOREIGN KEY ("verified_by_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."clients" ADD CONSTRAINT "clients_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."deliveries" ADD CONSTRAINT "deliveries_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."deliveries" ADD CONSTRAINT "deliveries_delivery_agent_id_delivery_agents_id_fk" FOREIGN KEY ("delivery_agent_id") REFERENCES "marketplace"."delivery_agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."delivery_agents" ADD CONSTRAINT "delivery_agents_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."delivery_agents" ADD CONSTRAINT "delivery_agents_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."expenses" ADD CONSTRAINT "expenses_farm_id_farms_id_fk" FOREIGN KEY ("farm_id") REFERENCES "marketplace"."farms"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."farms" ADD CONSTRAINT "farms_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."farms" ADD CONSTRAINT "farms_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."market_offers" ADD CONSTRAINT "market_offers_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."market_offers" ADD CONSTRAINT "market_offers_farm_id_farms_id_fk" FOREIGN KEY ("farm_id") REFERENCES "marketplace"."farms"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "marketplace"."marketplace_ratings" ADD CONSTRAINT "marketplace_ratings_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."market_offers" ADD CONSTRAINT "market_offers_sub_category_id_sub_categories_id_fk" FOREIGN KEY ("sub_category_id") REFERENCES "governance"."sub_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."order_disputes" ADD CONSTRAINT "order_disputes_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."order_disputes" ADD CONSTRAINT "order_disputes_raised_by_id_users_id_fk" FOREIGN KEY ("raised_by_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."order_items" ADD CONSTRAINT "order_items_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "marketplace"."products"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."order_reminders" ADD CONSTRAINT "order_reminders_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -777,16 +809,45 @@ ALTER TABLE "marketplace"."orders" ADD CONSTRAINT "orders_auction_id_auctions_id
 ALTER TABLE "marketplace"."orders" ADD CONSTRAINT "orders_winning_bid_id_bids_id_fk" FOREIGN KEY ("winning_bid_id") REFERENCES "marketplace"."bids"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."orders" ADD CONSTRAINT "orders_market_offer_id_market_offers_id_fk" FOREIGN KEY ("market_offer_id") REFERENCES "marketplace"."market_offers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."payments" ADD CONSTRAINT "payments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."producers" ADD CONSTRAINT "producers_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."producers" ADD CONSTRAINT "producers_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."producers" ADD CONSTRAINT "producers_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."products" ADD CONSTRAINT "products_sub_category_id_sub_categories_id_fk" FOREIGN KEY ("sub_category_id") REFERENCES "governance"."sub_categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."products" ADD CONSTRAINT "products_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."products" ADD CONSTRAINT "products_verified_by_id_users_id_fk" FOREIGN KEY ("verified_by_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_allocations" ADD CONSTRAINT "seed_allocations_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_allocations" ADD CONSTRAINT "seed_allocations_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_allocations" ADD CONSTRAINT "seed_allocations_allocated_by_id_users_id_fk" FOREIGN KEY ("allocated_by_id") REFERENCES "auth"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distribution_attempts" ADD CONSTRAINT "seed_distribution_attempts_distribution_id_seed_distributions_id_fk" FOREIGN KEY ("distribution_id") REFERENCES "marketplace"."seed_distributions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."seed_distribution_attempts" ADD CONSTRAINT "seed_distribution_attempts_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distributions" ADD CONSTRAINT "seed_distributions_allocation_id_seed_allocations_id_fk" FOREIGN KEY ("allocation_id") REFERENCES "marketplace"."seed_allocations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distributions" ADD CONSTRAINT "seed_distributions_producer_id_producers_id_fk" FOREIGN KEY ("producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distributions" ADD CONSTRAINT "seed_distributions_agent_id_users_id_fk" FOREIGN KEY ("agent_id") REFERENCES "auth"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distributions" ADD CONSTRAINT "seed_distributions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "marketplace"."seed_distributions" ADD CONSTRAINT "seed_distributions_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."stock_movements" ADD CONSTRAINT "stock_movements_stock_id_stocks_id_fk" FOREIGN KEY ("stock_id") REFERENCES "marketplace"."stocks"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."stocks" ADD CONSTRAINT "stocks_farm_id_farms_id_fk" FOREIGN KEY ("farm_id") REFERENCES "marketplace"."farms"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."stocks" ADD CONSTRAINT "stocks_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "marketplace"."warehouses"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."stocks" ADD CONSTRAINT "stocks_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "governance"."organizations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."stocks" ADD CONSTRAINT "stocks_verified_by_id_users_id_fk" FOREIGN KEY ("verified_by_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "marketplace"."warehouses" ADD CONSTRAINT "warehouses_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."agent_actions" ADD CONSTRAINT "agent_actions_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "marketplace"."orders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."agent_actions" ADD CONSTRAINT "agent_actions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."audit_logs" ADD CONSTRAINT "audit_logs_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."conversations" ADD CONSTRAINT "conversations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."conversations" ADD CONSTRAINT "conversations_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."demand_signals" ADD CONSTRAINT "demand_signals_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."demand_signals" ADD CONSTRAINT "demand_signals_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."moderation_events" ADD CONSTRAINT "moderation_events_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."notification_outbox" ADD CONSTRAINT "notification_outbox_solicitation_id_solicitations_id_fk" FOREIGN KEY ("solicitation_id") REFERENCES "intelligence"."solicitations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."notification_outbox" ADD CONSTRAINT "notification_outbox_recipient_user_id_users_id_fk" FOREIGN KEY ("recipient_user_id") REFERENCES "auth"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_auction_id_auctions_id_fk" FOREIGN KEY ("auction_id") REFERENCES "marketplace"."auctions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_market_offer_id_market_offers_id_fk" FOREIGN KEY ("market_offer_id") REFERENCES "marketplace"."market_offers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_target_producer_id_producers_id_fk" FOREIGN KEY ("target_producer_id") REFERENCES "marketplace"."producers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_target_buyer_id_buyer_profiles_id_fk" FOREIGN KEY ("target_buyer_id") REFERENCES "marketplace"."buyer_profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_sub_category_id_sub_categories_id_fk" FOREIGN KEY ("sub_category_id") REFERENCES "governance"."sub_categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."solicitations" ADD CONSTRAINT "solicitations_zone_id_zones_id_fk" FOREIGN KEY ("zone_id") REFERENCES "governance"."zones"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intelligence"."trust_scores" ADD CONSTRAINT "trust_scores_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "accounts_provider_unique" ON "auth"."accounts" USING btree ("provider","provider_account_id");--> statement-breakpoint
 CREATE INDEX "accounts_user_idx" ON "auth"."accounts" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "sessions_user_idx" ON "auth"."sessions" USING btree ("user_id");--> statement-breakpoint
@@ -794,36 +855,36 @@ CREATE INDEX "users_role_idx" ON "auth"."users" USING btree ("role");--> stateme
 CREATE INDEX "users_zone_idx" ON "auth"."users" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "users_created_idx" ON "auth"."users" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "users_account_status_idx" ON "auth"."users" USING btree ("account_status");--> statement-breakpoint
-CREATE UNIQUE INDEX "overlay_layers_zone_key_unique" ON "governance"."overlay_layers" USING btree ("zone_id","key");--> statement-breakpoint
-CREATE INDEX "overlay_layers_zone_idx" ON "governance"."overlay_layers" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "prohibited_terms_active_idx" ON "governance"."prohibited_terms" USING btree ("is_active");--> statement-breakpoint
 CREATE UNIQUE INDEX "standard_prices_sub_zone_unique" ON "governance"."standard_prices" USING btree ("sub_category_id","zone_id");--> statement-breakpoint
 CREATE INDEX "standard_prices_zone_idx" ON "governance"."standard_prices" USING btree ("zone_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "sub_categories_cat_name_unique" ON "governance"."sub_categories" USING btree ("category_id","name");--> statement-breakpoint
+CREATE INDEX "ix_subcategories_name_trgm" ON "governance"."sub_categories" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
 CREATE UNIQUE INDEX "user_org_unique" ON "governance"."user_organizations" USING btree ("user_id","organization_id");--> statement-breakpoint
+CREATE INDEX "user_org_user_idx" ON "governance"."user_organizations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_org_role_idx" ON "governance"."user_organizations" USING btree ("role_id");--> statement-breakpoint
+CREATE INDEX "user_org_org_idx" ON "governance"."user_organizations" USING btree ("organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "work_zones_org_zone_unique" ON "governance"."work_zones" USING btree ("organization_id","zone_id");--> statement-breakpoint
 CREATE INDEX "work_zones_org_idx" ON "governance"."work_zones" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "work_zones_zone_idx" ON "governance"."work_zones" USING btree ("zone_id");--> statement-breakpoint
-CREATE INDEX "zone_metrics_composite_idx" ON "governance"."zone_metrics" USING btree ("zone_id","date","metric_name");--> statement-breakpoint
-CREATE UNIQUE INDEX "zone_settings_zone_key_unique" ON "governance"."zone_settings" USING btree ("zone_id","key");--> statement-breakpoint
-CREATE INDEX "zone_settings_zone_idx" ON "governance"."zone_settings" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "zones_region_idx" ON "governance"."zones" USING btree ("climatic_region_id");--> statement-breakpoint
 CREATE INDEX "zones_org_idx" ON "governance"."zones" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "zones_active_idx" ON "governance"."zones" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "zones_parent_idx" ON "governance"."zones" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "zones_path_idx" ON "governance"."zones" USING btree ("path");--> statement-breakpoint
+CREATE INDEX "ix_zones_name_trgm" ON "governance"."zones" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "auctions_status_idx" ON "marketplace"."auctions" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "auctions_subcategory_idx" ON "marketplace"."auctions" USING btree ("sub_category_id");--> statement-breakpoint
 CREATE INDEX "auctions_buyer_idx" ON "marketplace"."auctions" USING btree ("buyer_id");--> statement-breakpoint
 CREATE INDEX "auctions_escrow_status_idx" ON "marketplace"."auctions" USING btree ("escrow_status");--> statement-breakpoint
 CREATE INDEX "auctions_zone_idx" ON "marketplace"."auctions" USING btree ("target_zone_id");--> statement-breakpoint
 CREATE INDEX "auctions_deadline_idx" ON "marketplace"."auctions" USING btree ("deadline");--> statement-breakpoint
-CREATE INDEX "batches_stock_idx" ON "marketplace"."batches" USING btree ("stock_id");--> statement-breakpoint
-CREATE INDEX "batches_org_idx" ON "marketplace"."batches" USING btree ("organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "bids_auction_producer_unique" ON "marketplace"."bids" USING btree ("auction_id","producer_id");--> statement-breakpoint
 CREATE INDEX "bids_auction_idx" ON "marketplace"."bids" USING btree ("auction_id");--> statement-breakpoint
 CREATE INDEX "bids_producer_idx" ON "marketplace"."bids" USING btree ("producer_id");--> statement-breakpoint
 CREATE INDEX "bids_linked_stock_idx" ON "marketplace"."bids" USING btree ("linked_stock_id");--> statement-breakpoint
 CREATE INDEX "bids_status_idx" ON "marketplace"."bids" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "bids_one_winner_per_auction_uq" ON "marketplace"."bids" USING btree ("auction_id") WHERE "marketplace"."bids"."is_winner" = true;--> statement-breakpoint
 CREATE INDEX "buyer_profiles_user_idx" ON "marketplace"."buyer_profiles" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "buyer_profiles_type_idx" ON "marketplace"."buyer_profiles" USING btree ("buyer_type_id");--> statement-breakpoint
 CREATE INDEX "buyer_profiles_verified_idx" ON "marketplace"."buyer_profiles" USING btree ("is_verified");--> statement-breakpoint
@@ -847,10 +908,7 @@ CREATE INDEX "market_offers_subcategory_idx" ON "marketplace"."market_offers" US
 CREATE INDEX "market_offers_available_at_idx" ON "marketplace"."market_offers" USING btree ("estimated_available_at");--> statement-breakpoint
 CREATE INDEX "market_offers_public_status_idx" ON "marketplace"."market_offers" USING btree ("is_public","status");--> statement-breakpoint
 CREATE INDEX "market_offers_preorder_idx" ON "marketplace"."market_offers" USING btree ("preorder_enabled");--> statement-breakpoint
-CREATE INDEX "mr_order_idx" ON "marketplace"."marketplace_ratings" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "mr_author_idx" ON "marketplace"."marketplace_ratings" USING btree ("author_id");--> statement-breakpoint
-CREATE INDEX "mr_target_idx" ON "marketplace"."marketplace_ratings" USING btree ("target_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "mr_order_author_unique" ON "marketplace"."marketplace_ratings" USING btree ("order_id","author_id");--> statement-breakpoint
+CREATE INDEX "ix_market_offers_label_trgm" ON "marketplace"."market_offers" USING gin ("product_label" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "order_disputes_order_idx" ON "marketplace"."order_disputes" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "order_disputes_status_idx" ON "marketplace"."order_disputes" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "order_disputes_raised_by_idx" ON "marketplace"."order_disputes" USING btree ("raised_by_id");--> statement-breakpoint
@@ -863,6 +921,7 @@ CREATE INDEX "osh_order_idx" ON "marketplace"."order_status_history" USING btree
 CREATE INDEX "osh_order_type_idx" ON "marketplace"."order_status_history" USING btree ("order_id","status_type");--> statement-breakpoint
 CREATE INDEX "osh_created_idx" ON "marketplace"."order_status_history" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "orders_buyer_idx" ON "marketplace"."orders" USING btree ("buyer_id");--> statement-breakpoint
+CREATE INDEX "orders_client_idx" ON "marketplace"."orders" USING btree ("client_id");--> statement-breakpoint
 CREATE INDEX "orders_org_idx" ON "marketplace"."orders" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "orders_status_idx" ON "marketplace"."orders" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "orders_delivery_status_idx" ON "marketplace"."orders" USING btree ("delivery_status");--> statement-breakpoint
@@ -875,6 +934,9 @@ CREATE INDEX "orders_type_idx" ON "marketplace"."orders" USING btree ("order_typ
 CREATE INDEX "orders_market_offer_idx" ON "marketplace"."orders" USING btree ("market_offer_id");--> statement-breakpoint
 CREATE INDEX "orders_buyer_status_idx" ON "marketplace"."orders" USING btree ("buyer_id","status");--> statement-breakpoint
 CREATE INDEX "orders_payment_status_idx" ON "marketplace"."orders" USING btree ("payment_status");--> statement-breakpoint
+CREATE UNIQUE INDEX "ix_orders_paydunya_token" ON "marketplace"."orders" USING btree ("paydunya_invoice_token") WHERE "marketplace"."orders"."paydunya_invoice_token" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "ix_orders_payment_expires_at" ON "marketplace"."orders" USING btree ("payment_expires_at") WHERE "marketplace"."orders"."payment_status" = 'PENDING';--> statement-breakpoint
+CREATE INDEX "ix_orders_checkout_group" ON "marketplace"."orders" USING btree ("checkout_group_id") WHERE "marketplace"."orders"."checkout_group_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "payments_order_idx" ON "marketplace"."payments" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "payments_status_idx" ON "marketplace"."payments" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "payments_provider_ref_unique" ON "marketplace"."payments" USING btree ("provider_ref");--> statement-breakpoint
@@ -889,6 +951,7 @@ CREATE INDEX "products_created_idx" ON "marketplace"."products" USING btree ("cr
 CREATE INDEX "products_verifier_idx" ON "marketplace"."products" USING btree ("verified_by_id");--> statement-breakpoint
 CREATE INDEX "products_producer_available_idx" ON "marketplace"."products" USING btree ("producer_id","is_available");--> statement-breakpoint
 CREATE INDEX "products_category_available_idx" ON "marketplace"."products" USING btree ("category_label","is_available");--> statement-breakpoint
+CREATE INDEX "ix_products_name_trgm" ON "marketplace"."products" USING gin ("name" gin_trgm_ops);--> statement-breakpoint
 CREATE INDEX "seed_allocations_org_idx" ON "marketplace"."seed_allocations" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "seed_allocations_zone_idx" ON "marketplace"."seed_allocations" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "seed_dist_attempts_distribution_idx" ON "marketplace"."seed_distribution_attempts" USING btree ("distribution_id");--> statement-breakpoint
@@ -906,15 +969,11 @@ CREATE INDEX "stocks_type_idx" ON "marketplace"."stocks" USING btree ("type");--
 CREATE INDEX "stocks_verifier_idx" ON "marketplace"."stocks" USING btree ("verified_by_id");--> statement-breakpoint
 CREATE INDEX "warehouses_zone_idx" ON "marketplace"."warehouses" USING btree ("zone_id");--> statement-breakpoint
 CREATE INDEX "agent_actions_status_idx" ON "intelligence"."agent_actions" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "agent_actions_user_idx" ON "intelligence"."agent_actions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "agent_actions_batch_idx" ON "intelligence"."agent_actions" USING btree ("batch_id");--> statement-breakpoint
 CREATE INDEX "agent_actions_name_idx" ON "intelligence"."agent_actions" USING btree ("agent_name");--> statement-breakpoint
 CREATE UNIQUE INDEX "agent_actions_order_unique" ON "intelligence"."agent_actions" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "agent_actions_queue_idx" ON "intelligence"."agent_actions" USING btree ("status","priority");--> statement-breakpoint
-CREATE INDEX "acm_user_idx" ON "intelligence"."agent_context_memory" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "acm_key_idx" ON "intelligence"."agent_context_memory" USING btree ("context_key");--> statement-breakpoint
-CREATE UNIQUE INDEX "acm_user_key_unique" ON "intelligence"."agent_context_memory" USING btree ("user_id","context_key");--> statement-breakpoint
-CREATE INDEX "ai_rating_trust_idx" ON "intelligence"."ai_rating_reasonings" USING btree ("trust_score_id");--> statement-breakpoint
-CREATE INDEX "ai_rating_agent_idx" ON "intelligence"."ai_rating_reasonings" USING btree ("agent_name");--> statement-breakpoint
 CREATE INDEX "audit_logs_actor_idx" ON "intelligence"."audit_logs" USING btree ("actor_id");--> statement-breakpoint
 CREATE INDEX "audit_logs_entity_idx" ON "intelligence"."audit_logs" USING btree ("entity_id");--> statement-breakpoint
 CREATE INDEX "audit_logs_entity_time_idx" ON "intelligence"."audit_logs" USING btree ("entity_type","created_at");--> statement-breakpoint
@@ -934,4 +993,8 @@ CREATE INDEX "outbox_solicitation_idx" ON "intelligence"."notification_outbox" U
 CREATE UNIQUE INDEX "solicitations_auction_producer_uq" ON "intelligence"."solicitations" USING btree ("auction_id","target_producer_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "solicitations_offer_buyer_uq" ON "intelligence"."solicitations" USING btree ("market_offer_id","target_buyer_id");--> statement-breakpoint
 CREATE INDEX "solicitations_kind_status_idx" ON "intelligence"."solicitations" USING btree ("kind","status");--> statement-breakpoint
-CREATE INDEX "solicitations_auction_idx" ON "intelligence"."solicitations" USING btree ("auction_id");
+CREATE INDEX "solicitations_auction_idx" ON "intelligence"."solicitations" USING btree ("auction_id");--> statement-breakpoint
+CREATE INDEX "ix_preorder_drafts_conversation" ON "marketplace"."preorder_drafts" USING btree ("conversation_id");--> statement-breakpoint
+CREATE INDEX "ix_preorder_drafts_order_id" ON "marketplace"."preorder_drafts" USING btree ("order_id") WHERE "marketplace"."preorder_drafts"."order_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "ix_procurement_drafts_conversation" ON "marketplace"."procurement_drafts" USING btree ("conversation_id");--> statement-breakpoint
+CREATE INDEX "ix_sales_publish_drafts_conversation" ON "marketplace"."sales_publish_drafts" USING btree ("conversation_id");

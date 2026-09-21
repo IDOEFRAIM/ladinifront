@@ -37,7 +37,6 @@ import {
   marketOffers,
   stocks,
   stockMovements,
-  batches,
   expenses,
   products,
   orders,
@@ -48,7 +47,6 @@ import {
   orderDisputes,
   auctions,
   bids,
-  marketplaceRatings,
   seedAllocations,
   seedDistributions,
   seedDistributionAttempts,
@@ -59,8 +57,6 @@ import {
   agentActions,
   conversations,
   trustScores,
-  aiRatingReasonings,
-  agentContextMemory,
 } from './intelligence';
 
 // ╔══════════════════════════════════════════════╗
@@ -257,13 +253,6 @@ export const stockMovementsRelations = relations(stockMovements, ({ one }) => ({
   }),
 }));
 
-export const batchesRelations = relations(batches, ({ one }) => ({
-  stock: one(stocks, {
-    fields: [batches.stockId],
-    references: [stocks.id],
-  }),
-}));
-
 export const expensesRelations = relations(expenses, ({ one }) => ({
   farm: one(farms, {
     fields: [expenses.farmId],
@@ -317,7 +306,6 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   statusHistory: many(orderStatusHistory),
   reminders: many(orderReminders),
   disputes: many(orderDisputes),
-  ratings: many(marketplaceRatings),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -355,13 +343,6 @@ export const orderRemindersRelations = relations(orderReminders, ({ one }) => ({
 export const orderDisputesRelations = relations(orderDisputes, ({ one }) => ({
   order: one(orders, {
     fields: [orderDisputes.orderId],
-    references: [orders.id],
-  }),
-}));
-
-export const marketplaceRatingsRelations = relations(marketplaceRatings, ({ one }) => ({
-  order: one(orders, {
-    fields: [marketplaceRatings.orderId],
     references: [orders.id],
   }),
 }));
@@ -479,25 +460,6 @@ export const trustScoresRelations = relations(trustScores, ({ one, many }) => ({
   user: one(users, {
     fields: [trustScores.userId],
     references: [users.id],
-  }),
-  reasonings: many(aiRatingReasonings),
-}));
-
-export const aiRatingReasoningsRelations = relations(aiRatingReasonings, ({ one }) => ({
-  trustScore: one(trustScores, {
-    fields: [aiRatingReasonings.trustScoreId],
-    references: [trustScores.id],
-  }),
-}));
-
-export const agentContextMemoryRelations = relations(agentContextMemory, ({ one }) => ({
-  user: one(users, {
-    fields: [agentContextMemory.userId],
-    references: [users.id],
-  }),
-  marketOffer: one(marketOffers, {
-    fields: [agentContextMemory.marketOfferId],
-    references: [marketOffers.id],
   }),
 }));
 

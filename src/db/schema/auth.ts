@@ -1,6 +1,7 @@
-import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, doublePrecision } from 'drizzle-orm/pg-core';
+import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, doublePrecision, AnyPgColumn } from 'drizzle-orm/pg-core';
 import { type InferModel } from 'drizzle-orm';
 import { authSchema, roleEnum } from './_config';
+import { zones } from './governance';
 
 export const users = authSchema.table('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -29,7 +30,7 @@ export const users = authSchema.table('users', {
   cnibNumber: text('cnib_number').unique(),
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),
-  zoneId: uuid('zone_id'),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
   onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   // Modération / abus : blocage (annulations répétées) & bannissement (produits interdits).
   accountStatus: text('account_status').default('ACTIVE').notNull(), // ACTIVE | BLOCKED | BANNED
@@ -47,7 +48,7 @@ export const users = authSchema.table('users', {
 
 export const accounts = authSchema.table('accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).notNull(),
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('provider_account_id').notNull(),
@@ -66,7 +67,7 @@ export const accounts = authSchema.table('accounts', {
 export const sessions = authSchema.table('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   sessionToken: text('session_token').unique().notNull(),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).notNull(),
   expires: timestamp('expires').notNull(),
 }, (t) => [
   index('sessions_user_idx').on(t.userId),
