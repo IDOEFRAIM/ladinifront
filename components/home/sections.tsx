@@ -98,7 +98,7 @@ export function HeroSection() {
         </h1>
 
         <p className="hero-rise" style={{ ...rise(0.3), fontFamily: F.body, fontSize: '1.2rem', color: C.muted, lineHeight: 1.6, marginTop: 24, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto', textAlign: 'center', fontWeight: 500 }}>
-          {'La terre et la table se parlent enfin sans intermédiaire. '}
+          
           <strong style={{ fontWeight: 700, color: C.forest }}>LADINI</strong>
           {' connecte directement nos producteurs aux restaurants et commerces. '}
           <span style={{ display: 'block', marginTop: 6, fontStyle: 'italic', color: C.emerald, fontWeight: 600 }}>Un marché direct, juste et transparent.</span>

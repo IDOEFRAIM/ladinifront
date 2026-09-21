@@ -1,5 +1,6 @@
-﻿'use client';
+'use client';
 
+import { BF_PREFIX, withBurkinaPrefix } from '@/lib/phone-input';
 import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,7 +35,7 @@ function SignupPageContent() {
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: '', email: '', password: '', phone: '' },
+    defaultValues: { name: '', email: '', password: '', phone: BF_PREFIX },
   });
 
   const { location, isLoading: geoLoading, getLocation } = useGeoLocation();
@@ -105,7 +106,7 @@ function SignupPageContent() {
 
           <div style={{ position: 'relative' }}>
             <Phone size={16} style={iconStyle(!!errors.phone)} />
-            <input {...register('phone')} disabled={isSubmitting} placeholder="Téléphone (ex: +226 70 00 00 00)" type="tel" style={inputStyle(!!errors.phone)} />
+            <input {...register('phone', { onChange: (e) => { e.target.value = withBurkinaPrefix(e.target.value); } })} disabled={isSubmitting} placeholder="Téléphone (ex: +226 70 00 00 00)" type="tel" style={inputStyle(!!errors.phone)} />
             {errors.phone && <p style={{ color: '#DC2626', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{errors.phone.message}</p>}
           </div>
 

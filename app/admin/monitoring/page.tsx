@@ -1,5 +1,7 @@
-import AdminMonitoringPage from '@/features/monitoring/components/AdminMonitoringPage';
+import AdminCockpitPage from '@/features/monitoring/cockpit/ui/AdminCockpitPage';
+
+export const metadata = { title: "Cockpit de l'agent — Ladini" };
 
 export default function Page() {
-  return <AdminMonitoringPage />;
+  return <AdminCockpitPage />;
 }

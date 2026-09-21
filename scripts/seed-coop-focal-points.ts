@@ -8,6 +8,21 @@ import bcrypt from 'bcryptjs';
 import { db, schema } from '@/src/db';
 import { eq } from 'drizzle-orm';
 
+// Codes de zone renommés lors de la migration vers la nouvelle base (l'ancien « HOUET » = Bobo-Dioulasso).
+const ZONE_ALIASES: Record<string, string> = { HOUET: 'BOBO-001' };
+
+/** Zone + région climatique (Kadiogo, Gwiriko…) ; la région du producteur en est déduite, jamais inventée. */
+async function findZone(code: string) {
+  const real = ZONE_ALIASES[code] ?? code;
+  const [row] = await db
+    .select({ id: schema.zones.id, region: schema.climaticRegions.name })
+    .from(schema.zones)
+    .leftJoin(schema.climaticRegions, eq(schema.climaticRegions.id, schema.zones.climaticRegionId))
+    .where(eq(schema.zones.code, real))
+    .limit(1);
+  return row;
+}
+
 const FOCAL_POINTS = [
   { phone: '+22678005103', name: 'GARIKO Leila',           password: 'leilagariko',        coop: 'Fromagerie Gariko', zone: 'OUA-001' },
   { phone: '+22671767695', name: 'DIALLO Sibé',            password: 'diallosidibekossam', coop: 'Kosam Yadega', zone: 'OUA-001' },
@@ -34,7 +49,8 @@ async function main() {
     if (exists) { console.log(`= ${fp.phone} (${fp.name}) existe déjà — ignoré`); continue; }
 
     const orgId = await ensureCoop(fp.coop);
-    const zone = await db.query.zones.findFirst({ where: eq(schema.zones.code, fp.zone), columns: { id: true } });
+    const zone = await findZone(fp.zone);
+    if (!zone) console.warn(`! zone « ${fp.zone} » introuvable dans cette base : ${fp.name} créé sans zone`);
     await db.transaction(async (tx) => {
       const [user] = await tx.insert(schema.users).values({
         name: fp.name,
@@ -45,7 +61,7 @@ async function main() {
         onboardingCompleted: true,
       }).returning({ id: schema.users.id });
       await tx.insert(schema.producers).values({
-        userId: user.id, organizationId: orgId, businessName: fp.coop, status: 'ACTIVE' as any, zoneId: zone?.id,
+        userId: user.id, organizationId: orgId, businessName: fp.coop, status: 'ACTIVE' as any, zoneId: zone?.id, region: zone?.region ?? undefined, phoneNumber: fp.phone,
       });
       await tx.insert(schema.userOrganizations).values({
         userId: user.id, organizationId: orgId, role: 'ADMIN' as any,
