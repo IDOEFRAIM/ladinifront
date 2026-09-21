@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useCachedJson } from '@/hooks/useCachedJson';
 import { Loader2 } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -49,22 +50,9 @@ const B2B_TYPES: BuyerAccountType[] = ['RESTAURANT', 'HOTEL', 'CANTINE', 'GROSSI
 
 // ─── Provider ───────────────────────────────────────────────────────────────
 export function AccountTypeGuard({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<BuyerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch('/api/buyer/dashboard?section=profile');
-        if (res.ok) {
-          const data = await res.json();
-          setProfile(data.profile ?? null);
-        }
-      } catch { /* ignore */ }
-      setLoading(false);
-    };
-    fetchProfile();
-  }, []);
+  // Profil léger (section=profile) : dédoublonné et mis en cache — le layout ne bloque plus l'affichage à chaque visite.
+  const { data, loading } = useCachedJson<{ profile?: BuyerProfile | null }>('/api/buyer/dashboard?section=profile');
+  const profile = data?.profile ?? null;
 
   const accountType = classifyBuyerType(profile?.buyerType?.name);
   const isB2B = B2B_TYPES.includes(accountType);

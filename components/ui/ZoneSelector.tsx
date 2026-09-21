@@ -2,34 +2,17 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useZone } from '@/context/ZoneContext';
+import { useCachedJson } from '@/hooks/useCachedJson';
 
 // Searchable dropdown that shows a scrollable list of all zones and allows typing to filter.
 export default function ZoneSelector() {
   const { zoneId, setZoneId } = useZone();
-  const [zones, setZones] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Liste des zones : quasi statique → mise en cache et dédoublonnée (plusieurs sélecteurs = un seul appel).
+  const { data: zonesData, loading } = useCachedJson<any>('/api/zones');
+  const zones: any[] = Array.isArray(zonesData) ? zonesData : Array.isArray(zonesData?.data) ? zonesData.data : [];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/zones');
-        const j = await res.json();
-        if (Array.isArray(j)) setZones(j);
-        else if (j && Array.isArray((j as any).data)) setZones((j as any).data);
-        else setZones([]);
-      } catch (e) {
-        console.error(e);
-        setZones([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {

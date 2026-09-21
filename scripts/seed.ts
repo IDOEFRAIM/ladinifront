@@ -144,9 +144,14 @@ async function ensureStandardPrice(subCategoryId: string, zoneId: string, priceP
 async function main() {
   console.log('Starting seed...');
 
-  // 1) Base geography
-  const regionId = await ensureClimaticRegion('Default Region', 'Default climatic region');
-  const zoneId = await ensureZone({ name: 'Ouaga Centre', code: 'OUA-001', climaticRegionId: regionId, latitude: 12.3714, longitude: -1.5197 });
+  // 1) Géographie : régions climatiques -> zones
+  //    Gwiriko : Bobo-Dioulasso  |  Kadiogo : Ouagadougou, Pabré, Saaba
+  const gwirikoId = await ensureClimaticRegion('Gwiriko', 'Région du Gwiriko (Bobo-Dioulasso)');
+  const kadiogoId = await ensureClimaticRegion('Kadiogo', 'Région du Kadiogo (Ouagadougou et périphérie)');
+  await ensureZone({ name: 'Bobo-Dioulasso', code: 'BOBO-001', climaticRegionId: gwirikoId, latitude: 11.1771, longitude: -4.2979 });
+  const zoneId = await ensureZone({ name: 'Ouagadougou', code: 'OUA-001', climaticRegionId: kadiogoId, latitude: 12.3714, longitude: -1.5197 });
+  await ensureZone({ name: 'Pabré', code: 'PAB-001', climaticRegionId: kadiogoId, latitude: 12.5167, longitude: -1.5667 });
+  await ensureZone({ name: 'Saaba', code: 'SAA-001', climaticRegionId: kadiogoId, latitude: 12.3833, longitude: -1.4167 });
 
   // 2) Organization (ACTIVE for onboarding list)
   const orgId = await ensureOrganization({ name: 'AgriMarket', type: 'PRIVATE_TRADER', status: 'ACTIVE', description: 'Default active organization' });
@@ -169,6 +174,17 @@ async function main() {
   const catLegumesId = await ensureCategory('Légumes');
   const scMaisId = await ensureSubCategory(catCerealesId, 'Maïs');
   const scTomateId = await ensureSubCategory(catLegumesId, 'Tomate');
+
+  // Catégories produits : agroalimentaire et animaux
+  const catAgroId = await ensureCategory('Agroalimentaire');
+  const catAnimauxId = await ensureCategory('Animaux');
+  await Promise.all([
+    ensureSubCategory(catAgroId, 'Lait'),
+    ensureSubCategory(catAgroId, 'Fromage'),
+    ensureSubCategory(catAnimauxId, 'Chèvre'),
+    ensureSubCategory(catAnimauxId, 'Bœuf'),
+    ensureSubCategory(catAnimauxId, 'Poulet'),
+  ]);
 
   // Standard prices seeded with admin as updater (non-critical if fails)
   await Promise.all([

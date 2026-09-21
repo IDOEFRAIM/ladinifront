@@ -85,8 +85,9 @@ export async function getAuctionById(id: string) {
 
 // Liste les enchères OPEN (avec filtres optionnels)
 
-export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: string }) {
-  try {
+/** Version STRICTE : lève en cas d'erreur DB (l'appelant peut distinguer « aucune enchère » de « chargement impossible »). */
+export async function queryOpenAuctions(opts?: { subCategoryId?: string; zoneId?: string }) {
+  {
     const conditions = [eq(schema.auctions.status, 'OPEN')];
     
     if (opts?.subCategoryId) conditions.push(eq(schema.auctions.subCategoryId, opts.subCategoryId));
@@ -120,6 +121,13 @@ export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: 
       autoExtend: a.autoExtend,
       escrowStatus: a.escrowStatus,
     }));
+  }
+}
+
+/** Version tolérante (historique) : renvoie [] si la lecture échoue. */
+export async function getOpenAuctions(opts?: { subCategoryId?: string; zoneId?: string }) {
+  try {
+    return await queryOpenAuctions(opts);
   } catch (e) {
     console.error('getOpenAuctions error:', e);
     return [];

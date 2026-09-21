@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-verify/
 /out/
 
 # PWA — générés par next-pwa (@ducanh2912/next-pwa) à chaque `next build`,

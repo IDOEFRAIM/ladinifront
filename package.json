@@ -6,6 +6,7 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "postbuild": "next-sitemap",
+    "build:verify": "node scripts/build-isolated.mjs",
     "start": "next start",
     "lint": "eslint",
     "check:seo": "node scripts/check-seo.mjs",
@@ -19,8 +20,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
-    "db:baseline": "tsx scripts/baseline-drizzle.ts",
     "db:migrate": "tsx scripts/run-migrations.ts",
+    "db:schema-check": "drizzle-kit check && node scripts/schema-drift-check.mjs",
     "db:introspect": "drizzle-kit introspect --config=drizzle.config.ts"
   },
   "dependencies": {

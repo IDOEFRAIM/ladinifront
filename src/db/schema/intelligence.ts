@@ -22,14 +22,19 @@ import {
   doublePrecision,
   index,
   uniqueIndex,
-} from 'drizzle-orm/pg-core';
+  AnyPgColumn, } from 'drizzle-orm/pg-core';
 import { intelligenceSchema, agentActionStatusEnum, validationPriorityEnum } from './_config';
 import { type InferModel } from 'drizzle-orm';
+import { orders } from './marketplace';
+import { zones } from './governance';
+import { users } from './auth';
+import { auctions, buyerProfiles, marketOffers, producers } from './marketplace';
+import { subCategories } from './governance';
 
 // ── Audit transactionnel ─────────────────────────────────────────────────
 export const auditLogs = intelligenceSchema.table('audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  actorId: uuid('actor_id').notNull(),
+  actorId: uuid('actor_id').references((): AnyPgColumn => users.id, { onDelete: 'restrict' }).notNull(),
   action: text('action').notNull(),
   entityId: text('entity_id').notNull(),
   entityType: text('entity_type').notNull(),
@@ -53,8 +58,8 @@ export const agentActions = intelligenceSchema.table('agent_actions', {
   payload: jsonb('payload'),
   status: agentActionStatusEnum('status').default('PENDING').notNull(),
   priority: validationPriorityEnum('priority').default('MEDIUM').notNull(),
-  orderId: uuid('order_id'),
-  userId: uuid('user_id'),
+  orderId: uuid('order_id').references((): AnyPgColumn => orders.id, { onDelete: 'set null' }),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   auditTrailId: text('audit_trail_id'),
   aiReasoning: text('ai_reasoning'),
   adminNotes: text('admin_notes'),
@@ -63,6 +68,7 @@ export const agentActions = intelligenceSchema.table('agent_actions', {
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('agent_actions_status_idx').on(t.status),
+  index('agent_actions_user_idx').on(t.userId),
   index('agent_actions_batch_idx').on(t.batchId),
   index('agent_actions_name_idx').on(t.agentName),
   uniqueIndex('agent_actions_order_unique').on(t.orderId),
@@ -73,11 +79,11 @@ export const agentActions = intelligenceSchema.table('agent_actions', {
 // ── Persistance conversationnelle (état du panier / commande en cours) ─────
 export const conversations = intelligenceSchema.table('conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'restrict' }).notNull(),
   query: text('query').notNull(),
   response: text('response'),
   agentType: text('agent_type'),
-  zoneId: uuid('zone_id'),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
   mode: text('mode').default('text').notNull(),
   audioUrl: text('audio_url'),
   isWaitingForInput: boolean('is_waiting_for_input').default(false).notNull(),
@@ -100,27 +106,10 @@ export const conversations = intelligenceSchema.table('conversations', {
 ]);
 
 // ── Mémoire courte de l'agent (slots persistés entre tours) ────────────────
-export const agentContextMemory = intelligenceSchema.table('agent_context_memory', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull(),
-  marketOfferId: uuid('market_offer_id'),
-  contextKey: text('context_key').notNull(),
-  contextValue: jsonb('context_value').notNull(),
-  source: text('source').default('AGENT').notNull(),
-  confidence: doublePrecision('confidence'),
-  expiresAt: timestamp('expires_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
-}, (t) => [
-  index('acm_user_idx').on(t.userId),
-  index('acm_key_idx').on(t.contextKey),
-  uniqueIndex('acm_user_key_unique').on(t.userId, t.contextKey),
-]);
-
 // ── Réputation (cœur de confiance marketplace) ─────────────────────────────
 export const trustScores = intelligenceSchema.table('trust_scores', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').unique().notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).unique().notNull(),
   globalScore: doublePrecision('global_score').default(0).notNull(),
   reliabilityIndex: doublePrecision('reliability_index').default(0).notNull(),
   qualityIndex: doublePrecision('quality_index').default(0).notNull(),
@@ -131,24 +120,12 @@ export const trustScores = intelligenceSchema.table('trust_scores', {
 });
 
 // Justification du "pourquoi" d'un score (transparence de la réputation).
-export const aiRatingReasonings = intelligenceSchema.table('ai_rating_reasonings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  trustScoreId: uuid('trust_score_id').notNull(),
-  agentName: text('agent_name').notNull(),
-  justification: text('justification').notNull(),
-  dataPoints: jsonb('data_points').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (t) => [
-  index('ai_rating_trust_idx').on(t.trustScoreId),
-  index('ai_rating_agent_idx').on(t.agentName),
-]);
-
 // ── Événements de modération (journal auditable des strikes) ───────────────
 // Chaque mention d'un produit interdit / scam est journalisée ici. Le nombre
 // de strikes d'un utilisateur = COUNT sur cette table (source de vérité DB).
 export const moderationEvents = intelligenceSchema.table('moderation_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id'),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   phone: text('phone').notNull(),
   kind: text('kind').notNull(),           // PROHIBITED_PRODUCT | SCAM
   matchedTerm: text('matched_term'),
@@ -170,8 +147,8 @@ export const demandSignals = intelligenceSchema.table('demand_signals', {
   normalizedTerm: text('normalized_term').notNull(),
   rawQuery: text('raw_query').notNull(),
   phone: text('phone'),
-  userId: uuid('user_id'),
-  zoneId: uuid('zone_id'),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
   occurrences: integer('occurrences').default(1).notNull(),
   resolved: boolean('resolved').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -188,12 +165,12 @@ export const demandSignals = intelligenceSchema.table('demand_signals', {
 export const solicitations = intelligenceSchema.table('solicitations', {
   id: uuid('id').primaryKey().defaultRandom(),
   kind: text('kind').notNull(),                     // AUCTION_INVITE | NEW_PRODUCT_ALERT
-  auctionId: uuid('auction_id'),                    // si AUCTION_INVITE
-  marketOfferId: uuid('market_offer_id'),           // si NEW_PRODUCT_ALERT
-  targetProducerId: uuid('target_producer_id'),
-  targetBuyerId: uuid('target_buyer_id'),
-  subCategoryId: uuid('sub_category_id'),
-  zoneId: uuid('zone_id'),
+  auctionId: uuid('auction_id').references((): AnyPgColumn => auctions.id, { onDelete: 'cascade' }),                    // si AUCTION_INVITE
+  marketOfferId: uuid('market_offer_id').references((): AnyPgColumn => marketOffers.id, { onDelete: 'cascade' }),           // si NEW_PRODUCT_ALERT
+  targetProducerId: uuid('target_producer_id').references((): AnyPgColumn => producers.id, { onDelete: 'cascade' }),
+  targetBuyerId: uuid('target_buyer_id').references((): AnyPgColumn => buyerProfiles.id, { onDelete: 'cascade' }),
+  subCategoryId: uuid('sub_category_id').references((): AnyPgColumn => subCategories.id, { onDelete: 'set null' }),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
   status: text('status').default('PENDING').notNull(), // PENDING→NOTIFIED→RESPONDED→EXPIRED|SKIPPED
   notifiedAt: timestamp('notified_at'),
   respondedAt: timestamp('responded_at'),
@@ -214,9 +191,9 @@ export const solicitations = intelligenceSchema.table('solicitations', {
 // une panne Twilio/Email ne fait pas planter l'orchestration.
 export const notificationOutbox = intelligenceSchema.table('notification_outbox', {
   id: uuid('id').primaryKey().defaultRandom(),
-  solicitationId: uuid('solicitation_id'),
+  solicitationId: uuid('solicitation_id').references((): AnyPgColumn => solicitations.id, { onDelete: 'set null' }),
   channel: text('channel').notNull(),               // WHATSAPP | EMAIL | PUSH | IN_APP
-  recipientUserId: uuid('recipient_user_id'),
+  recipientUserId: uuid('recipient_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   recipientPhone: text('recipient_phone'),
   templateKey: text('template_key').notNull(),      // ex: AUCTION_INVITE_PRODUCER
   payload: jsonb('payload').notNull(),              // variables du template + quick-action 1-clic
@@ -240,9 +217,7 @@ export default {
   auditLogs,
   agentActions,
   conversations,
-  agentContextMemory,
   trustScores,
-  aiRatingReasonings,
   moderationEvents,
   demandSignals,
   solicitations,
@@ -252,9 +227,7 @@ export default {
 export type AuditLog = InferModel<typeof auditLogs>;
 export type AgentAction = InferModel<typeof agentActions>;
 export type Conversation = InferModel<typeof conversations>;
-export type AgentContextMemory = InferModel<typeof agentContextMemory>;
 export type TrustScore = InferModel<typeof trustScores>;
-export type AiRatingReasoning = InferModel<typeof aiRatingReasonings>;
 export type ModerationEvent = InferModel<typeof moderationEvents>;
 export type DemandSignal = InferModel<typeof demandSignals>;
 export type Solicitation = InferModel<typeof solicitations>;

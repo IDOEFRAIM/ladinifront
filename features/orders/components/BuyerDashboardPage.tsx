@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, ShoppingCart } from 'lucide-react';
-import { asError } from '@/lib/errors';
+import { useCachedJson } from '@/hooks/useCachedJson';
 import type { BuyerDashboardResponse } from '@/features/buyer/types/buyer-dashboard.types';
 import { C, F, ActionButton } from '@/features/orders/components/dashboard/dashboard-ui';
 import StatCards from '@/features/orders/components/dashboard/StatCards';
@@ -14,26 +14,9 @@ import DashboardSidebar from '@/features/orders/components/dashboard/DashboardSi
 
 export default function BuyerDashboardPage() {
   const router = useRouter();
-  const [data, setData] = useState<BuyerDashboardResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchDashboard = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/buyer/dashboard');
-      if (!res.ok) throw new Error('Erreur de connexion aux données');
-      setData((await res.json()) as BuyerDashboardResponse);
-      setError(null);
-    } catch (_e: unknown) {
-    const e = asError(_e);
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  // Affiche IMMÉDIATEMENT les dernières données connues (revisite) puis se met à jour en arrière-plan ;
+  // le spinner plein écran n'apparaît qu'à la toute première visite (aucune donnée en mémoire).
+  const { data, loading, refreshing, refresh: fetchDashboard } = useCachedJson<BuyerDashboardResponse>('/api/buyer/dashboard');
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', gap: 16 }}>
@@ -66,8 +49,8 @@ export default function BuyerDashboardPage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <ActionButton label="Nouvelle commande" icon={ShoppingCart} onClick={() => router.push('/catalogue')} />
-          <button onClick={fetchDashboard} style={{ padding: 10, borderRadius: 12, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer' }}>
-            <RefreshCw size={18} color={C.muted} />
+          <button onClick={() => { void fetchDashboard(); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${C.border}`, background: '#fff', cursor: 'pointer' }}>
+            <RefreshCw size={18} color={C.muted} style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined} aria-label={refreshing ? 'Mise à jour…' : 'Actualiser'} />
           </button>
         </div>
       </header>

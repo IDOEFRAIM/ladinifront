@@ -108,6 +108,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 
 const nextConfig = {
   reactStrictMode: true,
+  // Dossier de sortie isolable : `next build` et `next dev` écrivaient dans le MÊME `.next`. Lancer un build pendant que le serveur de
+  // dev tourne corrompt ses manifestes (« Invariant: Expected clientReferenceManifest to be defined », pages en 500, rechargements
+  // en boucle). `npm run build:verify` construit dans `.next-verify`, sans jamais toucher au dossier du serveur de dev.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   turbopack: {},
   // Ensure Next.js traces output from the correct project root
   outputFileTracingRoot: path.join(__dirname),
