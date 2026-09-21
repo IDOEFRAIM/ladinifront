@@ -30,7 +30,7 @@ const signupSchema = z.object({
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
 function SignupPageContent() {
-  const { register: registerUser, isAuthenticated, isLoading, onboardingCompleted } = useAuth();
+  const { register: registerUser, isAuthenticated, isLoading, onboardingCompleted, logout } = useAuth();
   const router = useRouter();
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<SignupFormInputs>({
@@ -39,15 +39,6 @@ function SignupPageContent() {
   });
 
   const { location, isLoading: geoLoading, getLocation } = useGeoLocation();
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (isAuthenticated && !onboardingCompleted) {
-      router.replace('/onboarding');
-    } else if (isAuthenticated && onboardingCompleted) {
-      router.replace('/market');
-    }
-  }, [isAuthenticated, isLoading, onboardingCompleted, router]);
 
   useEffect(() => {
     if (location) {
@@ -78,6 +69,24 @@ function SignupPageContent() {
     position: 'absolute' as const, left: 14, top: '50%', transform: 'translateY(-50%)',
     color: hasError ? '#DC2626' : C.muted, opacity: 0.6,
   });
+
+  // Déjà connecté : on ne redirige plus en silence (l'utilisateur ne pouvait pas créer un autre compte) — on lui laisse le choix.
+  if (!isLoading && isAuthenticated) {
+    return (
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand, padding: 16 }}>
+        <div role="status" style={{ background: C.glass, borderRadius: 32, border: `1px solid ${C.border}`, padding: 36, width: '100%', maxWidth: 420, textAlign: 'center', fontFamily: "'Inter', sans-serif" }}>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '1.4rem', fontWeight: 800, color: C.forest, marginBottom: 8 }}>Vous êtes déjà connecté</h1>
+          <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Pour créer un autre compte, déconnectez-vous d&apos;abord.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button type="button" onClick={() => router.replace(onboardingCompleted ? '/market' : '/onboarding')}
+              style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: C.forest, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Continuer avec mon compte</button>
+            <button type="button" onClick={() => { void logout(); }}
+              style={{ padding: '12px 16px', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.forest, fontWeight: 700, cursor: 'pointer' }}>Me déconnecter et créer un compte</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.sand, padding: 16 }}>
