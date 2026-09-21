@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const path = require('path');
 
+// Identifiant de build DETERMINISTE (meme valeur dans tous les processus de `next build`) : SHA fourni par l'hebergeur/la CI, sinon
+// `git rev-parse`, sinon "unknown" (les controles de version sont alors neutres : jamais de faux positif).
+const BUILD_ID = (() => {
+  const fromEnv = process.env.NEXT_PUBLIC_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_SHA;
+  if (fromEnv) return String(fromEnv).slice(0, 12);
+  try { return require('child_process').execSync('git rev-parse --short=12 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || 'unknown'; }
+  catch { return 'unknown'; }
+})();
+
 const runtimeCaching = [
   // Espace livreur : jamais de cache SW — statuts/positions temps réel, et le
   // catch-all NetworkFirst ci-dessous interceptait ces routes par défaut
@@ -15,9 +24,10 @@ const runtimeCaching = [
   // API produits: Stale-While-Revalidate pour navigation fluide offline-first
   {
     urlPattern: /\/api\/(products|publicProduct)(\/|$)/i,
-    handler: 'StaleWhileRevalidate',
+    handler: 'NetworkFirst', // reseau d'abord : jamais de donnees d'un ancien format servies alors que le serveur repond
     options: {
-      cacheName: 'api-products',
+      networkTimeoutSeconds: 4,
+      cacheName: `api-products-${BUILD_ID}`, // le cache change a chaque build
       expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 },
       cacheableResponse: { statuses: [0, 200] },
     },
@@ -86,8 +96,9 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   runtimeCaching,
 
   // Optimisation App Router / navigation via next/link
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  // Desactives : ils gardaient les pages/payloads RSC d'une ancienne version alors que le backend et la base avaient change.
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
 
   // Gestion élégante des erreurs réseau (fallback offline)
   fallbacks: {
@@ -108,6 +119,8 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 
 const nextConfig = {
   reactStrictMode: true,
+  generateBuildId: async () => BUILD_ID,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   // Dossier de sortie isolable : `next build` et `next dev` écrivaient dans le MÊME `.next`. Lancer un build pendant que le serveur de
   // dev tourne corrompt ses manifestes (« Invariant: Expected clientReferenceManifest to be defined », pages en 500, rechargements
   // en boucle). `npm run build:verify` construit dans `.next-verify`, sans jamais toucher au dossier du serveur de dev.
@@ -167,6 +180,7 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'x-app-build', value: BUILD_ID }, // lu par VersionWatcher : detecte un client reste sur une ancienne version
         ],
       },
     ];

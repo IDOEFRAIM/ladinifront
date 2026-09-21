@@ -7,6 +7,7 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/features/checkout/context/CartContext';
 import { Toaster } from 'react-hot-toast';
 import { DevServiceWorkerCleanup } from '@/components/DevServiceWorkerCleanup';
+import VersionWatcher from '@/components/VersionWatcher';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import JsonLd from '@/components/seo/JsonLd';
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
@@ -86,6 +87,7 @@ export default function RootLayout({
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
         <AuthProvider>
           <DevServiceWorkerCleanup />
+          <VersionWatcher />
           <InstallPrompt />
           <CartProvider>
             {/* Toaster optimisé pour mobile (en bas sur mobile pour être accessible au pouce) */}
