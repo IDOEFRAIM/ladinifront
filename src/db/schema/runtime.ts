@@ -50,6 +50,13 @@ export const salesPublishDrafts = marketplaceSchema.table('sales_publish_drafts'
   index('ix_sales_publish_drafts_conversation').on(t.conversationId),
 ]);
 
+// Brouillon d'approvisionnement récurrent acheteur (CREATE_RECURRING_NEED/UPDATE_RECURRING_NEED, Phase 2).
+export const recurringNeedDrafts = marketplaceSchema.table('recurring_need_drafts', {
+  ...draftColumns,
+}, (t) => [
+  index('ix_recurring_need_drafts_conversation').on(t.conversationId),
+]);
+
 // Idempotence serveur des appels d'outils MCP : une ligne par (clé, outil).
 // La clé primaire composite est la garantie d'unicité (pas Redis).
 export const mcpIdempotencyRecords = marketplaceSchema.table('mcp_idempotency_records', {
