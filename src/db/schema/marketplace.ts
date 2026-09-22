@@ -25,6 +25,7 @@ import {
   uniqueIndex,
   index,
   real,
+  check,
   AnyPgColumn, } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
@@ -583,6 +584,115 @@ export const bids = marketplaceSchema.table('bids', {
   uniqueIndex('bids_one_winner_per_auction_uq').on(t.auctionId).where(sql`${t.isWinner} = true`),
 ]);
 
+// ── APPROVISIONNEMENT RÉCURRENT (Phase 1 — fondation de données uniquement) ─
+// À ne PAS confondre avec `PROCUREMENT_CREATE_REQUEST` / `auctions` (appel d'offres ponctuel, un seul gagnant) :
+// un besoin récurrent est une règle permanente d'un acheteur ("40 kg de tomate chaque jour"), qui se matérialise
+// en occurrences datées, elles-mêmes couvertes par une ou plusieurs allocations fournisseur.
+// `recurring_need_overrides` et `need_proposals` ont été délibérément écartés du modèle validé : une occurrence
+// porte directement son exception éventuelle et son état de matching (une seule ligne par besoin+date).
+export const recurringNeeds = marketplaceSchema.table('recurring_needs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  buyerId: uuid('buyer_id').references((): AnyPgColumn => buyerProfiles.id, { onDelete: 'restrict' }).notNull(),
+  subCategoryId: uuid('sub_category_id').references((): AnyPgColumn => subCategories.id, { onDelete: 'restrict' }).notNull(),
+  quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
+  unit: unitEnum('unit').default('KG').notNull(),
+  // DAILY | WEEKLY_DAYS | WEEKLY | ONE_OFF — volontairement fermé (pas de RRULE/cron générique, voir mandat pilote).
+  recurrenceType: text('recurrence_type').notNull(),
+  // Jours ISO (1=lundi..7=dimanche) — utilisé seulement si recurrenceType = WEEKLY_DAYS.
+  weeklyDays: integer('weekly_days').array(),
+  // Jours ISO exclus en permanence (ex: "tous les jours sauf le dimanche" sur un besoin DAILY) — un paramètre de
+  // récurrence, PAS une exception ponctuelle (qui, elle, vit sur l'occurrence).
+  excludedWeekdays: integer('excluded_weekdays').array(),
+  startsAt: timestamp('starts_at').notNull(),
+  endsAt: timestamp('ends_at'),
+  status: text('status').default('ACTIVE').notNull(),
+  pausedUntil: timestamp('paused_until'),
+  maxPricePerUnit: numeric('max_price_per_unit', { precision: 12, scale: 2 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('recurring_needs_buyer_idx').on(t.buyerId),
+  index('recurring_needs_subcategory_status_idx').on(t.subCategoryId, t.status),
+  check('recurring_needs_quantity_chk', sql`${t.quantity} > 0`),
+  check('recurring_needs_max_price_chk', sql`${t.maxPricePerUnit} IS NULL OR ${t.maxPricePerUnit} >= 0`),
+  check('recurring_needs_recurrence_type_chk', sql`${t.recurrenceType} IN ('DAILY','WEEKLY_DAYS','WEEKLY','ONE_OFF')`),
+  check('recurring_needs_status_chk', sql`${t.status} IN ('ACTIVE','PAUSED','CANCELLED')`),
+  // WEEKLY_DAYS sans jours listés n'a pas de sens (aucune occurrence ne pourrait jamais être générée).
+  check('recurring_needs_weekly_days_chk', sql`${t.recurrenceType} <> 'WEEKLY_DAYS' OR ${t.weeklyDays} IS NOT NULL`),
+]);
+
+// Demande concrète d'UN jour pour un besoin récurrent. Snapshot de quantité/unité au moment de la génération :
+// une modification ultérieure de `recurring_needs` ne réécrit JAMAIS une occurrence déjà créée (propriété testée).
+// Porte directement l'exception ponctuelle ("demain seulement 10 kg" = requestedQuantity modifiée sur CETTE ligne ;
+// "suspends demain" = status SKIPPED) : pas de table d'override séparée.
+export const recurringNeedOccurrences = marketplaceSchema.table('recurring_need_occurrences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  recurringNeedId: uuid('recurring_need_id').references((): AnyPgColumn => recurringNeeds.id, { onDelete: 'cascade' }).notNull(),
+  // `timestamp`, pas `date` : aucune table du schéma marketplace n'utilise le type SQL DATE (harvestDate,
+  // deliveryDeadline, etc. sont tous des timestamps) — on n'introduit pas un type inédit pour cette seule colonne.
+  occurrenceDate: timestamp('occurrence_date').notNull(),
+  requestedQuantity: numeric('requested_quantity', { precision: 14, scale: 3 }).notNull(),
+  unit: unitEnum('unit').notNull(),
+  status: text('status').default('OPEN').notNull(),
+  // 0 NOT NULL plutôt que nullable : NULL n'apporterait aucune sémantique de plus que 0 ("rien matché/confirmé/
+  // livré pour l'instant") et éviterait un 3ᵉ état (NULL / 0 / valeur) sans utilité pour ces compteurs cumulatifs.
+  quantityMatched: numeric('quantity_matched', { precision: 14, scale: 3 }).default('0').notNull(),
+  quantityConfirmed: numeric('quantity_confirmed', { precision: 14, scale: 3 }).default('0').notNull(),
+  quantityDelivered: numeric('quantity_delivered', { precision: 14, scale: 3 }).default('0').notNull(),
+  // CAS : une confirmation qui cible la version N est refusée si l'occurrence est déjà en version N+1 (même
+  // principe que `ProcurementDraft.version` côté backend).
+  version: integer('version').default(1).notNull(),
+  notifiedAt: timestamp('notified_at'),
+  acceptedAt: timestamp('accepted_at'),
+  expiresAt: timestamp('expires_at'),
+  // Corrélation vers la/les commandes issues de cette occurrence — même convention que `orders.checkoutGroupId`
+  // (uuid libre, volontairement SANS FK : le groupe n'est pas une entité, juste une clé de regroupement).
+  orderGroupId: uuid('order_group_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex('recurring_need_occurrences_need_date_uq').on(t.recurringNeedId, t.occurrenceDate),
+  index('recurring_need_occurrences_status_date_idx').on(t.status, t.occurrenceDate),
+  check('recurring_need_occurrences_requested_qty_chk', sql`${t.requestedQuantity} > 0`),
+  check('recurring_need_occurrences_matched_qty_chk', sql`${t.quantityMatched} >= 0`),
+  check('recurring_need_occurrences_confirmed_qty_chk', sql`${t.quantityConfirmed} >= 0`),
+  check('recurring_need_occurrences_delivered_qty_chk', sql`${t.quantityDelivered} >= 0`),
+  check('recurring_need_occurrences_version_chk', sql`${t.version} >= 1`),
+  check(
+    'recurring_need_occurrences_status_chk',
+    sql`${t.status} IN ('OPEN','SKIPPED','MATCHED','PROPOSED','ACCEPTED','PARTIALLY_ACCEPTED','REJECTED','EXPIRED','FULFILLED','PARTIALLY_FULFILLED','UNFULFILLED','CANCELLED')`
+  ),
+]);
+
+// Partie d'une occurrence couverte par UN fournisseur — ligne PostgreSQL réelle (FK + CHECK), jamais un blob JSON,
+// car elle participe ensuite à la consommation de stock, aux commandes, et potentiellement aux paiements.
+// Phase 1 : la source de stock est exclusivement `products.quantityForSale` (catalogue vivant) — `market_offer_id`
+// (prévente de récolte future) est volontairement absent, ajoutable plus tard par migration additive.
+export const needAllocations = marketplaceSchema.table('need_allocations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  occurrenceId: uuid('occurrence_id').references((): AnyPgColumn => recurringNeedOccurrences.id, { onDelete: 'cascade' }).notNull(),
+  producerId: uuid('producer_id').references((): AnyPgColumn => producers.id, { onDelete: 'restrict' }).notNull(),
+  productId: uuid('product_id').references((): AnyPgColumn => products.id, { onDelete: 'restrict' }).notNull(),
+  quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+  unit: unitEnum('unit').notNull(),
+  status: text('status').default('PROPOSED').notNull(),
+  // NULL jusqu'à la conversion en commande (Phase 5, hors scope ici) ; SET NULL si la ligne de commande
+  // disparaissait un jour — ne bloque jamais la suppression d'un OrderItem pour une simple ligne de traçabilité.
+  orderItemId: uuid('order_item_id').references((): AnyPgColumn => orderItems.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex('need_allocations_occurrence_producer_product_uq').on(t.occurrenceId, t.producerId, t.productId),
+  index('need_allocations_occurrence_idx').on(t.occurrenceId),
+  index('need_allocations_producer_idx').on(t.producerId),
+  index('need_allocations_product_idx').on(t.productId),
+  index('need_allocations_order_item_idx').on(t.orderItemId),
+  check('need_allocations_quantity_chk', sql`${t.quantity} > 0`),
+  check('need_allocations_unit_price_chk', sql`${t.unitPrice} >= 0`),
+  check('need_allocations_status_chk', sql`${t.status} IN ('PROPOSED','ACCEPTED','REJECTED','EXPIRED','CONVERTED')`),
+]);
+
 // ── MARKETPLACE RATINGS (réputation post-transaction — manquait côté Drizzle)
 // ── SEED ALLOCATIONS (stock d'intrants alloué à une organisation/zone) ─────
 // Restauré (2026-08-27) : présent dans la base réelle et activement utilisé
@@ -672,6 +782,9 @@ export default {
   orderDisputes,
   auctions,
   bids,
+  recurringNeeds,
+  recurringNeedOccurrences,
+  needAllocations,
   seedAllocations,
   seedDistributions,
   seedDistributionAttempts,
@@ -698,3 +811,6 @@ export type Stock = InferModel<typeof stocks>;
 export type SeedAllocation = InferModel<typeof seedAllocations>;
 export type SeedDistribution = InferModel<typeof seedDistributions>;
 export type SeedDistributionAttempt = InferModel<typeof seedDistributionAttempts>;
+export type RecurringNeed = InferModel<typeof recurringNeeds>;
+export type RecurringNeedOccurrence = InferModel<typeof recurringNeedOccurrences>;
+export type NeedAllocation = InferModel<typeof needAllocations>;
