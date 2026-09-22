@@ -12,6 +12,7 @@ import { buildAccessContext, type AccessContext } from '@/lib/access-context';
 import { getSessionFromRequest } from '@/lib/session';
 import { dbErrorResponse } from '@/lib/db-http';
 import { classifyDbError } from '@/lib/db-errors';
+import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 
 export type { AccessContext };
 
@@ -108,7 +109,13 @@ export async function getAccessContext(
   } catch (err) {
     const info = classifyDbError(err);
     if (info.errorClass === 'not_found') {
-      return { ctx: null, error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }) };
+      // Session d'un compte qui n'existe plus (base réinitialisée / compte supprimé) : 401 ET purge des cookies de session,
+      // sinon le navigateur reste « connecté » avec un jeton orphelin et chaque requête retombe en erreur.
+      const res = NextResponse.json({ error: 'Utilisateur introuvable.', code: 'SESSION_ORPHAN' }, { status: 401 });
+      for (const name of [COOKIE_NAMES.SESSION_TOKEN, COOKIE_NAMES.SESSION_READY, COOKIE_NAMES.USER_ROLE, COOKIE_NAMES.USER_PERMISSIONS, COOKIE_NAMES.ACTIVE_ORG_ID]) {
+        res.cookies.set(name, '', { path: '/', maxAge: 0 });
+      }
+      return { ctx: null, error: res };
     }
     // Fail closed : DB indisponible ⇒ aucune autorisation accordée (503), jamais un accès « par défaut ».
     return { ctx: null, error: dbErrorResponse(err, 'getAccessContext') };
