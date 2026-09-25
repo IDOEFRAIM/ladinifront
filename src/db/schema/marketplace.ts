@@ -596,7 +596,7 @@ export const recurringNeeds = marketplaceSchema.table('recurring_needs', {
   subCategoryId: uuid('sub_category_id').references((): AnyPgColumn => subCategories.id, { onDelete: 'restrict' }).notNull(),
   quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
   unit: unitEnum('unit').default('KG').notNull(),
-  // DAILY | WEEKLY_DAYS | WEEKLY | ONE_OFF — volontairement fermé (pas de RRULE/cron générique, voir mandat pilote).
+  // DAILY | WEEKLY_DAYS | WEEKLY | MONTHLY | ONE_OFF — volontairement fermé (pas de RRULE/cron générique, voir mandat pilote).
   recurrenceType: text('recurrence_type').notNull(),
   // Jours ISO (1=lundi..7=dimanche) — utilisé seulement si recurrenceType = WEEKLY_DAYS.
   weeklyDays: integer('weekly_days').array(),
@@ -615,7 +615,7 @@ export const recurringNeeds = marketplaceSchema.table('recurring_needs', {
   index('recurring_needs_subcategory_status_idx').on(t.subCategoryId, t.status),
   check('recurring_needs_quantity_chk', sql`${t.quantity} > 0`),
   check('recurring_needs_max_price_chk', sql`${t.maxPricePerUnit} IS NULL OR ${t.maxPricePerUnit} >= 0`),
-  check('recurring_needs_recurrence_type_chk', sql`${t.recurrenceType} IN ('DAILY','WEEKLY_DAYS','WEEKLY','ONE_OFF')`),
+  check('recurring_needs_recurrence_type_chk', sql`${t.recurrenceType} IN ('DAILY','WEEKLY_DAYS','WEEKLY','ONE_OFF','MONTHLY')`),
   check('recurring_needs_status_chk', sql`${t.status} IN ('ACTIVE','PAUSED','CANCELLED')`),
   // WEEKLY_DAYS sans jours listés n'a pas de sens (aucune occurrence ne pourrait jamais être générée).
   check('recurring_needs_weekly_days_chk', sql`${t.recurrenceType} <> 'WEEKLY_DAYS' OR ${t.weeklyDays} IS NOT NULL`),
