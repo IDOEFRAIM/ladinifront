@@ -10,6 +10,7 @@ import { DevServiceWorkerCleanup } from '@/components/DevServiceWorkerCleanup';
 import VersionWatcher from '@/components/VersionWatcher';
 import InstallPrompt from '@/components/pwa/InstallPrompt';
 import JsonLd from '@/components/seo/JsonLd';
+import Clarity from '@/components/analytics/Clarity';
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, DEFAULT_OG_IMAGE, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
 
 
@@ -108,6 +109,7 @@ export default function RootLayout({
             {/* <MobileNavBar /> */}
           </CartProvider>
         </AuthProvider>
+        <Clarity />
       </body>
     </html>
   );

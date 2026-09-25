@@ -12,6 +12,8 @@ import { eq } from 'drizzle-orm';
 import { getAccessContext } from '@/lib/api-guard';
 import { db } from '@/src/db';
 import { users } from '@/src/db/schema';
+import { dbOp } from '@/lib/db-observe';
+import { dbErrorResponse } from '@/lib/db-http';
 import { sendLadiniWebchatMessage, LadiniChatError, type LadiniChatRole, type LadiniChatImage } from '@/features/chat/services/ladini-chat.service';
 
 // L'agent peut enchaîner plusieurs appels LLM/outils avant de répondre.
@@ -68,10 +70,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rol
     return NextResponse.json({ error: 'Message invalide (un texte ou une image est requis).' }, { status: 422 });
   }
 
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, ctx.userId),
-    columns: { phone: true },
-  });
+  // Lecture fraîche (jamais mise en cache : le téléphone désigne LA conversation lue/écrite). Enveloppée dans dbOp
+  // pour qu'une panne DB (timeout, pool saturé) donne un 503 + Retry-After, jamais un 500 opaque.
+  let user: { phone: string | null } | undefined;
+  try {
+    user = await dbOp('chat.load_phone', { category: 'interactive', kind: 'read' }, () =>
+      db.query.users.findFirst({ where: eq(users.id, ctx.userId), columns: { phone: true } }),
+    );
+  } catch (err) {
+    return dbErrorResponse(err, 'api/chat');
+  }
 
   if (!user?.phone) {
     return NextResponse.json(
