@@ -149,3 +149,161 @@ export const metricTargets = analyticsSchema.table('metric_targets', {
     sql`(${t.scopeType} = 'GLOBAL' AND ${t.scopeId} IS NULL) OR (${t.scopeType} <> 'GLOBAL' AND ${t.scopeId} IS NOT NULL)`
   ),
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE D — agrégats quotidiens (2026-09-27)
+//
+// Règles communes (voir backend `docs/analytics/METRIC_LAYER.md`) :
+// - on stocke des NUMÉRATEURS / DÉNOMINATEURS (comptes, quantités, montants),
+//   JAMAIS des taux : un taux ne se recompose que par SUM(num)/SUM(den).
+// - grain = (metric_date [+ dimensions]) ; les dimensions absentes/inconnues
+//   valent le UUID nul (`00000000-…`) plutôt que NULL, pour qu'un index UNIQUE
+//   garantisse réellement "une ligne par grain" (NULL est distinct en unique).
+//   Ce UUID nul signifie "non renseigné / non attribuable" (ex. commande
+//   multi-sous-catégories) ; il n'a volontairement AUCUNE FK.
+// - `metric_date` = jour UTC d'une COHORTE : commandes/appels d'offres à leur
+//   date de création, occurrences récurrentes à leur date de besoin. Une
+//   livraison tardive modifie donc la ligne de la cohorte d'origine
+//   (recalcul idempotent DELETE+INSERT du jour), sans jamais bouger la ligne
+//   du jour de livraison.
+// - table dérivée et reconstructible : aucune FK, aucune donnée saisie.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+const qty = (name: string) => numeric(name, { precision: 16, scale: 3 }).notNull().default('0');
+const money = (name: string) => numeric(name, { precision: 16, scale: 2 }).notNull().default('0');
+const count = (name: string) => integer(name).notNull().default(0);
+
+/** Grain : (jour, acheteur). COUNT(DISTINCT buyer_id) sur une fenêtre reste exact. */
+export const buyerDailyMetrics = analyticsSchema.table('buyer_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  buyerId: uuid('buyer_id').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+
+  needsDirect: count('needs_direct'),
+  needsTender: count('needs_tender'),
+  needsRecurring: count('needs_recurring'),
+  satisfiedDirect: count('satisfied_direct'),
+  satisfiedTender: count('satisfied_tender'),
+  satisfiedRecurring: count('satisfied_recurring'),
+
+  potentialGmvDirect: money('potential_gmv_direct'),
+  potentialGmvTender: money('potential_gmv_tender'),
+  potentialGmvRecurring: money('potential_gmv_recurring'),
+  // Pas de confirmed_gmv_direct : DIRECT_ORDER_CONFIRMED n'est pas instrumenté (indisponible).
+  confirmedGmvTender: money('confirmed_gmv_tender'),
+  confirmedGmvRecurring: money('confirmed_gmv_recurring'),
+  deliveredGmvDirect: money('delivered_gmv_direct'),
+  deliveredGmvTender: money('delivered_gmv_tender'),
+  deliveredGmvRecurring: money('delivered_gmv_recurring'),
+
+  // Base "temps d'événement" (jour d'occurrence de l'event), pas cohorte.
+  digestsQueued: count('digests_queued'),
+  digestsAccepted: count('digests_accepted'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('buyer_daily_metrics_grain_uq').on(t.metricDate, t.buyerId),
+  index('buyer_daily_metrics_date_zone_idx').on(t.metricDate, t.zoneId),
+  check('buyer_daily_metrics_counts_chk', sql`${t.needsDirect} >= 0 AND ${t.needsTender} >= 0 AND ${t.needsRecurring} >= 0 AND ${t.satisfiedDirect} >= 0 AND ${t.satisfiedTender} >= 0 AND ${t.satisfiedRecurring} >= 0 AND ${t.digestsQueued} >= 0 AND ${t.digestsAccepted} >= 0`),
+  check('buyer_daily_metrics_money_chk', sql`${t.potentialGmvDirect} >= 0 AND ${t.potentialGmvTender} >= 0 AND ${t.potentialGmvRecurring} >= 0 AND ${t.confirmedGmvTender} >= 0 AND ${t.confirmedGmvRecurring} >= 0 AND ${t.deliveredGmvDirect} >= 0 AND ${t.deliveredGmvTender} >= 0 AND ${t.deliveredGmvRecurring} >= 0`),
+]);
+
+/** Grain : (jour de création, zone, catégorie, sous-catégorie). Pas de dimension d'unité : aucune quantité physique ici. */
+export const directDailyMetrics = analyticsSchema.table('direct_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+  categoryId: uuid('category_id').notNull().default(NIL_UUID),
+  subCategoryId: uuid('sub_category_id').notNull().default(NIL_UUID),
+
+  // Source : business_events (seule source des recherches ; historique inexistant avant Phase C).
+  searches: count('searches'),
+  successfulSearches: count('successful_searches'),
+  // Source : marketplace.orders (cohorte par created_at, hors DRAFT/SUPERSEDED, hors appel d'offres).
+  ordersCreated: count('orders_created'),
+  ordersDelivered: count('orders_delivered'),
+  createdValue: money('created_value'),
+  deliveredValue: money('delivered_value'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('direct_daily_metrics_grain_uq').on(t.metricDate, t.zoneId, t.categoryId, t.subCategoryId),
+  index('direct_daily_metrics_date_idx').on(t.metricDate),
+  check('direct_daily_metrics_counts_chk', sql`${t.searches} >= 0 AND ${t.successfulSearches} >= 0 AND ${t.ordersCreated} >= 0 AND ${t.ordersDelivered} >= 0 AND ${t.createdValue} >= 0 AND ${t.deliveredValue} >= 0`),
+]);
+
+/** Grain : (jour de création de l'appel d'offres, zone cible, catégorie, sous-catégorie). */
+export const tenderDailyMetrics = analyticsSchema.table('tender_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+  categoryId: uuid('category_id').notNull().default(NIL_UUID),
+  subCategoryId: uuid('sub_category_id').notNull().default(NIL_UUID),
+
+  tendersCreated: count('tenders_created'),
+  tendersWithBid: count('tenders_with_bid'),
+  bidsReceived: count('bids_received'),
+  tendersWithWinner: count('tenders_with_winner'),
+  tenderOrdersCreated: count('tender_orders_created'),
+  tenderOrdersDelivered: count('tender_orders_delivered'),
+  // Somme des délais (secondes) + nombre d'appels d'offres mesurés : la moyenne = somme / nombre, jamais moyenne de moyennes.
+  firstBidLatencySecondsSum: numeric('first_bid_latency_seconds_sum', { precision: 18, scale: 3 }).notNull().default('0'),
+  firstBidLatencyCount: count('first_bid_latency_count'),
+  potentialValue: money('potential_value'),
+  committedValue: money('committed_value'),
+  deliveredValue: money('delivered_value'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('tender_daily_metrics_grain_uq').on(t.metricDate, t.zoneId, t.categoryId, t.subCategoryId),
+  index('tender_daily_metrics_date_idx').on(t.metricDate),
+  check('tender_daily_metrics_counts_chk', sql`${t.tendersCreated} >= 0 AND ${t.tendersWithBid} >= 0 AND ${t.bidsReceived} >= 0 AND ${t.tendersWithWinner} >= 0 AND ${t.tenderOrdersCreated} >= 0 AND ${t.tenderOrdersDelivered} >= 0 AND ${t.firstBidLatencySecondsSum} >= 0 AND ${t.firstBidLatencyCount} >= 0 AND ${t.potentialValue} >= 0 AND ${t.committedValue} >= 0 AND ${t.deliveredValue} >= 0`),
+]);
+
+/**
+ * Grain : (jour du besoin, zone, catégorie, sous-catégorie, unité canonique).
+ * L'unité fait partie du grain : jamais de KG + L + TETE dans une même somme.
+ * `canonical_unit` = priority_unit de la sous-catégorie quand l'unité de
+ * l'occurrence lui est compatible (conversion G→KG…), sinon l'unité de
+ * l'occurrence elle-même ; `measurement_family` en dérive.
+ */
+export const recurringDailyMetrics = analyticsSchema.table('recurring_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+  categoryId: uuid('category_id').notNull().default(NIL_UUID),
+  subCategoryId: uuid('sub_category_id').notNull().default(NIL_UUID),
+  canonicalUnit: text('canonical_unit').notNull(),
+  measurementFamily: text('measurement_family').notNull(),
+
+  occurrencesTotal: count('occurrences_total'),
+  // Hors SKIPPED/CANCELLED : la demande que l'acheteur maintient réellement.
+  occurrencesActive: count('occurrences_active'),
+  occurrencesFullyCovered: count('occurrences_fully_covered'),
+  occurrencesNotified: count('occurrences_notified'),
+  occurrencesAccepted: count('occurrences_accepted'),
+  occurrencesSkipped: count('occurrences_skipped'),
+  occurrencesWithOrders: count('occurrences_with_orders'),
+  occurrencesAllReceived: count('occurrences_all_received'),
+  needsWithOccurrence: count('needs_with_occurrence'),
+
+  // Occurrences ACTIVES uniquement, en unité canonique.
+  requestedQuantity: qty('requested_quantity'),
+  matchedQuantity: qty('matched_quantity'),
+  confirmedQuantity: qty('confirmed_quantity'),
+  // SUM(GREATEST(requested - matched, 0)) : DEMANDE NON APPARIÉE (matching), pas "non livrée".
+  unmatchedQuantity: qty('unmatched_quantity'),
+  potentialValue: money('potential_value'),
+  confirmedValue: money('confirmed_value'),
+  receivedValue: money('received_value'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('recurring_daily_metrics_grain_uq').on(t.metricDate, t.zoneId, t.categoryId, t.subCategoryId, t.canonicalUnit),
+  index('recurring_daily_metrics_date_idx').on(t.metricDate),
+  check('recurring_daily_metrics_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
+  check('recurring_daily_metrics_counts_chk', sql`${t.occurrencesTotal} >= 0 AND ${t.occurrencesActive} >= 0 AND ${t.occurrencesFullyCovered} >= 0 AND ${t.occurrencesNotified} >= 0 AND ${t.occurrencesAccepted} >= 0 AND ${t.occurrencesSkipped} >= 0 AND ${t.occurrencesWithOrders} >= 0 AND ${t.occurrencesAllReceived} >= 0 AND ${t.needsWithOccurrence} >= 0`),
+  check('recurring_daily_metrics_qty_chk', sql`${t.requestedQuantity} >= 0 AND ${t.matchedQuantity} >= 0 AND ${t.confirmedQuantity} >= 0 AND ${t.unmatchedQuantity} >= 0 AND ${t.potentialValue} >= 0 AND ${t.confirmedValue} >= 0 AND ${t.receivedValue} >= 0`),
+]);
