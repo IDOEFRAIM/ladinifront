@@ -77,6 +77,17 @@ describe('adaptateur analytics : autorisation et hygiène', () => {
     expect((await analyticsProxy(req(), 'x', pre)).status).toBe(401);
     expect(pre).not.toHaveBeenCalled();
   });
+
+  it('espace de noms "producers" : vise /internal/analytics/producers/*, sans rien changer côté acheteurs (défaut inchangé)', async () => {
+    requireAdmin.mockResolvedValue(okAdmin);
+    const f = vi.fn().mockResolvedValue(new Response(JSON.stringify({ metrics: {} }), { status: 200 }));
+    vi.stubGlobal('fetch', f);
+    await analyticsProxy(req(), 'overview', undefined, 'producers');
+    expect(String(f.mock.calls[0][0])).toBe('http://backend:8000/internal/analytics/producers/overview');
+    f.mockClear();
+    await analyticsProxy(req(), 'overview'); // sans namespace : toujours "buyers"
+    expect(String(f.mock.calls[0][0])).toBe('http://backend:8000/internal/analytics/buyers/overview');
+  });
 });
 
 describe('construction de lURL amont', () => {
@@ -87,6 +98,10 @@ describe('construction de lURL amont', () => {
     expect(url).not.toContain('secret');
     expect(url).toContain(`metric=${'a'.repeat(80)}`);
     expect(ALLOWED_PARAMS).toContain('sub_category_id');
+  });
+  it('un namespace explicite change le segment sans toucher au reste de la construction', () => {
+    const url = buildUpstreamUrl('http://b/', 'supply', new URLSearchParams({ zone_id: 'z' }), 'producers');
+    expect(url).toBe('http://b/internal/analytics/producers/supply?zone_id=z');
   });
   it('un nom de métrique doit être un identifiant simple', () => {
     expect(METRIC_RE.test('recurring_coverage_rate')).toBe(true);

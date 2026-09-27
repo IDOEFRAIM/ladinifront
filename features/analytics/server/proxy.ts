@@ -2,31 +2,35 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/api-guard';
 
 /**
- * Adaptateur serveur des endpoints admin analytics acheteurs.
+ * Adaptateur serveur des endpoints admin analytics (acheteurs ET producteurs — même adaptateur,
+ * seul le segment `namespace` change, voir `/internal/analytics/{buyers,producers}/*` côté backend).
  *
  * - Auth : `requireAdmin` (session admin existante) AVANT tout appel au backend (401/403 sinon).
- * - Le navigateur ne voit JAMAIS le backend ni son jeton : ce module appelle `/internal/analytics/buyers/*`
+ * - Le navigateur ne voit JAMAIS le backend ni son jeton : ce module appelle `/internal/analytics/{namespace}/*`
  *   (serveur-à-serveur, en-tête `X-Internal-Token`).
- * - Aucune logique KPI ici ni ailleurs en TypeScript : le backend (`AnalyticsService`) est la seule source des formules.
+ * - Aucune logique KPI ici ni ailleurs en TypeScript : le backend (`AnalyticsService`/`ProducerAnalyticsService`)
+ *   est la seule source des formules.
  * - Seuls les paramètres d'une liste blanche sont transmis ; les erreurs internes ne fuient pas (502 générique).
  */
+
+export type AnalyticsNamespace = 'buyers' | 'producers';
 
 export const ALLOWED_PARAMS = ['from', 'to', 'zone_id', 'category_id', 'sub_category_id', 'journey', 'granularity', 'dimension', 'limit', 'offset', 'metric', 'prev_from', 'prev_to'] as const;
 export const METRIC_RE = /^[a-z][a-z0-9_]{0,63}$/;
 const TIMEOUT_MS = 20_000;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-export function buildUpstreamUrl(base: string, path: string, source: URLSearchParams): string {
+export function buildUpstreamUrl(base: string, path: string, source: URLSearchParams, namespace: AnalyticsNamespace = 'buyers'): string {
   const q = new URLSearchParams();
   for (const key of ALLOWED_PARAMS) {
     const v = source.get(key);
     if (v !== null && v !== '') q.set(key, v.slice(0, 80));
   }
   const qs = q.toString();
-  return `${base.replace(/\/$/, '')}/internal/analytics/buyers/${path}${qs ? `?${qs}` : ''}`;
+  return `${base.replace(/\/$/, '')}/internal/analytics/${namespace}/${path}${qs ? `?${qs}` : ''}`;
 }
 
-export async function analyticsProxy(req: NextRequest, path: string, precheck?: () => Response | null): Promise<Response> {
+export async function analyticsProxy(req: NextRequest, path: string, precheck?: () => Response | null, namespace: AnalyticsNamespace = 'buyers'): Promise<Response> {
   const { error } = await requireAdmin(req);
   if (error) return error;
   const invalid = precheck?.();
@@ -40,7 +44,7 @@ export async function analyticsProxy(req: NextRequest, path: string, precheck?: 
   }
 
   try {
-    const upstream = await fetch(buildUpstreamUrl(base, path, new URL(req.url).searchParams), {
+    const upstream = await fetch(buildUpstreamUrl(base, path, new URL(req.url).searchParams, namespace), {
       headers: { 'X-Internal-Token': token, Accept: 'application/json' },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: 'no-store',
