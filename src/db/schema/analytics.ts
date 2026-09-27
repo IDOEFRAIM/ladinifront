@@ -43,7 +43,7 @@ const EVENT_NAMES = [
   // SUPPLY (Producer Analytics Phase B)
   'PRODUCT_PUBLISHED_FOR_SALE', 'PRODUCT_SELLABLE_QUANTITY_CHANGED',
 ] as const;
-//: journey CHECK values — widened in Phase B (migration 0008) to add SUPPLY,
+//: journey CHECK values — widened in Phase B (migration 0009) to add SUPPLY,
 // the producer-supply axis (a quantity/visibility change on a Product isn't
 // tied to any one buyer journey). Kept as one constant so both CHECKs below
 // can never drift apart.
