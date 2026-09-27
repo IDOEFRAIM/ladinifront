@@ -8,6 +8,7 @@ export const authSchema = pgSchema('auth');
 export const governanceSchema = pgSchema('governance');
 export const marketplaceSchema = pgSchema('marketplace');
 export const intelligenceSchema = pgSchema('intelligence');
+export const analyticsSchema = pgSchema('analytics');
 
 // Use simple text columns for enums to avoid creating Postgres enum types
 export const roleEnum = (name: string) => text(name);
@@ -53,4 +54,5 @@ export type Schemas = {
   governanceSchema: typeof governanceSchema;
   marketplaceSchema: typeof marketplaceSchema;
   intelligenceSchema: typeof intelligenceSchema;
+  analyticsSchema: typeof analyticsSchema;
 };
