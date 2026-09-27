@@ -1,5 +1,5 @@
-import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, doublePrecision, AnyPgColumn } from 'drizzle-orm/pg-core';
-import { type InferModel } from 'drizzle-orm';
+import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, doublePrecision, check, AnyPgColumn } from 'drizzle-orm/pg-core';
+import { type InferModel, sql } from 'drizzle-orm';
 import { authSchema, roleEnum } from './_config';
 import { zones } from './governance';
 
@@ -31,6 +31,14 @@ export const users = authSchema.table('users', {
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),
   zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
+  // Couverture géographique (onboarding) : `declaredLocation` est le texte brut saisi par
+  // l'utilisateur (jamais géocodé — voir agriconnect.domain.identity.models.User côté Python,
+  // même table). `coverageStatus` reflète si sa zone est couverte par la plateforme ; un
+  // `zoneId` absent implique OUT_OF_COVERAGE (migration 0005_add_location_coverage). Colonnes
+  // manquantes ici jusqu'au 2026-09-27 — même classe de dérive que `locationUpdatedAt` plus haut :
+  // ajoutées côté ORM Python (PR #10) mais jamais propagées à ce schéma Drizzle source-de-vérité.
+  declaredLocation: text('declared_location'),
+  coverageStatus: text('coverage_status').default('COVERED').notNull(),
   onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
   // Modération / abus : blocage (annulations répétées) & bannissement (produits interdits).
   accountStatus: text('account_status').default('ACTIVE').notNull(), // ACTIVE | BLOCKED | BANNED
@@ -44,6 +52,7 @@ export const users = authSchema.table('users', {
   index('users_zone_idx').on(t.zoneId),
   index('users_created_idx').on(t.createdAt),
   index('users_account_status_idx').on(t.accountStatus),
+  check('users_coverage_status_chk', sql`${t.coverageStatus} IN ('COVERED','NEARBY','OUT_OF_COVERAGE','WAITLIST')`),
 ]);
 
 export const accounts = authSchema.table('accounts', {
