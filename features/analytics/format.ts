@@ -34,7 +34,8 @@ export function fmtValue(value: number | null | undefined, unit: string | null |
     case 'seconds': return fmtSeconds(value);
     case 'orders_per_search': return `${nf(2).format(value)} cmd/recherche`; // peut dépasser 1 : jamais présenté comme un %
     case 'bids': return `${nf(1).format(value)} offres`;
-    case 'count': case 'buyers': case 'canonical_unit': case undefined: case null: return fmtNumber(value);
+    case 'days': return `${nf(value < 100 ? 1 : 0).format(value)} j`;
+    case 'count': case 'buyers': case 'producers': case 'canonical_unit': case undefined: case null: return fmtNumber(value);
     default: return `${fmtNumber(value, value < 100 ? 1 : 0)} ${unit}`;
   }
 }

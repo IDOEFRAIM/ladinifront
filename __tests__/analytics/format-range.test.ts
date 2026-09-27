@@ -22,6 +22,12 @@ describe('formatage (jamais de null vers 0)', () => {
     expect(fmtQuantity(4200, 'KG')).toMatch(/4\s?200 KG/);
     expect(fmtQuantity(73, 'TETE')).toContain('TETE');
   });
+  it('une durée en jours (time_to_first_sale) et un compte de producteurs restent lisibles, jamais un mot anglais qui fuit', () => {
+    expect(fmtValue(12.4, 'days')).toBe('12,4 j');
+    expect(fmtValue(30, 'days')).toBe('30 j');
+    expect(fmtValue(7, 'producers')).toBe('7');
+    expect(fmtValue(null, 'days')).toBe(DASH);
+  });
   it('delta dun taux en points de pourcentage, delta relatif sinon', () => {
     expect(fmtDelta({ delta: 0.08, delta_kind: 'percentage_points', delta_points: 8, delta_pct: null })).toBe('+8 pts');
     expect(fmtDelta({ delta: -0.025, delta_kind: 'percentage_points', delta_points: -2.5, delta_pct: null })).toBe('−2,5 pts');

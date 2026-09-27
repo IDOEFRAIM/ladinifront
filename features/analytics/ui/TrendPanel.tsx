@@ -44,8 +44,8 @@ export function TrendChart({ points, unit }: { points: SeriesPoint[]; unit: stri
   );
 }
 
-export function TrendPanel({ metric, title, params }: { metric: string; title: string; params: Record<string, string> }) {
-  const { data, error, loading, refetch } = useCockpitData<TimeseriesResponse>(`/api/admin/analytics/buyers/metrics/${metric}/timeseries`, params);
+export function TrendPanel({ metric, title, params, endpointBase = '/api/admin/analytics/buyers' }: { metric: string; title: string; params: Record<string, string>; endpointBase?: string }) {
+  const { data, error, loading, refetch } = useCockpitData<TimeseriesResponse>(`${endpointBase}/metrics/${metric}/timeseries`, params);
   const hasValues = !!data?.points?.some((p) => p.value !== null);
   return (
     <Card testId={`trend-${metric}`} title={title} right={data && <ReliabilityBadge reliability={data.reliability} title={data.notes[0]} />} style={{ padding: 14 }}>
