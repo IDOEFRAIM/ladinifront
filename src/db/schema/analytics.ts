@@ -29,8 +29,8 @@ import { categories, subCategories, zones } from './governance';
 
 const tz = { withTimezone: true } as const;
 
-//: Catalogue Phase B (backend `domain/analytics/business_events.py::BusinessEventName`)
-// — mêmes 20 noms, mêmes deux dépôts synchronisés. Ajouter un event = ajouter
+//: Catalogue (backend `domain/analytics/business_events.py::BusinessEventName`)
+// — mêmes noms, mêmes deux dépôts synchronisés. Ajouter un event = ajouter
 // ici ET dans le fichier Python, dans le MÊME commit.
 const EVENT_NAMES = [
   'DIRECT_SEARCH_PERFORMED', 'DIRECT_SEARCH_SUCCEEDED', 'DIRECT_ORDER_CREATED',
@@ -40,7 +40,14 @@ const EVENT_NAMES = [
   'RECURRING_NEED_CREATED', 'RECURRING_OCCURRENCE_CREATED', 'RECURRING_MATCH_FOUND',
   'RECURRING_DIGEST_SENT', 'RECURRING_DIGEST_ACCEPTED', 'RECURRING_DIGEST_MODIFIED',
   'RECURRING_OCCURRENCE_SKIPPED', 'RECURRING_OCCURRENCE_CONFIRMED', 'RECURRING_OCCURRENCE_DELIVERED',
+  // SUPPLY (Producer Analytics Phase B)
+  'PRODUCT_PUBLISHED_FOR_SALE', 'PRODUCT_SELLABLE_QUANTITY_CHANGED',
 ] as const;
+//: journey CHECK values — widened in Phase B (migration 0009) to add SUPPLY,
+// the producer-supply axis (a quantity/visibility change on a Product isn't
+// tied to any one buyer journey). Kept as one constant so both CHECKs below
+// can never drift apart.
+const JOURNEY_VALUES_SQL = sql.raw("'DIRECT','TENDER','RECURRING','SUPPLY'");
 const EVENT_NAMES_SQL = sql.raw(EVENT_NAMES.map((n) => `'${n}'`).join(','));
 
 export const eventOutbox = analyticsSchema.table('event_outbox', {
@@ -63,7 +70,7 @@ export const eventOutbox = analyticsSchema.table('event_outbox', {
   uniqueIndex('event_outbox_dedupe_key_uq').on(t.dedupeKey),
   index('event_outbox_claim_idx').on(t.status, t.nextAttemptAt),
   check('event_outbox_status_chk', sql`${t.status} IN ('PENDING','SENDING','SENT','FAILED','DEAD')`),
-  check('event_outbox_journey_chk', sql`${t.journey} IN ('DIRECT','TENDER','RECURRING')`),
+  check('event_outbox_journey_chk', sql`${t.journey} IN (${JOURNEY_VALUES_SQL})`),
 ]);
 
 export const businessEvents = analyticsSchema.table('business_events', {
@@ -110,7 +117,7 @@ export const businessEvents = analyticsSchema.table('business_events', {
   index('business_events_sub_category_idx').on(t.subCategoryId, t.occurredAt),
   index('business_events_zone_idx').on(t.zoneId, t.occurredAt),
   check('business_events_event_name_chk', sql`${t.eventName} IN (${EVENT_NAMES_SQL})`),
-  check('business_events_journey_chk', sql`${t.journey} IN ('DIRECT','TENDER','RECURRING')`),
+  check('business_events_journey_chk', sql`${t.journey} IN (${JOURNEY_VALUES_SQL})`),
   check('business_events_actor_type_chk', sql`${t.actorType} IN ('BUYER','PRODUCER','SYSTEM','ADMIN')`),
   check(
     'business_events_measurement_family_chk',
