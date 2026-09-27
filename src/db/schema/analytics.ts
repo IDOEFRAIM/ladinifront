@@ -323,3 +323,107 @@ export const recurringDailyMetrics = analyticsSchema.table('recurring_daily_metr
   check('recurring_daily_metrics_delivered_chk', sql`${t.deliveredQuantity} >= 0`),
   check('recurring_daily_metrics_qty_chk', sql`${t.requestedQuantity} >= 0 AND ${t.matchedQuantity} >= 0 AND ${t.confirmedQuantity} >= 0 AND ${t.unmatchedQuantity} >= 0 AND ${t.potentialValue} >= 0 AND ${t.confirmedValue} >= 0 AND ${t.receivedValue} >= 0`),
 ]);
+
+/**
+ * Producer Analytics Phase C. Grain : (jour de création de la commande, producteur).
+ * `zone_id` = `Producer.zone_id` (la zone DU PRODUCTEUR, jamais celle de
+ * l'acheteur/livraison — voir PRODUCER_METRIC_LAYER.md). Une ligne n'existe
+ * que si le producteur a eu >=1 fait qualifiant ce jour-là (publication,
+ * changement de quantité vendable, offre reçue, commande confirmée/livrée) :
+ * COUNT(DISTINCT producer_id) sur une fenêtre = producteurs actifs, exact.
+ * Cohorte = jour de création de la commande (même règle DIRECT_COHORT_TS que
+ * côté acheteur). Confirmé = engagement ferme par journey : DIRECT =
+ * Order.status CONFIRMED ; TENDER = commande créée depuis l'offre gagnante
+ * (pas d'étape de confirmation séparée) ; RECURRING = commande créée à
+ * l'acceptation (idem). GMV : chaque Order de ces 3 journeys correspond à
+ * EXACTEMENT un producteur (cart splitting DIRECT, offre gagnante TENDER, un
+ * producteur par commande RECURRING) — `Order.total_amount` est déjà
+ * l'attribution correcte, pas besoin de descendre à l'item.
+ */
+export const producerDailyMetrics = analyticsSchema.table('producer_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  producerId: uuid('producer_id').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+
+  productsPublished: count('products_published'),
+  quantityChanges: count('quantity_changes'),
+  bidsReceived: count('bids_received'),
+
+  ordersConfirmedDirect: count('orders_confirmed_direct'),
+  ordersDeliveredDirect: count('orders_delivered_direct'),
+  ordersConfirmedTender: count('orders_confirmed_tender'),
+  ordersDeliveredTender: count('orders_delivered_tender'),
+  ordersConfirmedRecurring: count('orders_confirmed_recurring'),
+  // RECURRING "livré" = RECEIVED (réception confirmée acheteur), même règle que le buyer layer.
+  ordersDeliveredRecurring: count('orders_delivered_recurring'),
+
+  deliveredGmvDirect: money('delivered_gmv_direct'),
+  deliveredGmvTender: money('delivered_gmv_tender'),
+  deliveredGmvRecurring: money('delivered_gmv_recurring'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('producer_daily_metrics_grain_uq').on(t.metricDate, t.producerId),
+  index('producer_daily_metrics_date_zone_idx').on(t.metricDate, t.zoneId),
+  check('producer_daily_metrics_counts_chk', sql`${t.productsPublished} >= 0 AND ${t.quantityChanges} >= 0 AND ${t.bidsReceived} >= 0 AND ${t.ordersConfirmedDirect} >= 0 AND ${t.ordersDeliveredDirect} >= 0 AND ${t.ordersConfirmedTender} >= 0 AND ${t.ordersDeliveredTender} >= 0 AND ${t.ordersConfirmedRecurring} >= 0 AND ${t.ordersDeliveredRecurring} >= 0`),
+  check('producer_daily_metrics_money_chk', sql`${t.deliveredGmvDirect} >= 0 AND ${t.deliveredGmvTender} >= 0 AND ${t.deliveredGmvRecurring} >= 0`),
+]);
+
+/**
+ * Producer Analytics Phase C. Grain : (jour, producteur, unité canonique).
+ * Quantité confirmée/livrée par journey — jamais KG + L + TETE dans une même
+ * somme. TENDER est ABSENT PAR CONSTRUCTION (aucun OrderItem, donc aucune
+ * quantité fiable — voir PRODUCER_ANALYTICS_ARCHITECTURE.md §3.2/§10) :
+ * pas de colonnes `*_tender` ici plutôt que des colonnes toujours à zéro qui
+ * donneraient une fausse impression de disponibilité mesurée.
+ */
+export const producerQuantityDailyMetrics = analyticsSchema.table('producer_quantity_daily_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  producerId: uuid('producer_id').notNull(),
+  canonicalUnit: text('canonical_unit').notNull(),
+  measurementFamily: text('measurement_family').notNull(),
+
+  confirmedQuantityDirect: qty('confirmed_quantity_direct'),
+  deliveredQuantityDirect: qty('delivered_quantity_direct'),
+  confirmedQuantityRecurring: qty('confirmed_quantity_recurring'),
+  deliveredQuantityRecurring: qty('delivered_quantity_recurring'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('producer_quantity_daily_metrics_grain_uq').on(t.metricDate, t.producerId, t.canonicalUnit),
+  index('producer_quantity_daily_metrics_date_idx').on(t.metricDate),
+  check('producer_quantity_daily_metrics_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
+  check('producer_quantity_daily_metrics_qty_chk', sql`${t.confirmedQuantityDirect} >= 0 AND ${t.deliveredQuantityDirect} >= 0 AND ${t.confirmedQuantityRecurring} >= 0 AND ${t.deliveredQuantityRecurring} >= 0`),
+]);
+
+/**
+ * Producer Analytics Phase C. Grain : (jour, producteur, zone, catégorie,
+ * sous-catégorie, unité canonique). UN SNAPSHOT, JAMAIS UN FLUX : chaque
+ * ligne est "l'état connu de la supply vendable de ce producteur, à la fin
+ * de cette journée" — jamais une quantité ajoutée ce jour-là (donc jamais
+ * additive au fil des jours). Généré une fois par jour, pour le jour EN
+ * COURS uniquement — jamais reconstruit pour un jour passé (aucun snapshot
+ * n'existe avant que ce job tourne pour la première fois).
+ */
+export const producerSupplyDailySnapshot = analyticsSchema.table('producer_supply_daily_snapshot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  metricDate: date('metric_date').notNull(),
+  producerId: uuid('producer_id').notNull(),
+  zoneId: uuid('zone_id').notNull().default(NIL_UUID),
+  categoryId: uuid('category_id').notNull().default(NIL_UUID),
+  subCategoryId: uuid('sub_category_id').notNull().default(NIL_UUID),
+  canonicalUnit: text('canonical_unit').notNull(),
+  measurementFamily: text('measurement_family').notNull(),
+
+  availableQuantity: qty('available_quantity'),
+  productCount: count('product_count'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('producer_supply_daily_snapshot_grain_uq').on(t.metricDate, t.producerId, t.zoneId, t.categoryId, t.subCategoryId, t.canonicalUnit),
+  index('producer_supply_daily_snapshot_date_idx').on(t.metricDate),
+  check('producer_supply_daily_snapshot_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
+  check('producer_supply_daily_snapshot_qty_chk', sql`${t.availableQuantity} >= 0 AND ${t.productCount} >= 0`),
+]);
