@@ -103,6 +103,10 @@ describe('construction de lURL amont', () => {
     const url = buildUpstreamUrl('http://b/', 'supply', new URLSearchParams({ zone_id: 'z' }), 'producers');
     expect(url).toBe('http://b/internal/analytics/producers/supply?zone_id=z');
   });
+  it('le namespace market-balance transmet aussi zone_scope/canonical_unit', () => {
+    const url = buildUpstreamUrl('http://b/', 'current', new URLSearchParams({ zone_scope: 'z', canonical_unit: 'KG' }), 'market-balance');
+    expect(url).toBe('http://b/internal/analytics/market-balance/current?zone_scope=z&canonical_unit=KG');
+  });
   it('un nom de métrique doit être un identifiant simple', () => {
     expect(METRIC_RE.test('recurring_coverage_rate')).toBe(true);
     for (const bad of ['../x', 'a b', 'A', '', "x'; drop", 'a'.repeat(70)]) expect(METRIC_RE.test(bad)).toBe(false);

@@ -2,20 +2,21 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/api-guard';
 
 /**
- * Adaptateur serveur des endpoints admin analytics (acheteurs ET producteurs — même adaptateur,
- * seul le segment `namespace` change, voir `/internal/analytics/{buyers,producers}/*` côté backend).
+ * Adaptateur serveur des endpoints admin analytics (acheteurs, producteurs ET Market Balance —
+ * même adaptateur, seul le segment `namespace` change, voir
+ * `/internal/analytics/{buyers,producers,market-balance}/*` côté backend).
  *
  * - Auth : `requireAdmin` (session admin existante) AVANT tout appel au backend (401/403 sinon).
  * - Le navigateur ne voit JAMAIS le backend ni son jeton : ce module appelle `/internal/analytics/{namespace}/*`
  *   (serveur-à-serveur, en-tête `X-Internal-Token`).
- * - Aucune logique KPI ici ni ailleurs en TypeScript : le backend (`AnalyticsService`/`ProducerAnalyticsService`)
- *   est la seule source des formules.
+ * - Aucune logique KPI ici ni ailleurs en TypeScript : le backend (`AnalyticsService`/
+ *   `ProducerAnalyticsService`/`MarketBalanceService`) est la seule source des formules.
  * - Seuls les paramètres d'une liste blanche sont transmis ; les erreurs internes ne fuient pas (502 générique).
  */
 
-export type AnalyticsNamespace = 'buyers' | 'producers';
+export type AnalyticsNamespace = 'buyers' | 'producers' | 'market-balance';
 
-export const ALLOWED_PARAMS = ['from', 'to', 'zone_id', 'category_id', 'sub_category_id', 'journey', 'granularity', 'dimension', 'limit', 'offset', 'metric', 'prev_from', 'prev_to'] as const;
+export const ALLOWED_PARAMS = ['from', 'to', 'zone_id', 'zone_scope', 'category_id', 'sub_category_id', 'canonical_unit', 'journey', 'granularity', 'dimension', 'limit', 'offset', 'metric', 'prev_from', 'prev_to'] as const;
 export const METRIC_RE = /^[a-z][a-z0-9_]{0,63}$/;
 const TIMEOUT_MS = 20_000;
 const NO_STORE = { 'Cache-Control': 'no-store' };
