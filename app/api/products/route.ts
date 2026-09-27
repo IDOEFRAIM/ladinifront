@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { requireProducer } from '@/lib/api-guard';
-import { createProductFromForm, updateProductFromForm } from '@/app/actions/products.server';
+import { createProductFromForm, updateProductFromForm } from '@/features/products/services/product-form.service';
 // DB access and ownership checks moved to actions
-import { fetchProductsServer } from '@/app/actions/publicProduct.safe.server';
-import { fetchDashboardInventoryServer } from '@/app/actions/dashboard.server';
+import { fetchProductsServer } from '@/features/products/actions/get-catalogue-products';
+import { fetchDashboardInventoryServer } from '@/features/inventory/services/dashboard-inventory.service';
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.webm'];
 const UPLOAD_BASE_PATH = process.env.UPLOADS_DIR || 'public/uploads';
@@ -20,7 +20,7 @@ const MAX_IMAGES = 5;
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const session = await (await import('@/lib/session')).getSessionFromRequest({ cookies: cookieStore } as any);
+    const session = await (await import('@/lib/session')).getSessionFromRequest({ cookies: cookieStore });
     const userId = session?.userId;
 
     // If producer => use dashboard server action

@@ -5,11 +5,20 @@ const SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'dev-sess
 const encoder = new TextEncoder();
 const secretKey = encoder.encode(SECRET);
 
+// Journalisation de diagnostic (2026-08-27) : auparavant systématique dès que
+// `NODE_ENV !== 'production'`, donc sur CHAQUE requête authentifiée en dev —
+// une ligne `[session] verified ...` par appel de `getAccessContext`
+// (middleware + chaque route API), noyant les vrais signaux (ex: la boucle
+// POST /api/delivery/status) dans du bruit. Devient opt-in via
+// `DEBUG_SESSION=true` ; silencieux par défaut, y compris en dev.
+const SESSION_DEBUG = process.env.DEBUG_SESSION === 'true';
+
 export type SessionPayload = {
   userId: string;
   role?: string;
   permissionVersion?: string;
   activeOrgId?: string;
+  onboardingCompleted?: boolean;
   iat?: number;
   exp?: number;
 };
@@ -27,9 +36,9 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     const { payload } = await jwtVerify(token, secretKey as Uint8Array);
     return payload as unknown as SessionPayload;
   } catch (err) {
-    // In development log the verification error to help diagnose expired tokens,
-    // signature mismatches, malformed tokens, etc. Do not log token contents.
-    if (process.env.NODE_ENV !== 'production') {
+    // Diagnostic optionnel (DEBUG_SESSION=true) pour les jetons expirés,
+    // signatures invalides, jetons malformés... Ne logue jamais le contenu.
+    if (SESSION_DEBUG) {
       try {
         // err may be a JOSE error with message
         // eslint-disable-next-line no-console
@@ -42,14 +51,13 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
-export async function getSessionFromRequest(request: Request | { cookies?: any } | { headers?: any }) {
-  const isDev = process.env.NODE_ENV !== 'production';
+type SessionRequest = Request | { cookies?: { get(name: string): { value: string } | undefined } } | { headers?: { get(name: string): string | null } };
+
+export async function getSessionFromRequest(request: SessionRequest) {
+  const isDev = SESSION_DEBUG;
   let token: string | undefined;
   try {
-    // @ts-ignore
-    if (request.cookies && typeof request.cookies.get === 'function') {
-      // NextRequest
-      // @ts-ignore
+    if ('cookies' in request && request.cookies && typeof request.cookies.get === 'function') {
       token = request.cookies.get(COOKIE_NAMES.SESSION_TOKEN)?.value;
     }
   } catch (e) {
@@ -58,9 +66,7 @@ export async function getSessionFromRequest(request: Request | { cookies?: any }
 
   if (!token) {
     try {
-      // Try headers
-      // @ts-ignore
-      const headers = request.headers;
+      const headers = 'headers' in request ? request.headers : undefined;
       const raw = headers?.get ? headers.get('cookie') : undefined;
       if (raw) {
         const match = raw.match(new RegExp(COOKIE_NAMES.SESSION_TOKEN + '=([^;]+)'));

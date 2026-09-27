@@ -1,10 +1,14 @@
 ﻿'use client';
 
 import React, { useState, useEffect } from 'react';
-import ProductorSidebar from '@/components/utils/productorSidebar';
+import ProductorSidebar from '@/components/layout/ProductorSidebar';
 import { Menu, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// Le chat n'est pas nécessaire au premier affichage : chargé après hydratation, hors bundle initial.
+const LadiniChatWidget = dynamic(() => import('@/features/chat/components/LadiniChatWidget'), { ssr: false });
 
 export default function ProductorLayout({ children }: { children: React.ReactNode }) {
   const { userRole, isAuthenticated, isLoading, activeOrg } = useAuth();
@@ -32,8 +36,8 @@ export default function ProductorLayout({ children }: { children: React.ReactNod
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9FBF8] p-6 text-center">
         <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
-        <h2 className="text-slate-800 font-semibold text-lg">Vérification de vos accès</h2>
-        <p className="text-slate-500 text-sm max-w-xs">Nous préparons votre espace de gestion agricole...</p>
+        <h2 className="text-slate-800 font-semibold text-lg">Nous vérifions vos accès</h2>
+        <p className="text-slate-500 text-sm max-w-xs">Nous préparons votre espace de gestion agricole</p>
         {showContinueBtn && (
           <button
             onClick={() => router.replace('/login')}
@@ -77,11 +81,13 @@ export default function ProductorLayout({ children }: { children: React.ReactNod
 
       {/* Overlay pour fermer la sidebar sur mobile quand on clique à côté */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+
+      <LadiniChatWidget role="producer" />
     </div>
   );
 }

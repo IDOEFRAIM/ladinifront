@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { settleExpiredAuctions } from '@/services/auctionSettlement.service';
+import { settleExpiredAuctions } from '@/features/auction/services/auction-settlement.service';
+import { asError } from '@/lib/errors';
 
 /**
  * POST /api/cron/settle-auctions
@@ -15,17 +16,19 @@ import { settleExpiredAuctions } from '@/services/auctionSettlement.service';
  */
 export async function POST(req: NextRequest) {
   try {
-    // Vérification du secret
     const cronSecret = process.env.CRON_SECRET;
-    const headerSecret = req.headers.get('x-cron-secret');
-
-    if (cronSecret && headerSecret !== cronSecret) {
+    if (!cronSecret) {
+      return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 503 });
+    }
+    const headerSecret = req.headers.get('x-cron-secret') || req.headers.get('authorization')?.replace('Bearer ', '');
+    if (headerSecret !== cronSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const result = await settleExpiredAuctions();
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (_error: unknown) {
+    const error = asError(_error);
     console.error('POST /api/cron/settle-auctions error:', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }

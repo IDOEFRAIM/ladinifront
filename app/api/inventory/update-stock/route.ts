@@ -1,9 +1,9 @@
 import { getSessionFromRequest } from '@/lib/session';
 import { requireOrgAction, requireMembershipAndPermission } from '@/lib/api-guard';
-import { updateStockAction } from '@/app/actions/inventory.server';
+import { updateStockAction } from '@/features/inventory/services/inventory-api.service';
 
 export async function POST(req: Request) {
-  const session = await getSessionFromRequest(req as any);
+  const session = await getSessionFromRequest(req);
   if (!session?.userId) return new Response('Unauthorized', { status: 401 });
 
   const body = await req.json().catch(() => ({}));

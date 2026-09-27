@@ -1,5 +1,5 @@
-import NewAuctionClient from "@/components/auction/NewAuctionClient"; // Ajuste le chemin
-import { createAuction } from "@/services/auction.service"; // Ton service d'enchères
+import NewAuctionClient from "@/features/auction/components/NewAuctionClient"; // Ajuste le chemin
+import { createAuction } from "@/features/auction/services/auction.service"; // Ton service d'enchères
 import { db } from "@/src/db";
 import * as schema from "@/src/db/schema";
 import { eq } from 'drizzle-orm';
@@ -22,6 +22,9 @@ export default async function NewAuctionPage() {
       unit: payload.unit.toUpperCase(), // Conversion 'kg' -> 'KG' pour matcher l'Enum
       maxPricePerUnit: payload.maxPricePerUnit,
       deadline: payload.deadline,
+      incoterm: payload.incoterm,
+      deliveryLocation: payload.deliveryLocation,
+      deliveryDeadline: payload.deliveryDeadline,
       targetZoneId: payload.targetZoneId,
     });
 

@@ -8,7 +8,7 @@ import {
   deleteOrgAllocation,
   updateOrgAllocation,
   getOrgAllocations,
-} from '@/services/org-manager.service';
+} from '@/features/organization/services/org-manager.service';
 
 export async function GET() {
   const result = await getOrgAllocations();

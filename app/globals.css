@@ -1,5 +1,4 @@
-/* Space Grotesk and Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+/* Space Grotesk et Inter : polices auto-hébergées, déclarées dans app/fonts.css (fichiers dans public/fonts). */
 
 @import "tailwindcss";
 
@@ -88,3 +87,7 @@ p, li, span, a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Mise en page principale + colonne latérale : empilée sur mobile/tablette, 2 colonnes dès 900 px. */
+.ladini-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+@media (min-width: 900px) { .ladini-split { grid-template-columns: minmax(0, 1fr) 320px; gap: 32px; } }

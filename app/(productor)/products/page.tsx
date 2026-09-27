@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback,useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import { getMyProducts, deleteProduct } from '@/services/producer.service';
-import { C, F, GlassCard } from '@/components/productor/tokens';
+import { getMyProducts, deleteProduct } from '@/features/products/actions/producer-products.actions';
+import { C, F, GlassCard } from '@/features/production/components/tokens';
 import { Plus, Pencil, Trash2, Share2, Package, Search, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';

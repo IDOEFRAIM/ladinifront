@@ -29,11 +29,13 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/admin':         ['ORG_MANAGE'],
   '/org':           [],                   // authenticated + active org (checked in layout)
   '/market':        [],
-  //'/orders':        ['ORDER_VIEW'],
   '/conversations': [],
   '/agent':         [],
   '/buyer-dashboard': [],
   '/tracking':      [],
+  '/onboarding':    [],
+  '/checkout':      [],                   // authentifié + rôle (voir ROUTE_ROLES)
+  '/production':    [],                   // authentifié + rôle (voir ROUTE_ROLES)
 };
 
 // ─── Rôles autorisés par préfixe (contrôle haut niveau) ───────────────────
@@ -51,6 +53,8 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/agent':      ['AGENT', 'ADMIN', 'SUPERADMIN'],
   '/buyer-dashboard': ['BUYER', 'ADMIN', 'SUPERADMIN'],
   '/tracking':   ['BUYER', 'ADMIN', 'SUPERADMIN'],
+  '/onboarding': [],
+  '/production': ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
 };
 
 function parsePermissions(raw: string | undefined): string[] {
@@ -138,10 +142,11 @@ export async function middleware(request: NextRequest) {
 
     // 2. Vérifier le rôle de haut-niveau si défini
     const allowedRoles = ROUTE_ROLES[prefix];
+    const hasRoleRestriction = Array.isArray(allowedRoles) && allowedRoles.length > 0;
     // Si la route a une restriction de rôle, appliquer la vérification en utilisant
     // le rôle effectif (cookie ou token). On évite ainsi les faux positifs lorsque
     // le cookie `user-role` est absent ou obsolète.
-    if (allowedRoles && effectiveRole && !allowedRoles.includes(effectiveRole) && !isAdmin) {
+    if (hasRoleRestriction && effectiveRole && !allowedRoles!.includes(effectiveRole) && !isAdmin) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('forbidden', '1');
       return NextResponse.redirect(loginUrl);
@@ -150,7 +155,7 @@ export async function middleware(request: NextRequest) {
     // Si le rôle effectif est explicitement autorisé pour cette route, le rôle suffit
     // (bypass des permissions dynamiques côté middleware). Les API routes
     // devront quand même re-valider via getAccessContext() / AccessManager.
-    if (allowedRoles && effectiveRole && allowedRoles.includes(effectiveRole)) {
+    if (hasRoleRestriction && effectiveRole && allowedRoles!.includes(effectiveRole)) {
       break;
     }
 
@@ -172,6 +177,29 @@ export async function middleware(request: NextRequest) {
   }
 
   // ╔══════════════════════════════════════════════╗
+  // ║  ONBOARDING GATE — redirect si pas complété  ║
+  // ╚══════════════════════════════════════════════╝
+  const isOnboardingPage = pathname === '/onboarding';
+  const onboardingCookie = request.cookies.get(COOKIE_NAMES.ONBOARDING_COMPLETED)?.value;
+  const sessionOnboarding = session?.onboardingCompleted;
+  const onboardingDone = onboardingCookie
+    ?? (sessionOnboarding === true ? '1' : sessionOnboarding === false ? '0' : undefined);
+
+  if (isAuthenticated && onboardingDone === '0') {
+    const isApiRoute = pathname.startsWith('/api/');
+    if (!isOnboardingPage && !isApiRoute) {
+      return NextResponse.redirect(new URL('/onboarding', request.url));
+    }
+  }
+
+  if (isOnboardingPage && isAuthenticated && onboardingDone === '1') {
+    // Already onboarded — redirect to role dashboard
+    const roleKey = (effectiveRole ?? '').toUpperCase();
+    const target = ({ SUPERADMIN: '/admin', ADMIN: '/admin', PRODUCER: '/dashboard', AGENT: '/agent/deliveries', BUYER: '/buyer-dashboard', USER: '/market' } as Record<string, string>)[roleKey] || '/market';
+    return NextResponse.redirect(new URL(target, request.url));
+  }
+
+  // ╔══════════════════════════════════════════════╗
   // ║  REDIRECTION SI DÉJÀ CONNECTÉ               ║
   // ╚══════════════════════════════════════════════╝
   const isAuthPage = pathname === '/signup' || pathname === '/login';
@@ -190,11 +218,9 @@ export async function middleware(request: NextRequest) {
     const sessionRole = roleFromToken ? String(roleFromToken).toUpperCase() : undefined;
     const roleKey = (sessionRole ?? normalizedUserRole ?? userRole ?? '').toUpperCase();
     const target = redirectMap[roleKey] || '/';
-  
-  if (pathname !== target) {
-    return NextResponse.redirect(new URL(target, request.url));
-  }
-      // to be checked return NextResponse.redirect(new URL(target, request.url));
+    if (pathname !== target) {
+      return NextResponse.redirect(new URL(target, request.url));
+    }
   }
 
   // ╔══════════════════════════════════════════════╗
@@ -249,12 +275,13 @@ export const config = {
     '/admin/:path*',
     '/market/:path*',
     '/checkout/:path*',
-    //'/orders/:path*',
+    '/production/:path*',
     '/conversations/:path*',
     '/org/:path*',
     '/agent/:path*',
     '/buyer-dashboard/:path*',
     '/tracking/:path*',
+    '/onboarding',
     '/signup',
     '/login',
     ],

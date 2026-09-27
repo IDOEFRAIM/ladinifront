@@ -1,6 +1,6 @@
 import React from 'react';
-import CreateOrganizationClient from '../CreateOrganizationClient';
-import { createOrganization } from '@/app/actions/admin.server';
+import CreateOrganizationClient from '@/features/organization/components/CreateOrganizationClient';
+import { createOrganization } from '@/features/admin/services/admin-organizations.service';
 
 export const dynamic = 'force-dynamic';
 

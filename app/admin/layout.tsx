@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import React, { useEffect } from 'react';
-import AdminNavbar from '@/components/utils/adminNavbar';
+import AdminNavbar from '@/components/layout/AdminNavbar';
 import Link from 'next/link';
 import { Shield, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';

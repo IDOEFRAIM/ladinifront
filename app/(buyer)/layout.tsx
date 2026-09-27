@@ -1,11 +1,15 @@
 ﻿'use client';
 
 import React from 'react';
-import BuyerNavbar from '@/components/utils/BuyerNavbar';
-import CartFloatingIcon from '@/components/utils/CartFloating';
-import SyncProvider from '@/services/syncProvider';
-import { AccountTypeGuard, AccountTypeBanner } from '@/components/guards/AccountTypeGuard';
-import { BuyerMobileTabBar } from '@/components/ui/MobileTabBar';
+import BuyerNavbar from '@/components/layout/BuyerNavbar';
+import CartFloatingIcon from '@/components/layout/CartFloating';
+import SyncProvider from '@/components/providers/SyncProvider';
+import { AccountTypeGuard, AccountTypeBanner } from '@/features/auth/components/AccountTypeGuard';
+import { BuyerMobileTabBar } from '@/components/layout/MobileTabBar';
+import dynamic from 'next/dynamic';
+
+// Le chat n'est pas nécessaire au premier affichage : chargé après hydratation, hors bundle initial.
+const LadiniChatWidget = dynamic(() => import('@/features/chat/components/LadiniChatWidget'), { ssr: false });
 
 export default function BuyerLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,8 +20,8 @@ export default function BuyerLayout({ children }: { children: React.ReactNode })
       */}
       <SyncProvider />
 
-      {/* NAVBAR — Desktop uniquement */}
-      <header className="hidden md:block sticky top-0 z-40 w-full">
+      {/* NAVBAR — visible sur tous les écrans (sur mobile : logo + menu compte, la navigation est dans la TabBar du bas) */}
+      <header className="sticky top-0 z-40 w-full">
         <BuyerNavbar />
       </header>
 
@@ -41,6 +45,9 @@ export default function BuyerLayout({ children }: { children: React.ReactNode })
       <aside className="hidden md:block">
         <CartFloatingIcon />
       </aside>
+
+      {/* CHAT LADINI — côté gauche pour ne pas gêner le panier / la TabBar */}
+      <LadiniChatWidget role="buyer" position="left" />
 
       {/* 
           MOBILE TAB BAR 

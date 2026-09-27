@@ -5,7 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/api-guard';
-import { bulkApproveAgentActions } from '@/app/actions/monitoring.server';
+import { bulkApproveAgentActions } from '@/features/monitoring/services/monitoring-api.service';
+import { asError } from '@/lib/errors';
 
 export async function PATCH(req: NextRequest): Promise<Response | void> {
   const { user, error } = await requireAdmin(req);
@@ -44,7 +45,8 @@ export async function PATCH(req: NextRequest): Promise<Response | void> {
       // normalize driver result
       const updated = Array.isArray(result) ? result.length : Number(result) || 0;
       return NextResponse.json({ updated });
-    } catch (e: any) {
+    } catch (_e: unknown) {
+    const e = asError(_e);
       if (e?.message === 'INSUFFICIENT_PERMISSIONS') {
         return NextResponse.json({ error: 'Permissions insuffisantes.' }, { status: 403 });
       }

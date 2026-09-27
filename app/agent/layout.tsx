@@ -7,13 +7,13 @@ import {
   Package, History, Menu, X, Truck, 
   ClipboardList, Bell, Home, LogOut, User 
 } from 'lucide-react';
-import { AgentMobileTabBar } from '@/components/ui/MobileTabBar';
+import { AgentMobileTabBar } from '@/components/layout/MobileTabBar';
 
 const NAV_ITEMS = [
   { href: '/agent/deliveries', label: 'Missions dispo', icon: Truck },
   { href: '/agent/deliveries/active', label: 'En cours', icon: ClipboardList },
   { href: '/agent/distributions', label: 'Distributions', icon: Package },
-  { href: '/agent/history', label: 'Historique', icon: History },
+  { href: '/agent/history', label: 'Historiques', icon: History },
 ];
 
 export default function AgentLayout({ children }: { children: React.ReactNode }) {

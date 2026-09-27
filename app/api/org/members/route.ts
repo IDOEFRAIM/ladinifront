@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getOrgMembers } from '@/services/org-manager.service';
+import { getOrgMembers } from '@/features/organization/services/org-manager.service';
 
 export async function GET() {
   try {

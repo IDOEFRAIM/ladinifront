@@ -1,4 +1,4 @@
-import SeedDistributionForm from '@/components/SeedDistributionForm';
+import SeedDistributionForm from '@/features/inventory/components/SeedDistributionForm';
 import { db, schema } from '@/src/db';
 import { cookies } from 'next/headers';
 import { getSessionFromRequest } from '@/lib/session';
@@ -9,11 +9,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function Page() {
   const cookieStore = await cookies();
-  const session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  const session = await getSessionFromRequest({ cookies: cookieStore });
   const activeOrgId = cookieStore.get(COOKIE_NAMES.ACTIVE_ORG_ID)?.value ?? session?.activeOrgId ?? null;
 
   // fetch some allocations to show in the UI
-  let rows: any[] = [];
+  let rows: unknown[] = [];
   let dbError: any = null;
   try {
     rows = activeOrgId

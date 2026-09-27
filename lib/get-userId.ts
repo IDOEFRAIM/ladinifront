@@ -7,7 +7,7 @@ import { getSessionFromRequest } from '@/lib/session';
  */
 async function getUserIdFromSession(): Promise<string | undefined> {
     const cookieStore = await cookies();
-    const session = await getSessionFromRequest({ cookies: cookieStore } as any);
+    const session = await getSessionFromRequest({ cookies: cookieStore });
     return session?.userId;
 }
 

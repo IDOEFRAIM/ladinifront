@@ -8,9 +8,10 @@ import { PERMISSIONS } from '@/lib/permissions';
 import { uploadBufferToSupabase } from '@/lib/supabase.server';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
+import { asError } from '@/lib/errors';
 
 export async function POST(req: Request) {
-  const session = await getSessionFromRequest(req as any);
+  const session = await getSessionFromRequest(req);
   if (!session || !session.userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const form = await req.formData();
@@ -52,7 +53,8 @@ export async function POST(req: Request) {
       await db.update(schema.seedDistributions).set({ metadata: { ...(row.metadata || {}), cnibUrl: publicPath } }).where(eq(schema.seedDistributions.id, distributionId));
       return NextResponse.json({ ok: true, url: publicPath });
     }
-  } catch (err: any) {
+  } catch (_err: unknown) {
+    const err = asError(_err);
     console.error('CNIB upload failed', err);
     return NextResponse.json({ error: 'upload_failed' }, { status: 500 });
   }

@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ConversationTimeline } from '@/components/monitoring';
-import { useBuyerMonitoringView, useMonitoringSSE } from '@/hooks/useAgentMonitor';
+import { ConversationTimeline } from '@/features/monitoring/components';
+import { useBuyerMonitoringView, useMonitoringSSE } from '@/features/monitoring/hooks/useAgentMonitor';
 import type { Conversation, AgentAction } from '@/types/monitoring';
-import { ActionStatusBadge, AgentTag } from '@/components/monitoring/AgentStatusBadge';
+import { ActionStatusBadge, AgentTag } from '@/features/monitoring/components/AgentStatusBadge';
 import { MessageSquare, Bot, Clock, Package } from 'lucide-react';
 
 const C = { forest:'#064E3B', emerald:'#10B981', lime:'#84CC16', amber:'#D97706', sand:'#F9FBF8', glass:'rgba(255,255,255,0.72)', border:'rgba(6,78,59,0.07)', muted:'#64748B', text:'#1F2937' };

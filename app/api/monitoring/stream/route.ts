@@ -6,7 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { fetchStreamDeltas } from '@/app/actions/monitoring.server';
+import { fetchStreamDeltas } from '@/features/monitoring/services/monitoring-api.service';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

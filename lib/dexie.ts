@@ -44,7 +44,7 @@ class AgriConnectOfflineDB extends Dexie {
 export const localDb = typeof window !== "undefined" ? new AgriConnectOfflineDB() : null;
 
 // --- HELPERS ---
-export async function cacheProductsLocally(products: any[]) {
+export async function cacheProductsLocally(products: unknown[]) {
   if (!localDb) return;
   await localDb.products.bulkPut(products);
 }

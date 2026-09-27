@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from 'react';
-import CategoryManager from '@/components/admin/governance/CategoryManager';
-import StandardPriceManager from '@/components/admin/governance/StandardPriceManager';
-import BuyerTypeManager from '@/components/admin/governance/BuyerTypeManager';
+import CategoryManager from '@/features/governance/components/CategoryManager';
+import StandardPriceManager from '@/features/governance/components/StandardPriceManager';
+import BuyerTypeManager from '@/features/governance/components/BuyerTypeManager';
 import ZoneProvider from '@/context/ZoneContext';
 import { Tags, DollarSign, Users } from 'lucide-react';
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAccessContext } from '@/lib/api-guard';
-import { fetchAuctionById } from '@/app/actions/auctions.server';
+import { fetchAuctionById } from '@/features/auction/services/auction-api.service';
+import { asError } from '@/lib/errors';
 
 export async function GET(
   _req: Request,
@@ -14,7 +15,8 @@ export async function GET(
     const auction = await fetchAuctionById(id);
     if (!auction) return NextResponse.json({ error: 'Enchère introuvable' }, { status: 404 });
     return NextResponse.json({ data: auction });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     console.error('GET /api/auctions/[id] error', e);
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }

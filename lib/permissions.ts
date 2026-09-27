@@ -160,7 +160,7 @@ export function getUserScopedLocationIds(user: AuthenticatedUser): string[] | nu
 export function orgScopeFilter(
   user: AuthenticatedUser,
   orgField: string = 'organizationId'
-): Record<string, any> {
+): Record<string, unknown> {
   if (isSuperOrAdmin(user)) return {};
   const orgIds = getUserOrganizationIds(user);
   if (orgIds.length === 0) return { [orgField]: '__NO_ORG__' };
@@ -176,7 +176,7 @@ export function orgScopeFilter(
 export function locationScopeFilter(
   user: AuthenticatedUser,
   locationField: string = 'zoneId'
-): Record<string, any> {
+): Record<string, unknown> {
   if (isSuperOrAdmin(user)) return {};
   const locationIds = getUserScopedLocationIds(user);
   if (!locationIds) return {};

@@ -1,0 +1,28 @@
+/* Page d'accueil / squelettes : animations CSS (aucun JS requis, LCP non bloqué) */
+.glass-card { transition: transform .4s ease, box-shadow .4s ease; }
+.glass-card--hover:hover { transform: translateY(-4px); box-shadow: inset 0 0 60px rgba(16,185,129,.04), 0 16px 48px rgba(6,78,59,.06); }
+.lift { transition: transform .3s ease; }
+.lift:hover { transform: translateY(-5px); }
+.btn-pop { transition: transform .2s ease, box-shadow .2s ease; }
+.btn-pop:hover { transform: scale(1.03); }
+.btn-pop:active { transform: scale(.98); }
+.footer-link { transition: color .2s ease; }
+.footer-link:hover { color: #fff !important; }
+
+@keyframes home-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes home-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+@keyframes home-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes home-blob-a { 0%, 100% { transform: translate(0,0) scale(1); } 33% { transform: translate(30px,-40px) scale(1.08); } 66% { transform: translate(-20px,20px) scale(.95); } }
+@keyframes home-blob-b { 0%, 100% { transform: translate(0,0); } 33% { transform: translate(-20px,30px); } 66% { transform: translate(30px,-20px); } }
+@keyframes home-leaf { 0% { transform: translate(0,-40px) rotate(0); opacity: 0; } 10%, 85% { opacity: .6; } 100% { transform: translate(20px,105vh) rotate(270deg); opacity: 0; } }
+.hero-rise { animation: home-rise .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0s); }
+.anim-pulse { animation: home-pulse 2s ease-in-out infinite; }
+.anim-float { animation: home-float 3s ease-in-out infinite; animation-delay: var(--d, 0s); }
+
+@keyframes skeleton-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.skeleton {
+  background: linear-gradient(90deg, rgba(6,78,59,.06) 25%, rgba(6,78,59,.11) 37%, rgba(6,78,59,.06) 63%);
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  border-radius: 12px;
+}

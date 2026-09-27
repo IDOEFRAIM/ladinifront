@@ -2,11 +2,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ActionApprovalCard, ConversationTimeline, AgentActivityFeed, AgentTag } from '@/components/monitoring';
-import { useProducerMonitoringView, useMonitoringSSE } from '@/hooks/useAgentMonitor';
+import { ActionApprovalCard, ConversationTimeline, AgentActivityFeed, AgentTag } from '@/features/monitoring/components';
+import { useProducerMonitoringView, useMonitoringSSE } from '@/features/monitoring/hooks/useAgentMonitor';
 import type { AgentAction, Conversation, ProducerMonitoringView } from '@/types/monitoring';
 import { Bot, MessageSquare, BarChart3, Zap } from 'lucide-react';
-import { C, F, GlassCard } from '@/components/productor/tokens';
+import { C, F, GlassCard } from '@/features/production/components/tokens';
 
 type TabId = 'overview' | 'conversations' | 'actions' | 'live';
 

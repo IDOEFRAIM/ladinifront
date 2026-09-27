@@ -28,11 +28,13 @@ export type {
 } from '@/src/db/schema/marketplace';
 
 // ─── Inventory (Seeds) ──────────────────────────────────────────────────────
+// (2026-09-02) `src/db/schema/inventory.ts` a été supprimé — ces tables
+// vivent maintenant dans `marketplace.ts` (commit "switch schema").
 export type {
   SeedAllocation,
   SeedDistribution,
   SeedDistributionAttempt,
-} from '@/src/db/schema/inventory';
+} from '@/src/db/schema/marketplace';
 
 // ─── Rôles système ──────────────────────────────────────────────────────────
 export type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';

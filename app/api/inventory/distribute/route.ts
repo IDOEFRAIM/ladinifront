@@ -3,7 +3,7 @@
  * Auth + business logic is handled by createOrgDistribution in the service layer.
  */
 import { NextResponse } from 'next/server';
-import { createOrgDistribution } from '@/services/org-manager.service';
+import { createOrgDistribution } from '@/features/organization/services/org-manager.service';
 
 export async function POST(req: Request) {
   const body = await req.json();

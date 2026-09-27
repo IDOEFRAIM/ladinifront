@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchWithRetry } from '@/lib/client-retry';
 import Cookies from 'js-cookie';
 import { COOKIE_NAMES } from '@/lib/cookie-helpers';
-import { registerUser, loginUser, logoutUser } from '@/services/auth.service';
+import { registerUser, loginUser, logoutUser } from '@/features/auth/actions/auth.actions';
+import { asError } from '@/lib/errors';
 type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
 
 interface AuthUser {
@@ -19,6 +21,7 @@ interface AuthState {
   permissions: string[];
   activeOrg: { id: string; name: string; role: string } | null;
   organizations: Array<{ organizationId: string; role: string; name?: string }>;
+  onboardingCompleted: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -27,7 +30,7 @@ interface AuthContextType extends AuthState {
   isLoading: boolean;
   isActionLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<any>;
+  login: (phone: string, password: string) => Promise<any>;
   register: (data: any) => Promise<any>;
   logout: () => void;
 }
@@ -44,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     permissions: [],
     activeOrg: null,
     organizations: [],
+    onboardingCompleted: false,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -52,8 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateSession = useCallback((userData: any) => {
     if (isDev) console.debug('[Auth] hydrateSession invoked', { name: userData.name, role: userData.role });
-    // Quick debug: always log the user id to the browser console
-    try { console.log('[Auth] user id:', userData?.id); } catch (e) { /* ignore */ }
     const normalizedRole = (userData.role || '').toString().toUpperCase();
     Cookies.set(COOKIE_NAMES.USER_ROLE, normalizedRole, { expires: 7, sameSite: 'lax' });
     Cookies.set(COOKIE_NAMES.USER_NAME, userData.name || '', { expires: 7, sameSite: 'lax' });
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
       organizations: orgs,
       activeOrg: orgs.length > 0 ? { id: orgs[0].organizationId, name: orgs[0].name || '', role: orgs[0].role } : null,
+      onboardingCompleted: !!userData.onboardingCompleted,
     });
   }, []);
 
@@ -105,7 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (isDev) console.debug('[Auth] Calling /api/me', { at: Date.now(), sinceStartMs: Date.now() - startMs });
-        let res = await fetch('/api/me', { credentials: 'same-origin', signal: controller.signal });
+        // 503/429 : 2 réessais max avec backoff court (Retry-After respecté). 500 : aucun retry. 401 : flux normal.
+        let res = await fetchWithRetry(
+          () => fetch('/api/me', { credentials: 'same-origin', signal: controller.signal }),
+          { maxRetries: 2, signal: controller.signal }
+        );
 
         if (!res.ok && res.status === 401) {
           if (isDev) console.debug('[Auth] /api/me returned 401; retrying after delay');
@@ -117,22 +124,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (res.ok) {
           const data = await res.json();
-          if (data?.success && data.user) {
+          if (data?.success && data.data) {
             try {
               const clientPv = Cookies.get(COOKIE_NAMES.PERMISSION_VERSION);
-              if (clientPv && data.user.permissionVersion && String(data.user.permissionVersion) !== String(clientPv)) {
-                if (isDev) console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.user.permissionVersion });
+              if (clientPv && data.data.permissionVersion && String(data.data.permissionVersion) !== String(clientPv)) {
+                if (isDev) console.debug('[Auth] permission-version mismatch', { clientPv, serverPv: data.data.permissionVersion });
               }
             } catch (e) {
               // ignore
             }
 
-            if (mounted) hydrateSession(data.user);
+            if (mounted) hydrateSession(data.data);
             return;
           }
         }
 
-        const fallbackRole = Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined;
+        // Repli sur les cookies d'AFFICHAGE uniquement si le serveur est temporairement indisponible (503/429).
+        // Sur 401/403/500 on ne présente JAMAIS l'utilisateur comme connecté d'après un cookie forgeable ;
+        // l'autorité reste le serveur (chaque action est revérifiée en base, voir lib/access-context.ts).
+        const fallbackRole = (res.status === 503 || res.status === 429)
+          ? (Cookies.get(COOKIE_NAMES.USER_ROLE) as SystemRole | undefined)
+          : undefined;
         if (fallbackRole && mounted) {
           const savedName = Cookies.get(COOKIE_NAMES.USER_NAME);
           const savedLocation = Cookies.get(COOKIE_NAMES.USER_ZONE);
@@ -144,7 +156,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             userLocation: savedLocation ? JSON.parse(savedLocation) : null,
           }));
         }
-      } catch (e: any) {
+      } catch (_e: unknown) {
+    const e = asError(_e);
         if (e.name !== 'AbortError') console.error('Initial check session failed:', e);
       } finally {
         if (mounted) setIsLoading(false);
@@ -156,6 +169,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [hydrateSession]);
 
   const handleRedirect = (userData: any) => {
+    if (!userData.onboardingCompleted) {
+      if (typeof window !== 'undefined') window.location.href = '/onboarding';
+      return;
+    }
     const role = (userData.role || '').toString().toUpperCase();
     const redirectMap: Record<string, string> = {
       SUPERADMIN: '/admin',
@@ -169,14 +186,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') window.location.href = target;
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (phone: string, password: string) => {
     setIsActionLoading(true);
     setError(null);
     try {
-      const result = await loginUser({ email, password });
-      if (result.success && result.user) {
-        hydrateSession(result.user);
-        handleRedirect(result.user);
+      const result = await loginUser({ phone, password });
+      if (result.success) {
+        hydrateSession(result.data.user);
+        handleRedirect(result.data.user);
       } else {
         setError(result.error || 'Identifiants incorrects');
       }
@@ -194,13 +211,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await registerUser(data);
-      if (result.success && result.user) {
-        hydrateSession(result.user);
-        if (result.pendingOrgCreated) {
-          const role = (result.user.role || '').toString().toUpperCase();
+      if (result.success) {
+        const { user, pendingOrgCreated } = result.data;
+        hydrateSession(user);
+        if (pendingOrgCreated) {
+          const role = (user.role || '').toString().toUpperCase();
           window.location.href = role === 'PRODUCER' ? '/dashboard' : '/market';
         } else {
-          handleRedirect(result.user);
+          handleRedirect(user);
         }
       } else {
         setError(result.error || "Erreur lors de l'inscription");
@@ -229,6 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions: [],
       activeOrg: null,
       organizations: [],
+      onboardingCompleted: false,
     });
 
     window.location.href = '/login';

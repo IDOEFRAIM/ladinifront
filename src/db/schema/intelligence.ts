@@ -1,267 +1,234 @@
+/**
+ * INTELLIGENCE SCHEMA — Marketplace edition
+ * ══════════════════════════════════════════════════════════════════════════
+ * Réduit à l'infrastructure OPÉRATIONNELLE de l'agent transactionnel :
+ *   - audit transactionnel
+ *   - validation humaine des actions de l'agent (checkout, litiges)
+ *   - persistance conversationnelle (panier / commande en cours)
+ *   - mémoire courte de l'agent (slots inter-tours)
+ *   - réputation (trust) — cœur de confiance de la marketplace
+ *
+ * Tout l'héritage « conseil » (crop_profiles, fertilizer_steps, soil_analyses,
+ * ai_recommendations, weather_data_logs, agent_telemetry, external_context_files,
+ * territory_events, anomalies) a été SUPPRIMÉ.
+ */
 import {
-	uuid,
-	text,
-	timestamp,
-	jsonb,
-	boolean,
-	integer,
-	doublePrecision,
-	index,
-	uniqueIndex,
-} from 'drizzle-orm/pg-core';
+  uuid,
+  text,
+  timestamp,
+  jsonb,
+  boolean,
+  integer,
+  doublePrecision,
+  index,
+  uniqueIndex,
+  AnyPgColumn, } from 'drizzle-orm/pg-core';
 import { intelligenceSchema, agentActionStatusEnum, validationPriorityEnum } from './_config';
 import { type InferModel } from 'drizzle-orm';
+import { orders } from './marketplace';
+import { zones } from './governance';
+import { users } from './auth';
+import { auctions, buyerProfiles, marketOffers, producers } from './marketplace';
+import { subCategories } from './governance';
 
-// Audit Logs
+// ── Audit transactionnel ─────────────────────────────────────────────────
 export const auditLogs = intelligenceSchema.table('audit_logs', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	actorId: uuid('actor_id').notNull(),
-	action: text('action').notNull(),
-	entityId: text('entity_id').notNull(),
-	entityType: text('entity_type').notNull(),
-	oldValue: jsonb('old_value'),
-	newValue: jsonb('new_value'),
-	ipAddress: text('ip_address'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  actorId: uuid('actor_id').references((): AnyPgColumn => users.id, { onDelete: 'restrict' }).notNull(),
+  action: text('action').notNull(),
+  entityId: text('entity_id').notNull(),
+  entityType: text('entity_type').notNull(),
+  oldValue: jsonb('old_value'),
+  newValue: jsonb('new_value'),
+  ipAddress: text('ip_address'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [
-	index('audit_logs_actor_idx').on(t.actorId),
-	index('audit_logs_entity_idx').on(t.entityId),
+  index('audit_logs_actor_idx').on(t.actorId),
+  index('audit_logs_entity_idx').on(t.entityId),
+  // Optimisation : recherche fréquente "dernières actions sur une entité"
+  index('audit_logs_entity_time_idx').on(t.entityType, t.createdAt),
 ]);
 
-// Agent Actions
+// ── Validation humaine des actions de l'agent (checkout, litige, remboursement) ─
 export const agentActions = intelligenceSchema.table('agent_actions', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	agentName: text('agent_name').notNull(),
-	actionType: text('action_type').notNull(),
-	// Keep as text to match existing DB and avoid unsafe ALTER TYPE migrations
-	batchId: text('batch_id'),
-	payload: jsonb('payload'),
-	status: agentActionStatusEnum('status').default('PENDING').notNull(),
-	priority: validationPriorityEnum('priority').default('MEDIUM').notNull(),
-	orderId: uuid('order_id'),
-	userId: uuid('user_id'),
-	auditTrailId: text('audit_trail_id'),
-	aiReasoning: text('ai_reasoning'),
-	adminNotes: text('admin_notes'),
-	// Keep as text to match existing DB and avoid unsafe ALTER TYPE migrations
-	validatedById: text('validated_by_id'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentName: text('agent_name').notNull(),
+  actionType: text('action_type').notNull(),
+  batchId: text('batch_id'),
+  payload: jsonb('payload'),
+  status: agentActionStatusEnum('status').default('PENDING').notNull(),
+  priority: validationPriorityEnum('priority').default('MEDIUM').notNull(),
+  orderId: uuid('order_id').references((): AnyPgColumn => orders.id, { onDelete: 'set null' }),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  auditTrailId: text('audit_trail_id'),
+  aiReasoning: text('ai_reasoning'),
+  adminNotes: text('admin_notes'),
+  validatedById: text('validated_by_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
-	index('agent_actions_status_idx').on(t.status),
-	index('agent_actions_batch_idx').on(t.batchId),
-	index('agent_actions_name_idx').on(t.agentName),
-	uniqueIndex('agent_actions_order_unique').on(t.orderId),
+  index('agent_actions_status_idx').on(t.status),
+  index('agent_actions_user_idx').on(t.userId),
+  index('agent_actions_batch_idx').on(t.batchId),
+  index('agent_actions_name_idx').on(t.agentName),
+  uniqueIndex('agent_actions_order_unique').on(t.orderId),
+  // Optimisation : la file d'attente de validation = pending triés par priorité
+  index('agent_actions_queue_idx').on(t.status, t.priority),
 ]);
 
-// Agent Telemetry
-export const agentTelemetry = intelligenceSchema.table('agent_telemetry', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id').notNull(),
-	latitude: doublePrecision('latitude'),
-	longitude: doublePrecision('longitude'),
-	battery: integer('battery'),
-	signal: text('signal'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (t) => [
-	index('agent_telemetry_user_idx').on(t.userId),
-]);
-
-// ExternalContext (files and vectorized assets)
-export const externalContexts = intelligenceSchema.table('external_context_files', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	fileName: text('file_name').notNull(),
-	fileType: text('file_type').notNull(),
-	fileUrl: text('file_url').notNull(),
-	category: text('category'),
-	zoneId: uuid('zone_id'),
-	isVectorized: boolean('is_vectorized').default(false).notNull(),
-	mcpServerId: text('mcp_server_id'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-// Conversations
+// ── Persistance conversationnelle (état du panier / commande en cours) ─────
 export const conversations = intelligenceSchema.table('conversations', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id').notNull(),
-	query: text('query').notNull(),
-	response: text('response'),
-	agentType: text('agent_type'),
-	crop: text('crop'),
-	zoneId: uuid('zone_id'),
-	mode: text('mode').default('text').notNull(),
-	audioUrl: text('audio_url'),
-	isWaitingForInput: boolean('is_waiting_for_input').default(false).notNull(),
-	missingSlots: jsonb('missing_slots'),
-	executionPath: jsonb('execution_path'),
-	confidenceScore: doublePrecision('confidence_score'),
-	totalTokensUsed: integer('total_tokens_used').default(0).notNull(),
-	responseTimeMs: integer('response_time_ms'),
-	auditTrailId: text('audit_trail_id'),
-	anomalyId: uuid('anomaly_id'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'restrict' }).notNull(),
+  query: text('query').notNull(),
+  response: text('response'),
+  agentType: text('agent_type'),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
+  mode: text('mode').default('text').notNull(),
+  audioUrl: text('audio_url'),
+  isWaitingForInput: boolean('is_waiting_for_input').default(false).notNull(),
+  missingSlots: jsonb('missing_slots'),
+  executionPath: jsonb('execution_path'),
+  confidenceScore: doublePrecision('confidence_score'),
+  userIntent: text('user_intent'),
+  needsFollowUp: boolean('needs_follow_up').default(false).notNull(),
+  totalTokensUsed: integer('total_tokens_used').default(0).notNull(),
+  responseTimeMs: integer('response_time_ms'),
+  auditTrailId: text('audit_trail_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
-	index('conversations_user_idx').on(t.userId),
-	index('conversations_agent_idx').on(t.agentType),
-	index('conversations_created_idx').on(t.createdAt),
-	uniqueIndex('conversations_audit_unique').on(t.auditTrailId),
+  index('conversations_user_idx').on(t.userId),
+  index('conversations_agent_idx').on(t.agentType),
+  index('conversations_created_idx').on(t.createdAt),
+  index('conversations_followup_idx').on(t.needsFollowUp),
+  uniqueIndex('conversations_audit_unique').on(t.auditTrailId),
 ]);
 
-// Territory Event
-export const territoryEvents = intelligenceSchema.table('territory_events', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	zoneId: uuid('zone_id').notNull(),
-	eventType: text('event_type').notNull(),
-	payload: jsonb('payload'),
-	meta: jsonb('meta'),
-	status: text('status').default('NEW').notNull(),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	processedAt: timestamp('processed_at'),
-	processedById: uuid('processed_by_id'),
-}, (t) => [
-	index('territory_events_zone_idx').on(t.zoneId),
-	index('territory_events_type_idx').on(t.eventType),
-]);
-
-// Anomalies
-export const anomalies = intelligenceSchema.table('anomalies', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	zoneId: uuid('zone_id').notNull(),
-	source: text('source'),
-	level: text('level').notNull(),
-	title: text('title').notNull(),
-	message: text('message'),
-	details: jsonb('details'),
-	isResolved: boolean('is_resolved').default(false).notNull(),
-	resolvedById: uuid('resolved_by_id'),
-	resolvedAt: timestamp('resolved_at'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
-}, (t) => [
-	index('anomalies_zone_idx').on(t.zoneId),
-	index('anomalies_resolved_idx').on(t.isResolved),
-]);
-
-// Trust Scores
+// ── Mémoire courte de l'agent (slots persistés entre tours) ────────────────
+// ── Réputation (cœur de confiance marketplace) ─────────────────────────────
 export const trustScores = intelligenceSchema.table('trust_scores', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id').unique().notNull(),
-	globalScore: doublePrecision('global_score').default(0.0).notNull(),
-	reliabilityIndex: doublePrecision('reliability_index').default(0.0).notNull(),
-	qualityIndex: doublePrecision('quality_index').default(0.0).notNull(),
-	complianceIndex: doublePrecision('compliance_index').default(0.0).notNull(),
-	resilienceBonus: doublePrecision('resilience_bonus').default(0.0).notNull(),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).unique().notNull(),
+  globalScore: doublePrecision('global_score').default(0).notNull(),
+  reliabilityIndex: doublePrecision('reliability_index').default(0).notNull(),
+  qualityIndex: doublePrecision('quality_index').default(0).notNull(),
+  complianceIndex: doublePrecision('compliance_index').default(0).notNull(),
+  resilienceBonus: doublePrecision('resilience_bonus').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
-// AI Rating Reasonings
-export const aiRatingReasonings = intelligenceSchema.table('ai_rating_reasonings', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	trustScoreId: uuid('trust_score_id').notNull(),
-	agentName: text('agent_name').notNull(),
-	justification: text('justification').notNull(),
-	dataPoints: jsonb('data_points').notNull(),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
+// Justification du "pourquoi" d'un score (transparence de la réputation).
+// ── Événements de modération (journal auditable des strikes) ───────────────
+// Chaque mention d'un produit interdit / scam est journalisée ici. Le nombre
+// de strikes d'un utilisateur = COUNT sur cette table (source de vérité DB).
+export const moderationEvents = intelligenceSchema.table('moderation_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  phone: text('phone').notNull(),
+  kind: text('kind').notNull(),           // PROHIBITED_PRODUCT | SCAM
+  matchedTerm: text('matched_term'),
+  excerpt: text('excerpt'),
+  actionTaken: text('action_taken'),      // WARNED | BANNED
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [
-	index('ai_rating_trust_idx').on(t.trustScoreId),
-	index('ai_rating_agent_idx').on(t.agentName),
+  index('moderation_events_phone_idx').on(t.phone),
+  index('moderation_events_user_idx').on(t.userId),
+  index('moderation_events_kind_idx').on(t.kind),
 ]);
 
-// ── Cerveau IA : Recommandations stockées ───────────────────────────────
-export const aiRecommendations = intelligenceSchema.table('ai_recommendations', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	cropCycleId: uuid('crop_cycle_id'),
-	farmId: uuid('farm_id'),
-	userId: uuid('user_id'),
-	agentName: text('agent_name').notNull(), // ex: 'disease_alert', 'fertilizer_advisor', 'irrigation_planner'
-	recommendationType: text('recommendation_type').notNull(), // ALERTE, CONSEIL, PLANIFICATION, DIAGNOSTIC
-	title: text('title').notNull(),
-	content: text('content').notNull(),
-	confidenceScore: doublePrecision('confidence_score'),
-	dataSourcesUsed: jsonb('data_sources_used'), // { "weather": true, "soil": true, "bbch": 60 }
-	priority: text('priority').default('MEDIUM').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
-	status: text('status').default('PENDING').notNull(), // PENDING, VIEWED, APPLIED, DISMISSED
-	appliedAt: timestamp('applied_at'),
-	expiresAt: timestamp('expires_at'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
+// ── Signaux de demande non satisfaite (ce que les gens cherchent en vain) ──
+// Quand une recherche catalogue ne retourne rien et qu'aucune catégorie ne
+// correspond, on agrège la demande ici (upsert + incrément) pour piloter
+// l'ouverture de nouvelles catégories / le sourcing.
+export const demandSignals = intelligenceSchema.table('demand_signals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  normalizedTerm: text('normalized_term').notNull(),
+  rawQuery: text('raw_query').notNull(),
+  phone: text('phone'),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
+  occurrences: integer('occurrences').default(1).notNull(),
+  resolved: boolean('resolved').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
-	index('ai_rec_farm_idx').on(t.farmId),
-	index('ai_rec_crop_cycle_idx').on(t.cropCycleId),
-	index('ai_rec_user_idx').on(t.userId),
-	index('ai_rec_type_idx').on(t.recommendationType),
-	index('ai_rec_status_idx').on(t.status),
-	index('ai_rec_created_idx').on(t.createdAt),
+  uniqueIndex('demand_signals_term_unique').on(t.normalizedTerm),
+  index('demand_signals_occurrences_idx').on(t.occurrences),
 ]);
 
-// ── Cerveau IA : Cache météo externe (NASA POWER / Open-Meteo) ─────────
-export const weatherDataLogs = intelligenceSchema.table('weather_data_logs', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	zoneId: uuid('zone_id'),
-	farmId: uuid('farm_id'),
-	latitude: doublePrecision('latitude').notNull(),
-	longitude: doublePrecision('longitude').notNull(),
-	recordDate: timestamp('record_date').notNull(),
-	tempMin: doublePrecision('temp_min'),
-	tempMax: doublePrecision('temp_max'),
-	tempMean: doublePrecision('temp_mean'),
-	precipitationMm: doublePrecision('precipitation_mm'),
-	humidityPercent: doublePrecision('humidity_percent'),
-	windSpeedKmh: doublePrecision('wind_speed_kmh'),
-	solarRadiation: doublePrecision('solar_radiation'), // MJ/m²
-	evapotranspiration: doublePrecision('evapotranspiration'), // mm (ETo Penman-Monteith)
-	gddContribution: doublePrecision('gdd_contribution'), // max(0, tempMean - baseTemp)
-	source: text('source').default('OPEN_METEO').notNull(), // OPEN_METEO, NASA_POWER, STATION_LOCAL
-	rawPayload: jsonb('raw_payload'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
+// ── ORCHESTRATION PROACTIVE ────────────────────────────────────────────────
+// Sollicitations automatiques (enchères → producteurs, nouveaux produits →
+// acheteurs). Porte l'ÉTAT MÉTIER + l'idempotence (une sollicitation unique par
+// couple cible). Le taux de conversion = RESPONDED / NOTIFIED se calcule ici.
+export const solicitations = intelligenceSchema.table('solicitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: text('kind').notNull(),                     // AUCTION_INVITE | NEW_PRODUCT_ALERT
+  auctionId: uuid('auction_id').references((): AnyPgColumn => auctions.id, { onDelete: 'cascade' }),                    // si AUCTION_INVITE
+  marketOfferId: uuid('market_offer_id').references((): AnyPgColumn => marketOffers.id, { onDelete: 'cascade' }),           // si NEW_PRODUCT_ALERT
+  targetProducerId: uuid('target_producer_id').references((): AnyPgColumn => producers.id, { onDelete: 'cascade' }),
+  targetBuyerId: uuid('target_buyer_id').references((): AnyPgColumn => buyerProfiles.id, { onDelete: 'cascade' }),
+  subCategoryId: uuid('sub_category_id').references((): AnyPgColumn => subCategories.id, { onDelete: 'set null' }),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
+  status: text('status').default('PENDING').notNull(), // PENDING→NOTIFIED→RESPONDED→EXPIRED|SKIPPED
+  notifiedAt: timestamp('notified_at'),
+  respondedAt: timestamp('responded_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
-	index('wdl_zone_idx').on(t.zoneId),
-	index('wdl_farm_idx').on(t.farmId),
-	index('wdl_date_idx').on(t.recordDate),
-	uniqueIndex('wdl_farm_date_source_unique').on(t.farmId, t.recordDate, t.source),
+  // 🔒 Idempotence : une seule sollicitation par (enchère, producteur) /
+  // (offre, acheteur). Les NULL Postgres étant distincts, les deux index
+  // coexistent sans se gêner selon le kind.
+  uniqueIndex('solicitations_auction_producer_uq').on(t.auctionId, t.targetProducerId),
+  uniqueIndex('solicitations_offer_buyer_uq').on(t.marketOfferId, t.targetBuyerId),
+  index('solicitations_kind_status_idx').on(t.kind, t.status),
+  index('solicitations_auction_idx').on(t.auctionId),
 ]);
 
-// ── Cerveau IA : Mémoire contextuelle de l'agent (continuité dialogue) ──
-export const agentContextMemory = intelligenceSchema.table('agent_context_memory', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	userId: uuid('user_id').notNull(),
-	farmId: uuid('farm_id'),
-	cropCycleId: uuid('crop_cycle_id'),
-	contextKey: text('context_key').notNull(), // ex: 'last_observed_bbch', 'pending_fertilization', 'disease_risk_mildiou'
-	contextValue: jsonb('context_value').notNull(), // flexible JSON payload
-	source: text('source').default('AGENT').notNull(), // AGENT, USER_INPUT, SENSOR, WEATHER
-	confidence: doublePrecision('confidence'),
-	expiresAt: timestamp('expires_at'),
-	createdAt: timestamp('created_at').defaultNow().notNull(),
-	updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+// File d'attente durable de messages (Outbox Pattern). Le cron métier écrit ICI
+// (aucun appel externe) ; un worker séparé lit et envoie. Découplage total :
+// une panne Twilio/Email ne fait pas planter l'orchestration.
+export const notificationOutbox = intelligenceSchema.table('notification_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  solicitationId: uuid('solicitation_id').references((): AnyPgColumn => solicitations.id, { onDelete: 'set null' }),
+  channel: text('channel').notNull(),               // WHATSAPP | EMAIL | PUSH | IN_APP
+  recipientUserId: uuid('recipient_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  recipientPhone: text('recipient_phone'),
+  templateKey: text('template_key').notNull(),      // ex: AUCTION_INVITE_PRODUCER
+  payload: jsonb('payload').notNull(),              // variables du template + quick-action 1-clic
+  dedupeKey: text('dedupe_key').notNull(),          // 🔒 anti double-envoi
+  status: text('status').default('PENDING').notNull(), // PENDING→SENDING→SENT|FAILED|DEAD
+  attempts: integer('attempts').default(0).notNull(),
+  maxAttempts: integer('max_attempts').default(5).notNull(),
+  nextAttemptAt: timestamp('next_attempt_at').defaultNow().notNull(),
+  lastError: text('last_error'),
+  sentAt: timestamp('sent_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
-	index('acm_user_idx').on(t.userId),
-	index('acm_farm_idx').on(t.farmId),
-	index('acm_key_idx').on(t.contextKey),
-	uniqueIndex('acm_user_farm_key_unique').on(t.userId, t.farmId, t.contextKey),
+  uniqueIndex('outbox_dedupe_uq').on(t.dedupeKey),
+  // Le dispatcher scanne les messages « dus » : status + next_attempt_at.
+  index('outbox_due_idx').on(t.status, t.nextAttemptAt),
+  index('outbox_solicitation_idx').on(t.solicitationId),
 ]);
 
 export default {
-	auditLogs,
-	agentActions,
-	agentTelemetry,
-	externalContexts,
-	conversations,
-	territoryEvents,
-	anomalies,
-	trustScores,
-	aiRatingReasonings,
-	aiRecommendations,
-	weatherDataLogs,
-	agentContextMemory,
+  auditLogs,
+  agentActions,
+  conversations,
+  trustScores,
+  moderationEvents,
+  demandSignals,
+  solicitations,
+  notificationOutbox,
 };
 
-// Types
-export type AgentAction = InferModel<typeof agentActions>;
 export type AuditLog = InferModel<typeof auditLogs>;
+export type AgentAction = InferModel<typeof agentActions>;
 export type Conversation = InferModel<typeof conversations>;
-export type ExternalContext = InferModel<typeof externalContexts>;
 export type TrustScore = InferModel<typeof trustScores>;
-export type AiRecommendation = InferModel<typeof aiRecommendations>;
-export type WeatherDataLog = InferModel<typeof weatherDataLogs>;
-export type AgentContextMemory = InferModel<typeof agentContextMemory>;
+export type ModerationEvent = InferModel<typeof moderationEvents>;
+export type DemandSignal = InferModel<typeof demandSignals>;
+export type Solicitation = InferModel<typeof solicitations>;
+export type NotificationOutbox = InferModel<typeof notificationOutbox>;

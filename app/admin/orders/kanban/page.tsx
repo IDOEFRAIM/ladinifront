@@ -1,8 +1,8 @@
 "use client";
 
 import React from 'react';
-import KanbanBoard from '@/components/admin/orders/KanbanBoard';
-import ZoneManagers from '@/components/admin/zones/ZoneManagers';
+import KanbanBoard from '@/features/orders/components/admin/KanbanBoard';
+import ZoneManagers from '@/features/territory/components/ZoneManagers';
 import ZoneProvider from '@/context/ZoneContext';
 
 export default function OrdersKanbanPage() {

@@ -10,6 +10,9 @@ import { userOrganizations, zones } from '@/src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { buildAccessContext, type AccessContext } from '@/lib/access-context';
 import { getSessionFromRequest } from '@/lib/session';
+import { dbErrorResponse } from '@/lib/db-http';
+import { classifyDbError } from '@/lib/db-errors';
+import { COOKIE_NAMES } from '@/lib/cookie-helpers';
 
 export type { AccessContext };
 
@@ -42,17 +45,23 @@ export interface AuthenticatedUser {
  */
 export async function getAccessContext(
   requiredRoles?: SystemRole[],
-  requiredPermissions?: string[]
+  requiredPermissions?: string[],
+  options: { fresh?: boolean } = {}
 ): Promise<{ ctx: AccessContext | null; error: NextResponse | null }> {
+  // Actions sensibles (routes réservées aux admins, ou demandé explicitement) : jamais de cache, DB relue.
+  // Aucune décision d'autorisation n'est prise sur une donnée périmée (voir lib/access-context.ts).
+  const fresh =
+    options.fresh ??
+    Boolean(requiredRoles?.length && requiredRoles.every((r) => r === 'ADMIN' || r === 'SUPERADMIN'));
   const cookieStore = await cookies();
   const headerStore = await headers(); // Next.js 15 nécessite await
 
   // Tentative de récupération de session (Cookie puis Header)
-  let session = await getSessionFromRequest({ cookies: cookieStore } as any);
+  let session = await getSessionFromRequest({ cookies: cookieStore });
   
   if (!session?.userId) {
     try {
-      session = await getSessionFromRequest({ headers: headerStore } as any);
+      session = await getSessionFromRequest({ headers: headerStore });
     } catch (e) { /* ignore */ }
   }
 
@@ -69,7 +78,7 @@ export async function getAccessContext(
   }
 
   try {
-    const ctx = await buildAccessContext(userId);
+    const ctx = await buildAccessContext(userId, { fresh });
 
     // 1. Bypass SUPERADMIN
     if (ctx.role === 'SUPERADMIN') return { ctx, error: null };
@@ -98,11 +107,18 @@ export async function getAccessContext(
 
     return { ctx, error: null };
   } catch (err) {
-    if (err instanceof Error && err.message === 'USER_NOT_FOUND') {
-      return { ctx: null, error: NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 }) };
+    const info = classifyDbError(err);
+    if (info.errorClass === 'not_found') {
+      // Session d'un compte qui n'existe plus (base réinitialisée / compte supprimé) : 401 ET purge des cookies de session,
+      // sinon le navigateur reste « connecté » avec un jeton orphelin et chaque requête retombe en erreur.
+      const res = NextResponse.json({ error: 'Utilisateur introuvable.', code: 'SESSION_ORPHAN' }, { status: 401 });
+      for (const name of [COOKIE_NAMES.SESSION_TOKEN, COOKIE_NAMES.SESSION_READY, COOKIE_NAMES.USER_ROLE, COOKIE_NAMES.USER_PERMISSIONS, COOKIE_NAMES.ACTIVE_ORG_ID]) {
+        res.cookies.set(name, '', { path: '/', maxAge: 0 });
+      }
+      return { ctx: null, error: res };
     }
-    console.error('[getAccessContext] Fatal error:', err);
-    return { ctx: null, error: NextResponse.json({ error: "Erreur serveur d'authentification." }, { status: 500 }) };
+    // Fail closed : DB indisponible ⇒ aucune autorisation accordée (503), jamais un accès « par défaut ».
+    return { ctx: null, error: dbErrorResponse(err, 'getAccessContext') };
   }
 }
 

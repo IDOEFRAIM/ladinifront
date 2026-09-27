@@ -14,7 +14,7 @@ export async function GET(req: NextRequest): Promise<Response | void> {
   }
 
   try {
-    const { fetchProducerView } = await import('@/app/actions/monitoring.server');
+    const { fetchProducerView } = await import('@/features/monitoring/services/monitoring-api.service');
     const result = await fetchProducerView(user.id);
     return NextResponse.json(result);
   } catch (err) {

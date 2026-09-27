@@ -1,6 +1,7 @@
-import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, time, doublePrecision } from 'drizzle-orm/pg-core';
-import { type InferModel } from 'drizzle-orm';
+import { uuid, text, timestamp, index, uniqueIndex, integer, boolean, doublePrecision, check, AnyPgColumn } from 'drizzle-orm/pg-core';
+import { type InferModel, sql } from 'drizzle-orm';
 import { authSchema, roleEnum } from './_config';
+import { zones } from './governance';
 
 export const users = authSchema.table('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -11,13 +12,38 @@ export const users = authSchema.table('users', {
   password: text('password'),
   phone: text('phone').unique(),
   whatsappEnabled: boolean('whatsapp_enabled').default(true), // Canaux de communication
-  dailyAdviceTime: time('daily_advice_time').default('07:00'), // Heure idéale d'envoi
-  latitude: doublePrecision('latitude'), // Pour la météo locale
-  longitude: doublePrecision('longitude'), // Pour la météo locale
+  latitude: doublePrecision('latitude'), // Géoloc livraison
+  longitude: doublePrecision('longitude'), // Géoloc livraison
+  // Horodatage de la dernière mise à jour GPS (nullable — l'absence de
+  // position ne doit jamais bloquer un profil). Alimenté par l'ingestion
+  // native Twilio (message de localisation WhatsApp) côté agent — voir
+  // agriconnect.domain.identity.models.User.location_updated_at (backend
+  // Python, même table `auth.users`). Colonne manquante ici jusqu'au
+  // 2026-09-02 (migration Heroku) : présente côté ORM Python depuis la
+  // feature GPS delivery mais jamais propagée à ce schéma Drizzle
+  // source-de-vérité — `search_products` échouait avec `UndefinedColumnError:
+  // column users.location_updated_at does not exist` dès que le backend
+  // tournait contre une base migrée depuis CE schéma (confirmé sur Heroku,
+  // vraisemblablement masqué sur DigitalOcean par un ALTER TABLE manuel
+  // hors-migration).
+  locationUpdatedAt: timestamp('location_updated_at'),
   cnibNumber: text('cnib_number').unique(),
   role: roleEnum('role').default('USER').notNull(),
   identityVerified: boolean('identity_verified').default(false),
-  zoneId: uuid('zone_id'),
+  zoneId: uuid('zone_id').references((): AnyPgColumn => zones.id, { onDelete: 'set null' }),
+  // Couverture géographique (onboarding) : `declaredLocation` est le texte brut saisi par
+  // l'utilisateur (jamais géocodé — voir agriconnect.domain.identity.models.User côté Python,
+  // même table). `coverageStatus` reflète si sa zone est couverte par la plateforme ; un
+  // `zoneId` absent implique OUT_OF_COVERAGE (migration 0005_add_location_coverage). Colonnes
+  // manquantes ici jusqu'au 2026-09-27 — même classe de dérive que `locationUpdatedAt` plus haut :
+  // ajoutées côté ORM Python (PR #10) mais jamais propagées à ce schéma Drizzle source-de-vérité.
+  declaredLocation: text('declared_location'),
+  coverageStatus: text('coverage_status').default('COVERED').notNull(),
+  onboardingCompleted: boolean('onboarding_completed').default(false).notNull(),
+  // Modération / abus : blocage (annulations répétées) & bannissement (produits interdits).
+  accountStatus: text('account_status').default('ACTIVE').notNull(), // ACTIVE | BLOCKED | BANNED
+  blockedReason: text('blocked_reason'),
+  blockedAt: timestamp('blocked_at'),
   deletedAt: timestamp('deleted_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
@@ -25,11 +51,13 @@ export const users = authSchema.table('users', {
   index('users_role_idx').on(t.role),
   index('users_zone_idx').on(t.zoneId),
   index('users_created_idx').on(t.createdAt),
+  index('users_account_status_idx').on(t.accountStatus),
+  check('users_coverage_status_chk', sql`${t.coverageStatus} IN ('COVERED','NEARBY','OUT_OF_COVERAGE','WAITLIST')`),
 ]);
 
 export const accounts = authSchema.table('accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).notNull(),
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('provider_account_id').notNull(),
@@ -48,7 +76,7 @@ export const accounts = authSchema.table('accounts', {
 export const sessions = authSchema.table('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
   sessionToken: text('session_token').unique().notNull(),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).notNull(),
   expires: timestamp('expires').notNull(),
 }, (t) => [
   index('sessions_user_idx').on(t.userId),
@@ -59,28 +87,6 @@ export default {
   accounts,
   sessions,
 };
-
-//news part
-
-export const userCultures = authSchema.table('user_cultures', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').references(() => users.id).notNull(),
-  cultureName: text('culture_name').notNull(), // ex: "Sorgho"
-  plantingDate: timestamp('planting_date').notNull(), // Date du semis
-  isAssociation: boolean('is_association').default(false), // Pour les cultures associées
-  status: text('status').default('active'), // active, récoltée
-},(t) => [
-  index('user_cultures_user_idx').on(t.userId), // Index important pour les performances du script quotidien
-]);
-
-export const dailyAdviceLogs = authSchema.table('daily_advice_logs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').references(() => users.id).notNull(),
-  cultureName: text('culture_name').notNull(),
-  adviceContent: text('advice_content').notNull(), // Le conseil envoyé
-  sentAt: timestamp('sent_at').defaultNow().notNull(),
-  isUseful: boolean('is_useful'), // Feedback utilisateur (optionnel)
-});
 
 // Relations are defined centrally in ./relations.ts
 

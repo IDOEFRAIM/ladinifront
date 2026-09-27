@@ -1,0 +1,48 @@
+# Le schéma PostgreSQL est défini ICI (Drizzle) — source de vérité unique, consommée aussi par le backend
+# Python (dépôt ladini, miroir SQLAlchemy vérifié par backend/tests/schema/).
+name: Schema
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'src/db/schema/**'
+      - 'drizzle/**'
+      - 'drizzle.config.ts'
+      - 'scripts/run-migrations.ts'
+      - '.github/workflows/schema.yml'
+
+jobs:
+  drizzle:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      DISABLE_SSLMODE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Le schéma TypeScript == les migrations commitées (aucune dérive)
+        run: npm run db:schema-check
+      - name: Base vide -> migrations officielles (1re fois)
+        run: npm run db:migrate
+      - name: Migrations rejouées = no-op (idempotence)
+        run: npm run db:migrate
+      - name: Seed minimal sur la base migrée
+        run: npm run db:seed

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   try {
-    const { fetchAdminView } = await import('@/app/actions/monitoring.server');
+    const { fetchAdminView } = await import('@/features/monitoring/services/monitoring-api.service');
     const result = await fetchAdminView();
     return NextResponse.json(result);
   } catch (err) {

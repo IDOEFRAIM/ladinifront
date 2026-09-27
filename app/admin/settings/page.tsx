@@ -1,6 +1,6 @@
 ﻿import React from 'react';
-import AdminSettingsClient from '@/app/admin/AdminSettingsClient';
-import { getAdminUser, updateUserRole } from '@/app/actions/admin.server';
+import AdminSettingsClient from '@/features/admin/components/AdminSettingsClient';
+import { getAdminUser, updateUserRole } from '@/features/admin/services/admin-organizations.service';
 import { cookies } from 'next/headers';
 import { getSessionFromRequest } from '@/lib/session';
 
@@ -10,7 +10,7 @@ export default async function AdminSettingsPage() {
   let userId: string | undefined = undefined;
   try {
     const cookieStore = await cookies();
-    const session = await getSessionFromRequest({ cookies: cookieStore } as any).catch(() => null);
+    const session = await getSessionFromRequest({ cookies: cookieStore }).catch(() => null);
     userId = session?.userId;
   } catch (e) {
     // ignore

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { fetchEligibleProducers } from '@/app/actions/auctions.server';
+import { fetchEligibleProducers } from '@/features/auction/actions/auction.actions';
 import { getAccessContext } from '@/lib/api-guard';
+import { asError } from '@/lib/errors';
 
 export async function GET(
   _req: Request,
@@ -14,7 +15,8 @@ export async function GET(
     const res = await fetchEligibleProducers({ auctionId: id });
     if (!res.success) return NextResponse.json({ error: res.error }, { status: 400 });
     return NextResponse.json({ data: res.data });
-  } catch (e: any) {
+  } catch (_e: unknown) {
+    const e = asError(_e);
     console.error('GET eligible-producers error', e);
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }

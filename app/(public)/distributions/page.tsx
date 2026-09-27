@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const hdr = await headers();
   const sessionMod = await import('@/lib/session');
-  const session = await sessionMod.getSessionFromRequest({ headers: hdr } as any).catch(() => null);
+  const session = await sessionMod.getSessionFromRequest({ headers: hdr }).catch(() => null);
   const userId = session?.userId;
 
   if (!userId) {
@@ -39,7 +39,7 @@ export default async function Page() {
     );
   }
 
-  let rows: any[] = [];
+  let rows: unknown[] = [];
   try {
     const rowsWith = await db.query.seedDistributions.findMany({
       where: eq(schema.seedDistributions.producerId, ctx.producerId),
