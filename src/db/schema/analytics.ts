@@ -191,7 +191,8 @@ export const buyerDailyMetrics = analyticsSchema.table('buyer_daily_metrics', {
   potentialGmvDirect: money('potential_gmv_direct'),
   potentialGmvTender: money('potential_gmv_tender'),
   potentialGmvRecurring: money('potential_gmv_recurring'),
-  // Pas de confirmed_gmv_direct : DIRECT_ORDER_CONFIRMED n'est pas instrumenté (indisponible).
+  // D.5 : DIRECT confirmé = Order.status CONFIRMED (acceptation producteur / paiement escrow), event DIRECT_ORDER_CONFIRMED.
+  confirmedGmvDirect: money('confirmed_gmv_direct'),
   confirmedGmvTender: money('confirmed_gmv_tender'),
   confirmedGmvRecurring: money('confirmed_gmv_recurring'),
   deliveredGmvDirect: money('delivered_gmv_direct'),
@@ -207,6 +208,7 @@ export const buyerDailyMetrics = analyticsSchema.table('buyer_daily_metrics', {
   uniqueIndex('buyer_daily_metrics_grain_uq').on(t.metricDate, t.buyerId),
   index('buyer_daily_metrics_date_zone_idx').on(t.metricDate, t.zoneId),
   check('buyer_daily_metrics_counts_chk', sql`${t.needsDirect} >= 0 AND ${t.needsTender} >= 0 AND ${t.needsRecurring} >= 0 AND ${t.satisfiedDirect} >= 0 AND ${t.satisfiedTender} >= 0 AND ${t.satisfiedRecurring} >= 0 AND ${t.digestsQueued} >= 0 AND ${t.digestsAccepted} >= 0`),
+  check('buyer_daily_metrics_confirmed_direct_chk', sql`${t.confirmedGmvDirect} >= 0`),
   check('buyer_daily_metrics_money_chk', sql`${t.potentialGmvDirect} >= 0 AND ${t.potentialGmvTender} >= 0 AND ${t.potentialGmvRecurring} >= 0 AND ${t.confirmedGmvTender} >= 0 AND ${t.confirmedGmvRecurring} >= 0 AND ${t.deliveredGmvDirect} >= 0 AND ${t.deliveredGmvTender} >= 0 AND ${t.deliveredGmvRecurring} >= 0`),
 ]);
 
@@ -224,6 +226,9 @@ export const directDailyMetrics = analyticsSchema.table('direct_daily_metrics', 
   // Source : marketplace.orders (cohorte par created_at, hors DRAFT/SUPERSEDED, hors appel d'offres).
   ordersCreated: count('orders_created'),
   ordersDelivered: count('orders_delivered'),
+  // D.5 : commandes ayant atteint l'engagement ferme (CONFIRMED) ; un livré est toujours compté confirmé.
+  ordersConfirmed: count('orders_confirmed'),
+  confirmedValue: money('confirmed_value'),
   createdValue: money('created_value'),
   deliveredValue: money('delivered_value'),
 
@@ -231,6 +236,7 @@ export const directDailyMetrics = analyticsSchema.table('direct_daily_metrics', 
 }, (t) => [
   uniqueIndex('direct_daily_metrics_grain_uq').on(t.metricDate, t.zoneId, t.categoryId, t.subCategoryId),
   index('direct_daily_metrics_date_idx').on(t.metricDate),
+  check('direct_daily_metrics_confirmed_chk', sql`${t.ordersConfirmed} >= 0 AND ${t.confirmedValue} >= 0`),
   check('direct_daily_metrics_counts_chk', sql`${t.searches} >= 0 AND ${t.successfulSearches} >= 0 AND ${t.ordersCreated} >= 0 AND ${t.ordersDelivered} >= 0 AND ${t.createdValue} >= 0 AND ${t.deliveredValue} >= 0`),
 ]);
 
@@ -293,6 +299,8 @@ export const recurringDailyMetrics = analyticsSchema.table('recurring_daily_metr
   requestedQuantity: qty('requested_quantity'),
   matchedQuantity: qty('matched_quantity'),
   confirmedQuantity: qty('confirmed_quantity'),
+  // D.5 : quantité des lignes de commande RECEIVED des allocations CONVERTED de l'occurrence (unité canonique).
+  deliveredQuantity: qty('delivered_quantity'),
   // SUM(GREATEST(requested - matched, 0)) : DEMANDE NON APPARIÉE (matching), pas "non livrée".
   unmatchedQuantity: qty('unmatched_quantity'),
   potentialValue: money('potential_value'),
@@ -305,5 +313,6 @@ export const recurringDailyMetrics = analyticsSchema.table('recurring_daily_metr
   index('recurring_daily_metrics_date_idx').on(t.metricDate),
   check('recurring_daily_metrics_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
   check('recurring_daily_metrics_counts_chk', sql`${t.occurrencesTotal} >= 0 AND ${t.occurrencesActive} >= 0 AND ${t.occurrencesFullyCovered} >= 0 AND ${t.occurrencesNotified} >= 0 AND ${t.occurrencesAccepted} >= 0 AND ${t.occurrencesSkipped} >= 0 AND ${t.occurrencesWithOrders} >= 0 AND ${t.occurrencesAllReceived} >= 0 AND ${t.needsWithOccurrence} >= 0`),
+  check('recurring_daily_metrics_delivered_chk', sql`${t.deliveredQuantity} >= 0`),
   check('recurring_daily_metrics_qty_chk', sql`${t.requestedQuantity} >= 0 AND ${t.matchedQuantity} >= 0 AND ${t.confirmedQuantity} >= 0 AND ${t.unmatchedQuantity} >= 0 AND ${t.potentialValue} >= 0 AND ${t.confirmedValue} >= 0 AND ${t.receivedValue} >= 0`),
 ]);
