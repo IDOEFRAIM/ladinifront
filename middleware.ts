@@ -244,8 +244,7 @@ export async function middleware(request: NextRequest) {
   // CSP de base — report-only en dev pour ne pas casser les DevTools
   const cspDirectives = [
     "default-src 'self'",
-    // 'unsafe-eval'/'unsafe-inline' requis par Next.js ; clarity.ms = Microsoft Clarity (components/analytics/Clarity.tsx)
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // requis par Next.js
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https:",
