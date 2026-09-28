@@ -18,7 +18,9 @@ export async function POST(
     if (!winnerBidId) return NextResponse.json({ error: 'winnerBidId requis' }, { status: 400 });
     if (!expectedFingerprint) return NextResponse.json({ error: 'expectedFingerprint requis (termes confirmés)' }, { status: 400 });
     const res = await awardAuctionAction({ auctionId: id, winnerBidId, expectedFingerprint });
-    if (!res.success) return NextResponse.json({ error: (res as any).error }, { status: 400 });
+    // `code` transporté au client (ex: `award_terms_changed`, `bid_not_selectable`, `auction_not_open`) : c'est
+    // ce qui distingue "termes périmés -> reconfirmer" de "offre disparue" ou "déjà attribuée par ailleurs" côté UI.
+    if (!res.success) return NextResponse.json({ error: (res as any).error, code: (res as any).code }, { status: 400 });
     return NextResponse.json({ data: (res as any).data });
   } catch (_e: unknown) {
     const e = asError(_e);

@@ -10,7 +10,12 @@ import AuctionHero from '@/features/auction/components/AuctionHero';
 import AuctionLogistics from '@/features/auction/components/AuctionLogistics';
 import AuctionBidForm, { type BidBasis, type BidMessage } from '@/features/auction/components/AuctionBidForm';
 import AuctionProducersList from '@/features/auction/components/AuctionProducersList';
-import { asError } from '@/lib/errors';
+import AuctionBidList from '@/features/auction/components/AuctionBidList';
+import AuctionAwardConfirm, { type AwardTarget } from '@/features/auction/components/AuctionAwardConfirm';
+import AuctionAwardSuccess, { type AwardOutcome } from '@/features/auction/components/AuctionAwardSuccess';
+import { unitDisplay } from '@/features/auction/pricing/units';
+import { asError, codedError } from '@/lib/errors';
+import type { AuctionBid } from '@/features/auction/types/auction.types';
 
 export interface BidSubmitPayload {
   amount: number;
@@ -19,8 +24,18 @@ export interface BidSubmitPayload {
   estimatedDeliveryDate?: string;
 }
 
+export interface AwardSubmitPayload {
+  winnerBidId: string;
+  expectedFingerprint: string;
+}
+
+/** Codes serveur qui signifient "la décision a déjà été tranchée ailleurs" : on ferme la confirmation, on
+ * n'affiche jamais une nouvelle tentative dessus, on rafraîchit. Jamais un rejeu automatique. */
+const AWARD_ALREADY_DECIDED_CODES = new Set(['auction_not_open', 'concurrent_update', 'order_exists']);
+const AWARD_BID_GONE_CODES = new Set(['bid_not_found', 'bid_not_selectable']);
+
 // ─── Main Component ──────────────────────────────────────────────────
-export default function AuctionClient({ auctionId, initialAuction, initialProducers, serverLoad, serverSubmit }: { auctionId: string; initialAuction?: Auction | null; initialProducers?: ProducerItem[]; serverLoad?: (auctionId: string) => Promise<{ auction: Auction | null; producers: ProducerItem[] }>; serverSubmit?: (auctionId: string, payload: BidSubmitPayload) => Promise<any> }) {
+export default function AuctionClient({ auctionId, initialAuction, initialProducers, serverLoad, serverSubmit, serverAward }: { auctionId: string; initialAuction?: Auction | null; initialProducers?: ProducerItem[]; serverLoad?: (auctionId: string) => Promise<{ auction: Auction | null; producers: ProducerItem[] }>; serverSubmit?: (auctionId: string, payload: BidSubmitPayload) => Promise<any>; serverAward?: (auctionId: string, payload: AwardSubmitPayload) => Promise<any> }) {
   const [auction, setAuction] = useState<Auction | null>(initialAuction ?? null);
   const [producers, setProducers] = useState<ProducerItem[]>(initialProducers ?? []);
   const [loading, setLoading] = useState(false);
@@ -35,6 +50,17 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [bidMessage, setBidMessage] = useState<BidMessage | null>(null);
+
+  // Award confirm flow — voir AuctionAwardConfirm : `awardTarget` capture les termes CERTIFIÉS au moment de la
+  // sélection (jamais recalculés) ; `expectedFingerprint` est renvoyé tel quel, le serveur le revalide.
+  const [awardTarget, setAwardTarget] = useState<AwardTarget | null>(null);
+  const [awarding, setAwarding] = useState(false);
+  // Ref (pas seulement l'état) : deux invocations synchrones de `confirmAward` dans le même tick (double-clic
+  // avant le re-render) doivent être bloquées immédiatement — l'état React ne se met à jour qu'après.
+  const awardingRef = useRef(false);
+  const [awardError, setAwardError] = useState<string | null>(null);
+  const [awardNotice, setAwardNotice] = useState<string | null>(null);
+  const [awardOutcome, setAwardOutcome] = useState<AwardOutcome | null>(null);
 
   const { remaining, expired } = useCountdown(auction?.deadline ?? null);
   const isOpen = auction?.status === 'OPEN' && !expired;
@@ -197,6 +223,102 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
   }
 
 
+  // ─── Attribution ────────────────────────────────────────────────
+  function auctionQuantityLabel(): string | null {
+    if (!auction?.unit || auction.quantity == null) return null;
+    const qty = Number(auction.quantity);
+    return Number.isFinite(qty) ? `${qty} ${unitDisplay(auction.unit, qty)}` : null;
+  }
+
+  function openAwardConfirm(bid: AuctionBid) {
+    if (!bid.awardable || !bid.award || !bid.comparableTotal) return;
+    setAwardError(null);
+    setAwardNotice(null);
+    setAwardTarget({
+      bidId: bid.id,
+      producerName: bid.producerName || 'ce producteur',
+      pricingLabel: bid.pricingLabel || '',
+      comparableTotal: bid.comparableTotal,
+      fingerprint: bid.award.fingerprint,
+    });
+  }
+
+  function closeAwardConfirm() {
+    if (awarding) return;
+    setAwardTarget(null);
+    setAwardError(null);
+  }
+
+  async function confirmAward() {
+    // Étape 10 — la sécurité ne doit pas dépendre SEULEMENT du bouton disabled (déjà le cas via `submitting`
+    // sur AuctionAwardConfirm) : un second appel synchrone (double-clic avant le re-render) est un no-op ici.
+    if (!awardTarget || awardingRef.current) return;
+    awardingRef.current = true;
+    setAwarding(true);
+    setAwardError(null);
+    try {
+      const payload: AwardSubmitPayload = { winnerBidId: awardTarget.bidId, expectedFingerprint: awardTarget.fingerprint };
+      const data = serverAward
+        ? await serverAward(auctionId, payload)
+        : await (async () => {
+            const res = await fetch(`/api/auctions/${auctionId}/award`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+            if (!res.ok) throw codedError(json.code || 'award_failed', json.error || 'Erreur lors de l\'attribution');
+            return json.data;
+          })();
+
+      setAwardTarget(null);
+      setAwardOutcome({
+        producerName: awardTarget.producerName,
+        pricingLabel: data?.pricingLabel ?? awardTarget.pricingLabel,
+        quantityLabel: auctionQuantityLabel(),
+        totalAmount: data?.totalAmount ?? awardTarget.comparableTotal,
+        auctionStatus: data?.status ?? 'AWARDED',
+        idempotent: Boolean(data?.idempotent),
+      });
+      await refreshAuctionMetaSilently();
+      await loadBidsSilently();
+    } catch (_e: unknown) {
+      const e = asError(_e);
+      const code = String((e as { code?: unknown }).code ?? '');
+
+      // Étape 7 — termes périmés : le producteur a changé son offre entre l'affichage et la confirmation.
+      // JAMAIS attribué sur d'anciens termes ; la confirmation est invalidée, une nouvelle est obligatoire.
+      if (code === 'award_terms_changed') {
+        setAwardTarget(null);
+        setAwardNotice("L'offre a changé depuis votre confirmation. Veuillez vérifier les nouvelles conditions.");
+        await loadBidsSilently();
+        return;
+      }
+      // Étape 8 — l'offre a disparu (retirée / déjà tranchée) entre-temps.
+      if (AWARD_BID_GONE_CODES.has(code)) {
+        setAwardTarget(null);
+        setAwardNotice("Cette offre n'est plus disponible.");
+        await loadBidsSilently();
+        return;
+      }
+      // Étape 11 — concurrence : un autre onglet/admin a déjà attribué (ou une commande existe déjà) pendant
+      // que cette confirmation était ouverte. On ne rejoue rien, on referme et on rafraîchit l'état réel.
+      if (AWARD_ALREADY_DECIDED_CODES.has(code)) {
+        setAwardTarget(null);
+        setAwardNotice('Cette enchère a déjà été attribuée ou fermée entre-temps.');
+        await refreshAuctionMetaSilently();
+        await loadBidsSilently();
+        return;
+      }
+      // Erreur générique : reste affichée DANS la modale pour permettre une nouvelle tentative (pas de perte
+      // de contexte — les termes affichés restent ceux capturés à la sélection).
+      setAwardError(e.message || "Erreur lors de l'attribution");
+    } finally {
+      awardingRef.current = false;
+      setAwarding(false);
+    }
+  }
+
   // ─── Render ─────────────────────────────────────────────────────
   if (loading) return <LoadingView />;
   if (error || !auction) return <ErrorView message={error || 'Enchère introuvable'} onRetry={loadData} />;
@@ -207,6 +329,14 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
     <div className="min-h-screen p-4 md:p-8 lg:p-12" style={{ background: C.sand, fontFamily: F.body }}>
       <div className="max-w-5xl mx-auto space-y-6">
         <AuctionHero auction={auction} remaining={remaining} deadlinePulse={deadlinePulse} escrowVerified={escrowVerified} />
+
+        {awardOutcome && <AuctionAwardSuccess outcome={awardOutcome} />}
+        {awardNotice && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            {awardNotice}
+          </div>
+        )}
+
         <AuctionLogistics auction={auction} bidsData={bidsData} bidsLoading={bidsLoading} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -227,7 +357,24 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
           />
           <AuctionProducersList producers={producers} onRefresh={loadData} />
         </div>
+
+        <AuctionBidList
+          auction={auction}
+          bids={bidsData?.bids ?? []}
+          loading={bidsLoading}
+          viewerCanAward={Boolean(bidsData?.viewerCanAward)}
+          onSelectForAward={openAwardConfirm}
+        />
       </div>
+
+      <AuctionAwardConfirm
+        auction={auction}
+        target={awardTarget}
+        submitting={awarding}
+        error={awardError}
+        onCancel={closeAwardConfirm}
+        onConfirm={confirmAward}
+      />
     </div>
   );
 }

@@ -19,7 +19,11 @@ export async function getBidsForAuction(auctionId: string) {
 
     // Check access: only auction creator, admin, or bid participants
     const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, role: true } });
-    const isOwner = auction.buyerId === userId;
+    // `auctions.buyer_id` référence `buyer_profiles.id` ; on accepte aussi l'identifiant utilisateur (enchères
+    // historiques créées par le web) — MÊME convention transitoire que `services/auction-award.ts::awardAuction`
+    // (l'autorité réelle reste ce contrôle côté serveur à l'attribution ; ceci ne fait que décider l'affichage).
+    const profile = await db.query.buyerProfiles.findFirst({ where: eq(schema.buyerProfiles.userId, userId), columns: { id: true } });
+    const isOwner = auction.buyerId === userId || (profile != null && auction.buyerId === profile.id);
     const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
 
     const bidsResult = await db.query.bids.findMany({
@@ -68,6 +72,9 @@ export async function getBidsForAuction(auctionId: string) {
         normalizedLabel: view.normalizedLabel,
         comparable: view.comparable,
         award,
+        // Ce que le bouton "Attribuer" côté UI doit lire — jamais recalculé dans le composant. Le serveur
+        // (`awardAuction`) reste seul AUTORITAIRE : ce booléen est une commodité d'affichage, pas une permission.
+        awardable: view.comparable && award !== null && String(b.status || '').toUpperCase() === 'PENDING',
         message: b.message,
         status: b.status,
         isWinner: b.isWinner,
@@ -87,6 +94,9 @@ export async function getBidsForAuction(auctionId: string) {
         auctionStatus: auction.status,
         totalBids: bids.length,
         bestBidPrice: bestBid?.comparableTotal ?? null,
+        // L'UI n'affiche le flux d'attribution que pour le propriétaire (ou un admin) — le serveur revérifie
+        // quand même l'appartenance à l'attribution (`awardAuction`), ceci ne fait que piloter le rendu.
+        viewerCanAward: isOwner || isAdmin,
         bids,
       },
     };
