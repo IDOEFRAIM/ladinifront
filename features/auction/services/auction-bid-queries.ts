@@ -1,8 +1,10 @@
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import getUserIdFromSession from '@/lib/get-userId';
 import { asError } from '@/lib/errors';
+import { bidPricingView, rankByComparableTotal, snapshotFromBid } from '@/features/auction/pricing/bid-pricing';
+import { buildAwardDecision, fingerprintOf } from '@/features/auction/pricing/award-decision';
 
 export async function getBidsForAuction(auctionId: string) {
   const userId = await getUserIdFromSession();
@@ -11,7 +13,7 @@ export async function getBidsForAuction(auctionId: string) {
   try {
     const auction = await db.query.auctions.findFirst({
       where: eq(schema.auctions.id, auctionId),
-      columns: { id: true, buyerId: true, status: true, maxPricePerUnit: true },
+      columns: { id: true, buyerId: true, status: true, maxPricePerUnit: true, quantity: true, unit: true },
     });
     if (!auction) return { success: false, error: 'Enchère introuvable' };
 
@@ -22,7 +24,7 @@ export async function getBidsForAuction(auctionId: string) {
 
     const bidsResult = await db.query.bids.findMany({
       where: eq(schema.bids.auctionId, auctionId),
-      orderBy: [asc(schema.bids.offeredPrice)],
+      orderBy: [desc(schema.bids.createdAt)],
       with: {
         producer: {
           columns: { id: true, businessName: true, zoneId: true },
@@ -31,22 +33,52 @@ export async function getBidsForAuction(auctionId: string) {
       },
     });
 
-    // Determine best bid (lowest price = best for buyer)
-    const bestBidId = bidsResult.length > 0 ? bidsResult[0].id : null;
+    const terms = { quantity: auction.quantity, unit: auction.unit };
 
-    const bids = bidsResult.map((b, idx) => ({
-      id: b.id,
-      producerId: b.producerId,
-      producerName: isOwner || isAdmin ? (b.producer?.user?.name ?? b.producer?.businessName ?? 'Producteur') : `Producteur #${idx + 1}`,
-      offeredPrice: b.offeredPrice,
-      message: b.message,
-      status: b.status,
-      isWinner: b.isWinner,
-      isBestBid: b.id === bestBidId,
-      linkedStockId: b.linkedStockId,
-      estimatedDeliveryDate: b.estimatedDeliveryDate ?? null,
-      createdAt: b.createdAt,
-    }));
+    // Classement par TOTAL COMPARABLE (jamais `offeredPrice` brut) — voir `pricing/bid-pricing.ts::rankByComparableTotal`.
+    // Un bid non certifié (base inconnue) n'est jamais "le meilleur" : il vient après, non comparable.
+    const ranked = rankByComparableTotal(
+      bidsResult.map((b) => ({ id: b.id, createdAt: b.createdAt, view: bidPricingView(b, terms) })),
+    );
+    const bestBidId = ranked.find((r) => r.view.comparable)?.id ?? null;
+
+    const bids = bidsResult.map((b, idx) => {
+      const view = bidPricingView(b, terms);
+      // Empreinte des TERMES ACTUELS — c'est CE QUE l'acheteur confirme ; `awardAuction` la revalide sous verrou.
+      let award: { fingerprint: string; total: string } | null = null;
+      if (view.certified && view.snapshot) {
+        try {
+          const decision = buildAwardDecision(b, { id: auction.id, buyerId: auction.buyerId, quantity: auction.quantity, unit: auction.unit });
+          award = { fingerprint: fingerprintOf(decision), total: decision.awardTotal.toFixed() };
+        } catch {
+          award = null; // total incompatible avec l'enchère (ex: conditionnement non divisible) : non attribuable
+        }
+      }
+      return {
+        id: b.id,
+        producerId: b.producerId,
+        producerName: isOwner || isAdmin ? (b.producer?.user?.name ?? b.producer?.businessName ?? 'Producteur') : `Producteur #${idx + 1}`,
+        // Champ hérité CONSERVÉ pour compatibilité (jamais réinterprété comme "par unité de l'enchère") :
+        offeredPrice: b.offeredPrice,
+        offeredPriceBasis: b.offeredPriceBasis,
+        // Sémantique propre au bid — ce qui doit être affiché :
+        pricingLabel: view.label,
+        pricingCertified: view.certified,
+        comparableTotal: view.comparableTotal,
+        normalizedLabel: view.normalizedLabel,
+        comparable: view.comparable,
+        award,
+        message: b.message,
+        status: b.status,
+        isWinner: b.isWinner,
+        isBestBid: b.id === bestBidId,
+        linkedStockId: b.linkedStockId,
+        estimatedDeliveryDate: b.estimatedDeliveryDate ?? null,
+        createdAt: b.createdAt,
+      };
+    });
+
+    const bestBid = bids.find((b) => b.id === bestBidId) ?? null;
 
     return {
       success: true,
@@ -54,7 +86,7 @@ export async function getBidsForAuction(auctionId: string) {
         auctionId,
         auctionStatus: auction.status,
         totalBids: bids.length,
-        bestBidPrice: bidsResult[0]?.offeredPrice ?? null,
+        bestBidPrice: bestBid?.comparableTotal ?? null,
         bids,
       },
     };
@@ -88,21 +120,26 @@ export async function getMyBids() {
 
     return {
       success: true,
-      data: results.map(b => ({
-        id: b.id,
-        auctionId: b.auctionId,
-        offeredPrice: b.offeredPrice,
-        status: b.status,
-        isWinner: b.isWinner,
-        message: b.message,
-        notifiedAt: b.notifiedAt,
-        auctionStatus: b.auction?.status,
-        subCategoryName: b.auction?.subCategory?.name ?? 'Produit',
-        auctionQuantity: b.auction?.quantity,
-        auctionUnit: b.auction?.unit,
-        auctionDeadline: b.auction?.deadline,
-        createdAt: b.createdAt,
-      })),
+      data: results.map(b => {
+        const view = b.auction ? bidPricingView(b, { quantity: b.auction.quantity, unit: b.auction.unit }) : null;
+        return {
+          id: b.id,
+          auctionId: b.auctionId,
+          offeredPrice: b.offeredPrice,
+          pricingLabel: view?.label ?? (snapshotFromBid(b) ? null : 'Base de prix à préciser'),
+          pricingCertified: view?.certified ?? false,
+          status: b.status,
+          isWinner: b.isWinner,
+          message: b.message,
+          notifiedAt: b.notifiedAt,
+          auctionStatus: b.auction?.status,
+          subCategoryName: b.auction?.subCategory?.name ?? 'Produit',
+          auctionQuantity: b.auction?.quantity,
+          auctionUnit: b.auction?.unit,
+          auctionDeadline: b.auction?.deadline,
+          createdAt: b.createdAt,
+        };
+      }),
     };
   } catch (_e: unknown) {
     const e = asError(_e);
