@@ -211,6 +211,12 @@ export const marketOffers = marketplaceSchema.table('market_offers', {
   // Disponibilité & prix (Decimal côté DB via numeric)
   unit: unitEnum('unit').default('KG').notNull(),
   pricePerUnit: numeric('price_per_unit', { precision: 12, scale: 2 }),
+  // Phase B2a (2026-09-28) — sémantique commerciale COMPLÈTE de l'offre (« 500 FCFA / sachet de
+  // 0,5 L », lot à prix total…). `market_offers` est une PROJECTION MUTABLE du catalogue (pas un
+  // instantané) : le contrat y est donc un JSONB versionné (`schema_version`), le même objet que
+  // `products.commercial_pricing` (backend : domain/commercial_pricing_snapshot.py). `price_per_unit`
+  // reste la projection normalisée héritée. NULL = offre antérieure à B2a (sémantique inconnue).
+  pricingSnapshot: jsonb('pricing_snapshot'),
   availableQuantity: numeric('available_quantity', { precision: 14, scale: 3 }).default('0').notNull(),
   reservedQuantity: numeric('reserved_quantity', { precision: 14, scale: 3 }).default('0').notNull(),
   currentStock: numeric('current_stock', { precision: 14, scale: 3 }).default('0').notNull(),
@@ -233,6 +239,7 @@ export const marketOffers = marketplaceSchema.table('market_offers', {
   index('market_offers_public_status_idx').on(t.isPublic, t.status),
   index('market_offers_preorder_idx').on(t.preorderEnabled),
   index('ix_market_offers_label_trgm').using('gin', t.productLabel.op('gin_trgm_ops')),
+  check('market_offers_pricing_snapshot_chk', sql`${t.pricingSnapshot} IS NULL OR (jsonb_typeof(${t.pricingSnapshot}) = 'object' AND ${t.pricingSnapshot} ? 'schema_version')`),
 ]);
 
 // ── STOCKS (inventaire atomique) ───────────────────────────────────────────
@@ -301,6 +308,13 @@ export const products = marketplaceSchema.table('products', {
   // jamais normalisé. NULL = produit à tarif unique (comportement
   // historique, colonnes price/unit/quantityForSale ci-dessus).
   pricingTiers: jsonb('pricing_tiers'),
+  // Phase B2a (2026-09-28) — sémantique commerciale CERTIFIÉE au moment de la publication
+  // (price_basis PER_BASE_UNIT | PER_PACKAGE | TOTAL_LOT, package, prix normalisé DÉRIVÉ…), JSONB
+  // versionné (`schema_version`). `price`/`unit` ci-dessus restent la projection normalisée
+  // héritée (dual-write vérifié côté backend) ; un lot à prix total (TOTAL_LOT) n'existe
+  // explicitement QUE dans ce champ. NULL = produit antérieur à B2a. Ne sert JAMAIS à comprendre
+  // une transaction passée : `order_items` en porte son propre instantané immuable.
+  commercialPricing: jsonb('commercial_pricing'),
   images: text('images').array().notNull().default(sql`'{}'::text[]`),
   audioUrl: text('audio_url'),
   qualityClass: text('quality_class'),
@@ -325,6 +339,7 @@ export const products = marketplaceSchema.table('products', {
   index('products_category_available_idx').on(t.categoryLabel, t.isAvailable),
   // Recherche floue (pg_trgm) du catalogue — search_products / get_public_products.
   index('ix_products_name_trgm').using('gin', t.name.op('gin_trgm_ops')),
+  check('products_commercial_pricing_chk', sql`${t.commercialPricing} IS NULL OR (jsonb_typeof(${t.commercialPricing}) = 'object' AND ${t.commercialPricing} ? 'schema_version')`),
 ]);
 
 // ── ORDERS (Commande→Paiement→Livraison→Confirmation) ──────────────────────
@@ -378,6 +393,13 @@ export const orders = marketplaceSchema.table('orders', {
 
   auctionId: uuid('auction_id').references(() => auctions.id),
   winningBidId: uuid('winning_bid_id').references(() => bids.id),
+  // Phase B2a (2026-09-28) : une commande d'APPEL D'OFFRES (auction_id / winning_bid_id) n'a AUCUNE
+  // ligne `order_items` (`order_items.product_id` est NOT NULL, un appel d'offres n'a pas de
+  // produit). L'instantané IMMUABLE du prix attribué (base réelle du bid gagnant — « 450000 /
+  // TONNE », « lot à 5 000 000 » —, quantité et unité de l'enchère, total) vit donc ICI, en JSONB
+  // versionné (`schema_version`), écrit UNE fois à l'attribution et gelé par trigger. NULL = commande
+  // hors appel d'offres, ou attribuée avant B2a (base de prix du bid gagnant INCONNUE).
+  awardPricingSnapshot: jsonb('award_pricing_snapshot'),
 
   orderType: text('order_type').default('STANDARD').notNull(),
   marketOfferId: uuid('market_offer_id').references(() => marketOffers.id), // ex crop_cycle_id (prévente)
@@ -400,6 +422,7 @@ export const orders = marketplaceSchema.table('orders', {
   index('orders_phone_idx').on(t.customerPhone),
   uniqueIndex('orders_auction_unique').on(t.auctionId),
   index('orders_winning_bid_idx').on(t.winningBidId),
+  check('orders_award_pricing_snapshot_chk', sql`${t.awardPricingSnapshot} IS NULL OR (jsonb_typeof(${t.awardPricingSnapshot}) = 'object' AND ${t.awardPricingSnapshot} ? 'schema_version')`),
   index('orders_type_idx').on(t.orderType),
   index('orders_market_offer_idx').on(t.marketOfferId),
   // Optimisation : tableau de bord acheteur = commandes d'un acheteur triées par état
@@ -428,9 +451,34 @@ export const orderItems = marketplaceSchema.table('order_items', {
   // agriconnect.domain.pricing_tiers::resolve_stock_debit côté agent).
   tierId: text('tier_id'),
   baseUnitQuantity: numeric('base_unit_quantity', { precision: 14, scale: 3 }),
+  // ── Phase B2a (2026-09-28) : INSTANTANÉ IMMUABLE de la sémantique commerciale ────────────
+  // Une ligne de commande se comprend SANS relire `products` (mutable), la taxonomie, un palier ou
+  // un ancien état de conversation. Projection relationnelle du même contrat que
+  // `products.commercial_pricing` (backend : domain/commercial_pricing_snapshot.py). Toutes les
+  // colonnes sont NULL sur une ligne antérieure à B2a (jamais rétro-inférées : sa base de prix est
+  // INCONNUE) ; `pricing_snapshot_version` non NULL = snapshot certifié, alors contraint (CHECK) et
+  // gelé par trigger (voir migration). `quantity_unit` = unité dans laquelle `quantity` est exprimée
+  // (« SACHET » pour 4 sachets, « KG » pour 100 kg) ; `base_unit_quantity` reste la quantité en
+  // unité de base. `normalized_unit_price` est un DÉRIVÉ (arrondi HALF_UP, 4 décimales), jamais
+  // l'autorité : `commercial_price_amount` l'est.
+  quantityUnit: text('quantity_unit'),
+  commercialPriceAmount: numeric('commercial_price_amount', { precision: 14, scale: 2 }),
+  priceBasis: text('price_basis'),               // PER_BASE_UNIT | PER_PACKAGE | TOTAL_LOT
+  priceUnit: text('price_unit'),                 // PER_BASE_UNIT : « TONNE » dans « 450000 / TONNE »
+  packageType: text('package_type'),
+  packageContentAmount: numeric('package_content_amount', { precision: 14, scale: 3 }),
+  packageContentUnit: text('package_content_unit'),
+  normalizedUnitPrice: numeric('normalized_unit_price', { precision: 18, scale: 4 }),
+  normalizedUnit: text('normalized_unit'),
+  currency: text('currency'),
+  pricingSnapshotVersion: integer('pricing_snapshot_version'),
 }, (t) => [
   index('order_items_order_idx').on(t.orderId),
   index('order_items_product_idx').on(t.productId),
+  // Une ligne sans version n'a AUCUN champ de snapshot (pas de demi-écriture)…
+  check('order_items_snapshot_all_null_chk', sql`${t.pricingSnapshotVersion} IS NOT NULL OR (${t.commercialPriceAmount} IS NULL AND ${t.priceBasis} IS NULL AND ${t.priceUnit} IS NULL AND ${t.packageType} IS NULL AND ${t.packageContentAmount} IS NULL AND ${t.packageContentUnit} IS NULL AND ${t.normalizedUnitPrice} IS NULL AND ${t.normalizedUnit} IS NULL AND ${t.quantityUnit} IS NULL AND ${t.currency} IS NULL)`),
+  // …et une ligne versionnée est complète et cohérente (mêmes règles que le domaine).
+  check('order_items_snapshot_chk', sql`${t.pricingSnapshotVersion} IS NULL OR (${t.pricingSnapshotVersion} >= 1 AND ${t.commercialPriceAmount} IS NOT NULL AND ${t.commercialPriceAmount} > 0 AND ${t.quantityUnit} IS NOT NULL AND ${t.currency} IS NOT NULL AND ${t.priceBasis} IS NOT NULL AND ${t.priceBasis} IN ('PER_BASE_UNIT','PER_PACKAGE','TOTAL_LOT') AND (${t.priceBasis} <> 'PER_BASE_UNIT' OR ${t.priceUnit} IS NOT NULL) AND (${t.priceBasis} = 'PER_BASE_UNIT' OR ${t.priceUnit} IS NULL) AND (${t.priceBasis} <> 'PER_PACKAGE' OR (${t.packageType} IS NOT NULL AND ${t.packageContentAmount} IS NOT NULL AND ${t.packageContentAmount} > 0 AND ${t.packageContentUnit} IS NOT NULL)) AND (${t.priceBasis} = 'PER_PACKAGE' OR (${t.packageType} IS NULL AND ${t.packageContentAmount} IS NULL AND ${t.packageContentUnit} IS NULL)) AND (${t.normalizedUnitPrice} IS NULL OR (${t.normalizedUnitPrice} > 0 AND ${t.normalizedUnit} IS NOT NULL)))`),
 ]);
 
 // ── PAYMENTS (journal de paiement — ajout) ─────────────────────────────────
@@ -561,6 +609,22 @@ export const bids = marketplaceSchema.table('bids', {
   auctionId: uuid('auction_id').references((): AnyPgColumn => auctions.id, { onDelete: 'restrict' }).notNull(),
   producerId: uuid('producer_id').references((): AnyPgColumn => producers.id, { onDelete: 'restrict' }).notNull(),
   offeredPrice: numeric('offered_price', { precision: 12, scale: 2 }).notNull(),
+  // ── Phase B2a (2026-09-28) : CONTRAT DE PRIX du bid ───────────────────────────────────────
+  // `offered_price` seul (« 450000 ») ne dit pas « par tonne », « par kg » ou « au total ». Il ne
+  // doit JAMAIS être relu après coup comme « par unité de l'enchère ». Bid nouveau : base
+  // obligatoire (PER_BASE_UNIT + offered_price_unit | PER_PACKAGE + conditionnement | TOTAL_LOT),
+  // `pricing_snapshot_version` renseignée. Bid ANTÉRIEUR : tout est NULL (= base historique
+  // INCONNUE, affichée comme telle — l'unité de l'enchère n'est PAS supposée). Un bid reste
+  // modifiable (négociation) : la mise à jour du montant recalcule le snapshot côté backend.
+  offeredPriceBasis: text('offered_price_basis'),    // PER_BASE_UNIT | PER_PACKAGE | TOTAL_LOT | LEGACY_UNSPECIFIED
+  offeredPriceUnit: text('offered_price_unit'),
+  offeredPriceCurrency: text('offered_price_currency'),
+  packageType: text('package_type'),
+  packageContentAmount: numeric('package_content_amount', { precision: 14, scale: 3 }),
+  packageContentUnit: text('package_content_unit'),
+  normalizedUnitPrice: numeric('normalized_unit_price', { precision: 18, scale: 4 }),
+  normalizedUnit: text('normalized_unit'),
+  pricingSnapshotVersion: integer('pricing_snapshot_version'),
   linkedStockId: uuid('linked_stock_id').references((): AnyPgColumn => stocks.id, { onDelete: 'set null' }),
   isWinner: boolean('is_winner').default(false).notNull(),
   status: text('status').default('PENDING').notNull(),
@@ -582,6 +646,9 @@ export const bids = marketplaceSchema.table('bids', {
   index('bids_status_idx').on(t.status),
   // Invariant d'acceptation : AU PLUS un gagnant par enchère (garanti par PostgreSQL, pas seulement par le code).
   uniqueIndex('bids_one_winner_per_auction_uq').on(t.auctionId).where(sql`${t.isWinner} = true`),
+  check('bids_price_basis_chk', sql`${t.offeredPriceBasis} IS NULL OR ${t.offeredPriceBasis} IN ('PER_BASE_UNIT','PER_PACKAGE','TOTAL_LOT','LEGACY_UNSPECIFIED')`),
+  // Bid certifié (version non NULL) : base réelle + cohérence base ↔ champs (mêmes règles que le domaine).
+  check('bids_snapshot_chk', sql`${t.pricingSnapshotVersion} IS NULL OR (${t.pricingSnapshotVersion} >= 1 AND ${t.offeredPrice} > 0 AND ${t.offeredPriceCurrency} IS NOT NULL AND ${t.offeredPriceBasis} IS NOT NULL AND ${t.offeredPriceBasis} IN ('PER_BASE_UNIT','PER_PACKAGE','TOTAL_LOT') AND (${t.offeredPriceBasis} <> 'PER_BASE_UNIT' OR ${t.offeredPriceUnit} IS NOT NULL) AND (${t.offeredPriceBasis} = 'PER_BASE_UNIT' OR ${t.offeredPriceUnit} IS NULL) AND (${t.offeredPriceBasis} <> 'PER_PACKAGE' OR (${t.packageType} IS NOT NULL AND ${t.packageContentAmount} IS NOT NULL AND ${t.packageContentAmount} > 0 AND ${t.packageContentUnit} IS NOT NULL)) AND (${t.offeredPriceBasis} = 'PER_PACKAGE' OR (${t.packageType} IS NULL AND ${t.packageContentAmount} IS NULL AND ${t.packageContentUnit} IS NULL)) AND (${t.normalizedUnitPrice} IS NULL OR (${t.normalizedUnitPrice} > 0 AND ${t.normalizedUnit} IS NOT NULL)))`),
 ]);
 
 // ── APPROVISIONNEMENT RÉCURRENT (Phase 1 — fondation de données uniquement) ─
