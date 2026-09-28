@@ -8,12 +8,19 @@ import { C, F } from '@/features/auction/utils/auction-tokens';
 import { LoadingView, ErrorView } from '@/features/auction/components/AuctionStatusViews';
 import AuctionHero from '@/features/auction/components/AuctionHero';
 import AuctionLogistics from '@/features/auction/components/AuctionLogistics';
-import AuctionBidForm, { type BidMessage } from '@/features/auction/components/AuctionBidForm';
+import AuctionBidForm, { type BidBasis, type BidMessage } from '@/features/auction/components/AuctionBidForm';
 import AuctionProducersList from '@/features/auction/components/AuctionProducersList';
 import { asError } from '@/lib/errors';
 
+export interface BidSubmitPayload {
+  amount: number;
+  basis: BidBasis;
+  priceUnit?: string | null;
+  estimatedDeliveryDate?: string;
+}
+
 // ─── Main Component ──────────────────────────────────────────────────
-export default function AuctionClient({ auctionId, initialAuction, initialProducers, serverLoad, serverSubmit }: { auctionId: string; initialAuction?: Auction | null; initialProducers?: ProducerItem[]; serverLoad?: (auctionId: string) => Promise<{ auction: Auction | null; producers: ProducerItem[] }>; serverSubmit?: (auctionId: string, payload: { offeredPrice: number }) => Promise<any> }) {
+export default function AuctionClient({ auctionId, initialAuction, initialProducers, serverLoad, serverSubmit }: { auctionId: string; initialAuction?: Auction | null; initialProducers?: ProducerItem[]; serverLoad?: (auctionId: string) => Promise<{ auction: Auction | null; producers: ProducerItem[] }>; serverSubmit?: (auctionId: string, payload: BidSubmitPayload) => Promise<any> }) {
   const [auction, setAuction] = useState<Auction | null>(initialAuction ?? null);
   const [producers, setProducers] = useState<ProducerItem[]>(initialProducers ?? []);
   const [loading, setLoading] = useState(false);
@@ -24,6 +31,7 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
 
   // Bid form
   const [price, setPrice] = useState('');
+  const [basis, setBasis] = useState<BidBasis>('PER_BASE_UNIT');
   const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [bidMessage, setBidMessage] = useState<BidMessage | null>(null);
@@ -135,24 +143,30 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
       return;
     }
 
-    // Bid validation with minimum increment (50 FCFA default)
-    const currentBest = producers.find(p => p.hasBid)?.trustScore?.globalScore ?? null;
-    const validation = validateBid(null, numPrice, 50, auction?.maxPricePerUnit ?? null, true);
-    if (!validation.valid) {
-      setBidMessage({ type: 'error', text: validation.error || 'Enchère invalide' });
-      return;
+    // Validation d'incrément (50 FCFA) : n'a de sens QUE pour un prix par unité de l'enchère (même base que le
+    // plafond `maxPricePerUnit`) — un montant TOTAL_LOT n'est pas comparable à ce plafone brut ici. Le serveur
+    // revalide de toute façon le VRAI plafond sur le total comparable (`exceedsCeiling`), quelle que soit la base.
+    if (basis === 'PER_BASE_UNIT') {
+      const validation = validateBid(null, numPrice, 50, auction?.maxPricePerUnit ?? null, true);
+      if (!validation.valid) {
+        setBidMessage({ type: 'error', text: validation.error || 'Enchère invalide' });
+        return;
+      }
     }
 
     setSubmitting(true);
     try {
+      const priceUnit = basis === 'PER_BASE_UNIT' ? (auction?.unit ?? null) : null;
       if (serverSubmit) {
-        await serverSubmit(auctionId, { offeredPrice: numPrice } as any);
+        await serverSubmit(auctionId, { amount: numPrice, basis, priceUnit });
       } else {
         const res = await fetch(`/api/auctions/${auctionId}/bids`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            offeredPrice: numPrice,
+            amount: numPrice,
+            basis,
+            priceUnit,
             estimatedDeliveryDate: estimatedDeliveryDate ? new Date(estimatedDeliveryDate).toISOString() : undefined,
           }),
         });
@@ -200,6 +214,9 @@ export default function AuctionClient({ auctionId, initialAuction, initialProduc
             isOpen={isOpen}
             expired={expired}
             maxPricePerUnit={auction.maxPricePerUnit}
+            auctionUnit={auction.unit ?? 'TONNE'}
+            basis={basis}
+            onBasisChange={setBasis}
             price={price}
             onPriceChange={setPrice}
             estimatedDeliveryDate={estimatedDeliveryDate}
