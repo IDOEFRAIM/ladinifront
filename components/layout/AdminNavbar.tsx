@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bot, Map, Users, Warehouse,
   CheckCircle, Settings, LogOut, Eye, ClipboardList,
-  Tags, Menu, X, BarChart3, Sprout
+  Tags, Menu, X, BarChart3, Sprout, Scale
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -27,6 +27,7 @@ const adminNavItems = [
   { name: 'Agents IA', href: '/admin/monitoring', icon: Bot },
   { name: 'Analytics acheteurs', href: '/admin/analytics/buyers', icon: BarChart3 },
   { name: 'Analytics producteurs', href: '/admin/analytics/producers', icon: Sprout },
+  { name: 'Market Balance', href: '/admin/analytics/market-balance', icon: Scale },
   { name: 'Territoires', href: '/admin/territories', icon: Map },
   { name: 'Producteurs', href: '/admin/producers', icon: Users },
   { name: 'Stocks', href: '/admin/stock', icon: Warehouse },

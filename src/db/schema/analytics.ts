@@ -427,3 +427,44 @@ export const producerSupplyDailySnapshot = analyticsSchema.table('producer_suppl
   check('producer_supply_daily_snapshot_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
   check('producer_supply_daily_snapshot_qty_chk', sql`${t.availableQuantity} >= 0 AND ${t.productCount} >= 0`),
 ]);
+
+//: Market Balance (Phase E) — journeys whose `current_open_demand` actually contributes to a
+// given cell. Part of the grain (not just presentational metadata): the same cell computed with
+// a different journey mix is not the same fact — see docs/analytics/MARKET_BALANCE.md §13.
+const DEMAND_SCOPE_VALUES_SQL = sql.raw("'RECURRING','TENDER','RECURRING+TENDER'");
+
+/**
+ * Market Balance (Phase E). Grain : (jour, zone, catégorie, sous-catégorie, unité canonique,
+ * périmètre de demande). UN SNAPSHOT, JAMAIS UN FLUX — même discipline que
+ * `producerSupplyDailySnapshot` : chaque ligne est l'état à `computed_at`, jamais reconstruite
+ * pour un jour passé avant le premier run de ce job (voir docs/analytics/MARKET_BALANCE.md §16/§18).
+ * Seules les quantités brutes sont stockées — jamais `potential_coverage_rate` (reconstructible
+ * depuis les composantes, même règle que toutes les autres tables du Metric Layer).
+ */
+export const marketBalanceDailySnapshot = analyticsSchema.table('market_balance_daily_snapshot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  snapshotDay: date('snapshot_day').notNull(),
+  zoneScope: uuid('zone_scope').notNull().default(NIL_UUID),
+  categoryId: uuid('category_id').notNull().default(NIL_UUID),
+  subCategoryId: uuid('sub_category_id').notNull().default(NIL_UUID),
+  canonicalUnit: text('canonical_unit').notNull(),
+  measurementFamily: text('measurement_family').notNull(),
+  demandScope: text('demand_scope').notNull(),
+
+  openDemandQuantity: qty('open_demand_quantity'),
+  availableSupplyQuantity: qty('available_supply_quantity'),
+  potentialCoverableQuantity: qty('potential_coverable_quantity'),
+  demandGapQuantity: qty('demand_gap_quantity'),
+  excessSupplyQuantity: qty('excess_supply_quantity'),
+
+  computedAt: timestamp('computed_at', tz).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('market_balance_daily_snapshot_grain_uq').on(t.snapshotDay, t.zoneScope, t.categoryId, t.subCategoryId, t.canonicalUnit, t.demandScope),
+  index('market_balance_daily_snapshot_date_idx').on(t.snapshotDay),
+  check('market_balance_daily_snapshot_family_chk', sql`${t.measurementFamily} IN ('MASS','VOLUME','COUNT','PACKAGE','OTHER')`),
+  check('market_balance_daily_snapshot_scope_chk', sql`${t.demandScope} IN (${DEMAND_SCOPE_VALUES_SQL})`),
+  check(
+    'market_balance_daily_snapshot_qty_chk',
+    sql`${t.openDemandQuantity} >= 0 AND ${t.availableSupplyQuantity} >= 0 AND ${t.potentialCoverableQuantity} >= 0 AND ${t.demandGapQuantity} >= 0 AND ${t.excessSupplyQuantity} >= 0`,
+  ),
+]);
