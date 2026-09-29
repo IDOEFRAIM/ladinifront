@@ -3,7 +3,7 @@
  */
 
 /** System-level roles matching auth.role enum in Drizzle schema */
-export type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT';
+export type SystemRole = 'USER' | 'BUYER' | 'PRODUCER' | 'ADMIN' | 'SUPERADMIN' | 'AGENT' | 'COMMERCIAL';
 /** @deprecated Use SystemRole instead */
 export type Role = SystemRole;
 
