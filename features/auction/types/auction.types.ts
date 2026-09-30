@@ -3,6 +3,7 @@ export type Auction = {
   status: string;
   deadline: string | null;
   maxPricePerUnit: number | null;
+  quantity?: string | number | null;
   unit?: string | null;
   autoExtend?: boolean | null;
   escrowWalletId?: string | null;
@@ -33,6 +34,12 @@ export type AuctionBid = {
   comparable?: boolean;
   /** Empreinte des termes ACTUELS de ce bid — à renvoyer telle quelle à `awardAuction` (`expectedFingerprint`). */
   award?: { fingerprint: string; total: string } | null;
+  /** Ce que le bouton "Attribuer" doit lire — jamais recalculé dans le composant (commodité d'affichage, le
+   * serveur reste seul autoritaire). `false` pour un bid legacy, incomparable, retiré ou déjà tranché. */
+  awardable?: boolean;
+  status?: string;
+  isWinner?: boolean;
+  producerId?: string;
   estimatedDeliveryDate?: string | Date | null;
   isBestBid?: boolean;
 };
@@ -43,6 +50,9 @@ export type BidsApiResponse = {
   totalBids: number;
   /** Total comparable (chaîne) du meilleur bid comparable, ou `null` — jamais un `offeredPrice` brut. */
   bestBidPrice: string | null;
+  /** `true` pour le propriétaire de l'enchère (ou un admin) : pilote l'affichage du flux d'attribution. Le
+   * serveur (`awardAuction`) revérifie quand même l'appartenance — ceci n'est jamais une permission. */
+  viewerCanAward?: boolean;
   bids: AuctionBid[];
 };
 
