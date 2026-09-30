@@ -1,0 +1,1025 @@
+{
+  "cases": [
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "450000",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "TONNE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "4500000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "450",
+          "offeredPrice": "450000",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "TONNE",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "4500000",
+        "fingerprint": "6bdbc0e723629384bfca78888c3ce648c092458d001c47a5b50fafaac8138617",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "10",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "6bdbc0e723629384bfca78888c3ce648c092458d001c47a5b50fafaac8138617",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "4500000.00"
+          },
+          "commercial_price_amount": "450000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "450",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "TONNE",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:6bdbc0e723629384",
+        "label": "450 000 FCFA par tonne"
+      },
+      "name": "A_450000_per_tonne_on_10_tonne"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "4200000",
+        "basis": "TOTAL_LOT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "4200000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "420",
+          "offeredPrice": "4200000",
+          "offeredPriceBasis": "TOTAL_LOT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "4200000",
+        "fingerprint": "2849f90a4389d56cc5d4f4a68c1d38b495e84dffb19c10670b688328498bc2f1",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "10",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "2849f90a4389d56cc5d4f4a68c1d38b495e84dffb19c10670b688328498bc2f1",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "4200000.00"
+          },
+          "commercial_price_amount": "4200000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "420",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "TOTAL_LOT",
+          "price_source": null,
+          "price_unit": null,
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:2849f90a4389d56c",
+        "label": "4 200 000 FCFA pour l'ensemble"
+      },
+      "name": "B_4200000_total_lot_on_10_tonne"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "1000",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "450000",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "TONNE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "450000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "450",
+          "offeredPrice": "450000",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "TONNE",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "450000",
+        "fingerprint": "b6d7ee8db47b48c7d8f94a53583145a381f5bd2ca81cd2cdcf83c57eb2900a41",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "1000",
+            "auction_unit": "KG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "b6d7ee8db47b48c7d8f94a53583145a381f5bd2ca81cd2cdcf83c57eb2900a41",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "450000.00"
+          },
+          "commercial_price_amount": "450000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "450",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "TONNE",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:b6d7ee8db47b48c7",
+        "label": "450 000 FCFA par tonne"
+      },
+      "name": "E_450000_per_tonne_on_1000_kg"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "1000",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "450",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "KG",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "450000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "450",
+          "offeredPrice": "450",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "KG",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "450000",
+        "fingerprint": "2a520d376e61df3a41aa1353882caa13ecaaca57ae92a142dd2ebe43bc9f0b87",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "1000",
+            "auction_unit": "KG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "2a520d376e61df3a41aa1353882caa13ecaaca57ae92a142dd2ebe43bc9f0b87",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "450000.00"
+          },
+          "commercial_price_amount": "450",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "450",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "KG",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:2a520d376e61df3a",
+        "label": "450 FCFA par kg"
+      },
+      "name": "450_per_kg_on_1000_kg"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "450",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "KG",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "4500000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "450",
+          "offeredPrice": "450",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "KG",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "4500000",
+        "fingerprint": "548c3cb03437e64b1d0f019fd99e23d9370ee3e53a6be3ded9721c038c4a511c",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "10",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "548c3cb03437e64b1d0f019fd99e23d9370ee3e53a6be3ded9721c038c4a511c",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "4500000.00"
+          },
+          "commercial_price_amount": "450",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "450",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "KG",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:548c3cb03437e64b",
+        "label": "450 FCFA par kg"
+      },
+      "name": "450_per_kg_on_10_tonne"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "3",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "1000000",
+        "basis": "TOTAL_LOT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "1000000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "333.3333",
+          "offeredPrice": "1000000",
+          "offeredPriceBasis": "TOTAL_LOT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "1000000",
+        "fingerprint": "0e9fa4f48e8e14f9caa5f97988629b715ec3ed271832d219721a2345c447771a",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "3",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "0e9fa4f48e8e14f9caa5f97988629b715ec3ed271832d219721a2345c447771a",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "1000000.00"
+          },
+          "commercial_price_amount": "1000000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "333.3333",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "TOTAL_LOT",
+          "price_source": null,
+          "price_unit": null,
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:0e9fa4f48e8e14f9",
+        "label": "1 000 000 FCFA pour l'ensemble"
+      },
+      "name": "total_lot_1000000_on_3_tonne_inexact_normalized"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "50",
+        "unit": "LITRE"
+      },
+      "bid": {
+        "amount": "500",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "LITRE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "25000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "LITRE",
+          "normalizedUnitPrice": "500",
+          "offeredPrice": "500",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "LITRE",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "25000",
+        "fingerprint": "a22bbfd417a3ef5bd0da0518ae1ef907075608618f766dbca95860b679791b15",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "50",
+            "auction_unit": "LITRE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "a22bbfd417a3ef5bd0da0518ae1ef907075608618f766dbca95860b679791b15",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "25000.00"
+          },
+          "commercial_price_amount": "500",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "LITRE",
+          "normalized_unit_price": "500",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "LITRE",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:a22bbfd417a3ef5b",
+        "label": "500 FCFA par litre"
+      },
+      "name": "500_per_litre_on_50_litre"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "25",
+        "unit": "BAG"
+      },
+      "bid": {
+        "amount": "12000",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "BAG",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "300000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "BAG",
+          "normalizedUnitPrice": "12000",
+          "offeredPrice": "12000",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "BAG",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "300000",
+        "fingerprint": "9bede529905e8230fdb5a31c688b30a643d9daca1ea38045c1f4ed92a33fbe95",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "25",
+            "auction_unit": "BAG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "9bede529905e8230fdb5a31c688b30a643d9daca1ea38045c1f4ed92a33fbe95",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "300000.00"
+          },
+          "commercial_price_amount": "12000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "BAG",
+          "normalized_unit_price": "12000",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "BAG",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:9bede529905e8230",
+        "label": "12 000 FCFA par bag"
+      },
+      "name": "12000_per_bag_on_25_bag"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "2.5",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "450000",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "TONNE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "1125000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "450",
+          "offeredPrice": "450000",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "TONNE",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "1125000",
+        "fingerprint": "bf44ad8c2b55f741acf2c382aa7d81b84ca89e8fd47eb1742785db6601ae7eed",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "2.5",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "bf44ad8c2b55f741acf2c382aa7d81b84ca89e8fd47eb1742785db6601ae7eed",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "1125000.00"
+          },
+          "commercial_price_amount": "450000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "450",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "TONNE",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:bf44ad8c2b55f741",
+        "label": "450 000 FCFA par tonne"
+      },
+      "name": "450000_per_tonne_on_2_5_tonne"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "7.5",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "12345.67",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "KG",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "92592.53",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "12345.67",
+          "offeredPrice": "12345.67",
+          "offeredPriceBasis": "PER_BASE_UNIT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": "KG",
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "92592.53",
+        "fingerprint": "b7521ebdec43a80d5a77b69e77383f398504f385662056ce982958a13fca9ca9",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "7.5",
+            "auction_unit": "KG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "b7521ebdec43a80d5a77b69e77383f398504f385662056ce982958a13fca9ca9",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "92592.53"
+          },
+          "commercial_price_amount": "12345.67",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "12345.67",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "PER_BASE_UNIT",
+          "price_source": null,
+          "price_unit": "KG",
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:b7521ebdec43a80d",
+        "label": "12 345,67 FCFA par kg"
+      },
+      "name": "half_up_12345_67_per_kg_on_7_5_kg"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "7.5",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "1234.5",
+        "basis": "TOTAL_LOT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "1234.5",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "164.6",
+          "offeredPrice": "1234.5",
+          "offeredPriceBasis": "TOTAL_LOT",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": null,
+          "packageContentUnit": null,
+          "packageType": null,
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "1234.5",
+        "fingerprint": "d418ce43ee92353611cb00d62c23e1cdf3121383c70452cbb5844ecafa23690c",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "7.5",
+            "auction_unit": "KG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "d418ce43ee92353611cb00d62c23e1cdf3121383c70452cbb5844ecafa23690c",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "1234.50"
+          },
+          "commercial_price_amount": "1234.5",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "164.6",
+          "package_content_amount": null,
+          "package_content_unit": null,
+          "package_type": null,
+          "price_basis": "TOTAL_LOT",
+          "price_source": null,
+          "price_unit": null,
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:d418ce43ee923536",
+        "label": "1 234,5 FCFA pour l'ensemble"
+      },
+      "name": "total_lot_with_decimals_on_kg_auction"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "200",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "12000",
+        "basis": "PER_PACKAGE",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": "25",
+        "package_content_unit": "KG",
+        "package_type": "CAISSE",
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "96000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "480",
+          "offeredPrice": "12000",
+          "offeredPriceBasis": "PER_PACKAGE",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": "25",
+          "packageContentUnit": "KG",
+          "packageType": "CAISSE",
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "96000",
+        "fingerprint": "f5f3b2ed47d30142d8c08d466282b641e619c355c346fd2fbfdf6438538cc0f3",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "200",
+            "auction_unit": "KG",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "f5f3b2ed47d30142d8c08d466282b641e619c355c346fd2fbfdf6438538cc0f3",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "96000.00"
+          },
+          "commercial_price_amount": "12000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "480",
+          "package_content_amount": "25",
+          "package_content_unit": "KG",
+          "package_type": "CAISSE",
+          "price_basis": "PER_PACKAGE",
+          "price_source": null,
+          "price_unit": null,
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:f5f3b2ed47d30142",
+        "label": "12 000 FCFA par caisse de 25 kg"
+      },
+      "name": "package_8_crates_of_25kg"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "210",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "12000",
+        "basis": "PER_PACKAGE",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": "25",
+        "package_content_unit": "KG",
+        "package_type": "CAISSE",
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_error": "award_pricing_invalid",
+        "award_ok": false,
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "480",
+          "offeredPrice": "12000",
+          "offeredPriceBasis": "PER_PACKAGE",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": "25",
+          "packageContentUnit": "KG",
+          "packageType": "CAISSE",
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": null,
+        "label": "12 000 FCFA par caisse de 25 kg"
+      },
+      "name": "package_not_divisible_210kg_by_25kg"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "1",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "12000",
+        "basis": "PER_PACKAGE",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": "50",
+        "package_content_unit": "KG",
+        "package_type": "SAC",
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "award_ok": true,
+        "award_total": "240000",
+        "build_ok": true,
+        "columns": {
+          "normalizedUnit": "KG",
+          "normalizedUnitPrice": "240",
+          "offeredPrice": "12000",
+          "offeredPriceBasis": "PER_PACKAGE",
+          "offeredPriceCurrency": "XOF",
+          "offeredPriceUnit": null,
+          "packageContentAmount": "50",
+          "packageContentUnit": "KG",
+          "packageType": "SAC",
+          "pricingSnapshotVersion": 1
+        },
+        "comparable_total": "240000",
+        "fingerprint": "e7ff0ce43e7b53bfd07ac107e4e1a96bf5f42d5e54630629214d36d25c623224",
+        "frozen_snapshot": {
+          "award": {
+            "auction_id": "11111111-1111-4111-8111-111111111111",
+            "auction_quantity": "1",
+            "auction_unit": "TONNE",
+            "bid_id": "33333333-3333-4333-8333-333333333333",
+            "decision_version": 1,
+            "fingerprint": "e7ff0ce43e7b53bfd07ac107e4e1a96bf5f42d5e54630629214d36d25c623224",
+            "producer_id": "44444444-4444-4444-8444-444444444444",
+            "total_amount": "240000.00"
+          },
+          "commercial_price_amount": "12000",
+          "commercial_quantity_amount": null,
+          "commercial_quantity_unit": null,
+          "currency": "XOF",
+          "inventory_quantity_amount": null,
+          "inventory_quantity_unit": null,
+          "normalized_unit": "KG",
+          "normalized_unit_price": "240",
+          "package_content_amount": "50",
+          "package_content_unit": "KG",
+          "package_type": "SAC",
+          "price_basis": "PER_PACKAGE",
+          "price_source": null,
+          "price_unit": null,
+          "schema_version": 1
+        },
+        "idempotency_key": "award:11111111-1111-4111-8111-111111111111:33333333-3333-4333-8333-333333333333:e7ff0ce43e7b53bf",
+        "label": "12 000 FCFA par sac de 50 kg"
+      },
+      "name": "package_in_tonne_auction"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "450000",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": null,
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "build_ok": false
+      },
+      "name": "refused_per_base_unit_without_unit"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "0",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "TONNE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "build_ok": false
+      },
+      "name": "refused_zero_amount"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "KG"
+      },
+      "bid": {
+        "amount": "450",
+        "basis": "PER_BASE_UNIT",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "LITRE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "build_ok": false
+      },
+      "name": "refused_litre_price_on_kg_auction"
+    },
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "bid": {
+        "amount": "450000",
+        "basis": "PER_WHATEVER",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "package_content_amount": null,
+        "package_content_unit": null,
+        "package_type": null,
+        "price_unit": "TONNE",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "expected": {
+        "build_ok": false
+      },
+      "name": "refused_unknown_basis"
+    }
+  ],
+  "engine": "python",
+  "legacy_cases": [
+    {
+      "auction": {
+        "buyer_id": "22222222-2222-4222-8222-222222222222",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "quantity": "10",
+        "unit": "TONNE"
+      },
+      "expected": {
+        "award_error": "bid_basis_unknown",
+        "certified": false,
+        "comparable": false
+      },
+      "legacy_bid": {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "offeredPrice": "400000",
+        "producer_id": "44444444-4444-4444-8444-444444444444"
+      },
+      "name": "legacy_bid_without_certified_basis"
+    }
+  ],
+  "schema": "web-pricing-parity",
+  "version": 1
+}
