@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bot, Map, Users, Warehouse,
   CheckCircle, Settings, LogOut, Eye, ClipboardList,
-  Tags, Menu, X, BarChart3, Sprout, Scale
+  Tags, Menu, X, BarChart3, Sprout, Scale, Repeat, SlidersHorizontal, MessageCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -25,6 +25,10 @@ const adminNavItems = [
   { name: 'Commandes', href: '/admin/orders/kanban', icon: ClipboardList },
   { name: 'Gouvernance', href: '/admin/governance', icon: Tags },
   { name: 'Agents IA', href: '/admin/monitoring', icon: Bot },
+  // Recurring — OPERATIONS (inspecter un besoin réel, régler le délai de départ) ≠ ANALYTICS (agrégats, ci-dessous).
+  { name: 'Commercial', href: '/admin/commercial', icon: MessageCircle },
+  { name: 'Recurring', href: '/admin/recurring/needs', icon: Repeat },
+  { name: 'Réglages recurring', href: '/admin/recurring/settings', icon: SlidersHorizontal },
   { name: 'Analytics acheteurs', href: '/admin/analytics/buyers', icon: BarChart3 },
   { name: 'Analytics producteurs', href: '/admin/analytics/producers', icon: Sprout },
   { name: 'Market Balance', href: '/admin/analytics/market-balance', icon: Scale },
@@ -64,7 +68,7 @@ export default function AdminNavbar() {
         className="sticky top-0 z-[100] w-full border-b backdrop-blur-md"
         style={{ background: C.glass, borderColor: C.border }}
       >
-        <div className="max-w-[1400px] mx-auto px-4 flex items-center justify-between h-16">
+        <div className="max-w-[1600px] mx-auto px-4 py-1 flex items-center justify-between min-h-16">
           
           {/* Logo / Mobile Trigger */}
           <div className="flex items-center gap-4">
@@ -77,8 +81,8 @@ export default function AdminNavbar() {
             <div className="font-bold text-emerald-900 hidden sm:block">Admin<span className="text-emerald-500">Panel</span></div>
           </div>
 
-          {/* Navigation Items (Scrollable horizontalement sur petits écrans) */}
-          <div className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar px-2 flex-1 max-w-4xl">
+          {/* Navigation Items : passent à la ligne (plus de défilement caché qui masquait des sections) */}
+          <div className="hidden md:flex flex-wrap items-center gap-x-1 gap-y-0.5 px-2 flex-1">
             {items.map((item) => {
               const isActive = item.exact
                 ? currentPath === item.href
