@@ -24,7 +24,7 @@ export interface OrgMembership {
   dynRolePermissions?: string[];
 }
 
-export type SystemRole = 'SUPERADMIN' | 'ADMIN' | 'USER' | 'PRODUCER' | 'BUYER' | 'AGENT';
+export type SystemRole = 'SUPERADMIN' | 'ADMIN' | 'USER' | 'PRODUCER' | 'BUYER' | 'AGENT' | 'COMMERCIAL';
 
 export interface AuthenticatedUser {
   id: string;
@@ -163,6 +163,18 @@ export async function requireProducer(req?: NextRequest) {
 
 export async function requireAdmin(req?: NextRequest) {
   const { ctx, error } = await getAccessContext(['ADMIN', 'SUPERADMIN']);
+  if (error || !ctx) return { user: null, error };
+  return { user: mapCtxToUser(ctx), error: null };
+}
+
+/**
+ * Accès à l'espace Commercial (relances manuelles) : ADMIN/SUPERADMIN
+ * y ont accès comme partout ailleurs (bypass), et le rôle COMMERCIAL dédié
+ * l'obtient sans hériter des autres droits ADMIN (pas de secrets, pas de
+ * gestion de comptes/paiements — voir routes protégées par cette fonction).
+ */
+export async function requireCommercial(req?: NextRequest) {
+  const { ctx, error } = await getAccessContext(['ADMIN', 'SUPERADMIN', 'COMMERCIAL']);
   if (error || !ctx) return { user: null, error };
   return { user: mapCtxToUser(ctx), error: null };
 }

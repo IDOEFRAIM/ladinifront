@@ -26,6 +26,9 @@ const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/clients':       ['USER_VIEW'],
   '/settings':      [],                   // authentifié suffit
   '/agents':        ['MONITORING_VIEW'],
+  // Plus spécifique que '/admin' ci-dessous : doit être évalué en premier
+  // (le loop matche le premier préfixe dont la route commence, puis `break`).
+  '/admin/commercial': [],                // authentifié + rôle (voir ROUTE_ROLES)
   '/admin':         ['ORG_MANAGE'],
   '/org':           [],                   // authenticated + active org (checked in layout)
   '/market':        [],
@@ -47,6 +50,7 @@ const ROUTE_ROLES: Record<string, string[]> = {
   '/clients':    ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
   '/settings':   ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
   '/agents':     ['PRODUCER', 'ADMIN', 'SUPERADMIN'],
+  '/admin/commercial': ['ADMIN', 'SUPERADMIN', 'COMMERCIAL'],
   '/admin':      ['ADMIN', 'SUPERADMIN'],
   '/org':        ['PRODUCER', 'ADMIN', 'SUPERADMIN', 'AGENT'],
   '/checkout':   ['BUYER', 'PRODUCER', 'ADMIN', 'SUPERADMIN'],
@@ -195,7 +199,7 @@ export async function middleware(request: NextRequest) {
   if (isOnboardingPage && isAuthenticated && onboardingDone === '1') {
     // Already onboarded — redirect to role dashboard
     const roleKey = (effectiveRole ?? '').toUpperCase();
-    const target = ({ SUPERADMIN: '/admin', ADMIN: '/admin', PRODUCER: '/dashboard', AGENT: '/agent/deliveries', BUYER: '/buyer-dashboard', USER: '/market' } as Record<string, string>)[roleKey] || '/market';
+    const target = ({ SUPERADMIN: '/admin', ADMIN: '/admin', COMMERCIAL: '/admin/commercial', PRODUCER: '/dashboard', AGENT: '/agent/deliveries', BUYER: '/buyer-dashboard', USER: '/market' } as Record<string, string>)[roleKey] || '/market';
     return NextResponse.redirect(new URL(target, request.url));
   }
 
@@ -209,6 +213,7 @@ export async function middleware(request: NextRequest) {
     const redirectMap: Record<string, string> = {
       'SUPERADMIN': '/admin',
       'ADMIN': '/admin',
+      'COMMERCIAL': '/admin/commercial',
       'PRODUCER': '/dashboard',
       'AGENT': '/agent/deliveries',
       'USER': '/market',

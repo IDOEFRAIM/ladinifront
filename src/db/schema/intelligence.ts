@@ -22,9 +22,10 @@ import {
   doublePrecision,
   index,
   uniqueIndex,
+  check,
   AnyPgColumn, } from 'drizzle-orm/pg-core';
 import { intelligenceSchema, agentActionStatusEnum, validationPriorityEnum } from './_config';
-import { type InferModel } from 'drizzle-orm';
+import { sql, type InferModel } from 'drizzle-orm';
 import { orders } from './marketplace';
 import { zones } from './governance';
 import { users } from './auth';
@@ -213,6 +214,28 @@ export const notificationOutbox = intelligenceSchema.table('notification_outbox'
   index('outbox_solicitation_idx').on(t.solicitationId),
 ]);
 
+// ── Suivi commercial (relances manuelles côté dashboard) ────────────────────
+// Un statut de suivi par utilisateur (pas par tour de conversation) : le
+// commercial relance une personne, pas un message isolé. L'envoi réel du
+// message passe par le canal WhatsApp existant côté backend (WhatsAppChannel) ;
+// cette table ne porte que l'état de suivi, jamais le contenu du message
+// (journalisé dans audit_logs, action=COMMERCIAL_OUTBOUND).
+export const commercialFollowupStatusEnum = ['NONE', 'TO_FOLLOW_UP', 'FOLLOWED_UP', 'RESOLVED', 'NOT_INTERESTED'] as const;
+
+export const commercialFollowups = intelligenceSchema.table('commercial_followups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'cascade' }).unique().notNull(),
+  status: text('status').default('NONE').notNull(),
+  assignedCommercialId: uuid('assigned_commercial_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  lastFollowUpAt: timestamp('last_follow_up_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('commercial_followups_status_idx').on(t.status),
+  check('commercial_followups_status_chk', sql`${t.status} IN ('NONE','TO_FOLLOW_UP','FOLLOWED_UP','RESOLVED','NOT_INTERESTED')`),
+  index('commercial_followups_assigned_idx').on(t.assignedCommercialId),
+]);
+
 export default {
   auditLogs,
   agentActions,
@@ -222,6 +245,7 @@ export default {
   demandSignals,
   solicitations,
   notificationOutbox,
+  commercialFollowups,
 };
 
 export type AuditLog = InferModel<typeof auditLogs>;
@@ -232,3 +256,4 @@ export type ModerationEvent = InferModel<typeof moderationEvents>;
 export type DemandSignal = InferModel<typeof demandSignals>;
 export type Solicitation = InferModel<typeof solicitations>;
 export type NotificationOutbox = InferModel<typeof notificationOutbox>;
+export type CommercialFollowup = InferModel<typeof commercialFollowups>;
