@@ -24,6 +24,7 @@ const ALLOWED_LIST_PARAMS = [
 ] as const;
 const PASS_THROUGH_ERRORS = [400, 403, 404, 409, 422];
 const UNAVAILABLE = 'Le service Recurring est momentanément indisponible.';
+const ROUTE_MISSING = "Console Recurring indisponible : le backend contacté n'expose pas encore /internal/recurring-admin (version à déployer).";
 
 function backendConfig(): { base: string; token: string } | null {
   const base = process.env.LADINI_BACKEND_URL;
@@ -46,6 +47,14 @@ async function forward(url: string, token: string, init?: RequestInit): Promise<
     let body: unknown = null;
     try { body = await upstream.json(); } catch { /* corps non JSON */ }
     if (upstream.ok) return NextResponse.json(body, { headers: NO_STORE });
+    // 404 SANS message métier = la ROUTE n'existe pas sur ce backend (version non déployée), pas « besoin introuvable »
+    // (le backend répond `Besoin introuvable.` dans ce cas-là). On le dit clairement plutôt qu'un « Requête invalide ».
+    if (upstream.status === 404) {
+      const detail = (body as { detail?: string } | null)?.detail;
+      if (!detail || detail === 'Not Found') {
+        return NextResponse.json({ error: ROUTE_MISSING }, { status: 503, headers: NO_STORE });
+      }
+    }
     if (PASS_THROUGH_ERRORS.includes(upstream.status)) {
       const detail = (body as { detail?: string } | null)?.detail || 'Requête invalide.';
       return NextResponse.json({ error: detail }, { status: upstream.status, headers: NO_STORE });

@@ -96,6 +96,20 @@ describe('adaptateur recurring (operations) : autorisation et hygiène', () => {
     expect((await res.json()).error).toBe('message métier');
   });
 
+  it('404 sans message métier (route absente du backend) -> 503 explicite ; 404 métier conservé', async () => {
+    requireAdmin.mockResolvedValue(adminAs('a-1'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ detail: 'Not Found' }, 404)));
+    const missing = await recurringNeedsListProxy(new NextRequest('http://localhost/x'));
+    expect(missing.status).toBe(503);
+    expect((await missing.json()).error).toMatch(/pas encore/);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>404</html>', { status: 404 })));
+    expect((await recurringNeedsListProxy(new NextRequest('http://localhost/x'))).status).toBe(503);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ detail: 'Besoin introuvable.' }, 404)));
+    const real = await recurringNeedDetailProxy(new NextRequest('http://localhost/x'), 'n-1');
+    expect(real.status).toBe(404);
+    expect((await real.json()).error).toBe('Besoin introuvable.');
+  });
+
   it('une panne backend ne fuit jamais : 502 générique', async () => {
     requireAdmin.mockResolvedValue(adminAs('a-1'));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ detail: 'trace interne secrète' }, 500)));
