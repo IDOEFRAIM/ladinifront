@@ -14,9 +14,10 @@ export async function POST(
   const { id } = await context.params;
   try {
     const body = await req.json();
-    const { winnerBidId } = body;
+    const { winnerBidId, expectedFingerprint } = body;
     if (!winnerBidId) return NextResponse.json({ error: 'winnerBidId requis' }, { status: 400 });
-    const res = await awardAuctionAction({ auctionId: id, winnerBidId });
+    if (!expectedFingerprint) return NextResponse.json({ error: 'expectedFingerprint requis (termes confirmés)' }, { status: 400 });
+    const res = await awardAuctionAction({ auctionId: id, winnerBidId, expectedFingerprint });
     if (!res.success) return NextResponse.json({ error: (res as any).error }, { status: 400 });
     return NextResponse.json({ data: (res as any).data });
   } catch (_e: unknown) {

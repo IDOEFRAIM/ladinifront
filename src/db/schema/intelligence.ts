@@ -22,9 +22,10 @@ import {
   doublePrecision,
   index,
   uniqueIndex,
+  check,
   AnyPgColumn, } from 'drizzle-orm/pg-core';
 import { intelligenceSchema, agentActionStatusEnum, validationPriorityEnum } from './_config';
-import { type InferModel } from 'drizzle-orm';
+import { sql, type InferModel } from 'drizzle-orm';
 import { orders } from './marketplace';
 import { zones } from './governance';
 import { users } from './auth';
@@ -231,6 +232,7 @@ export const commercialFollowups = intelligenceSchema.table('commercial_followup
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
   index('commercial_followups_status_idx').on(t.status),
+  check('commercial_followups_status_chk', sql`${t.status} IN ('NONE','TO_FOLLOW_UP','FOLLOWED_UP','RESOLVED','NOT_INTERESTED')`),
   index('commercial_followups_assigned_idx').on(t.assignedCommercialId),
 ]);
 

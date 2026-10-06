@@ -13,8 +13,18 @@ const PRODUCER_SIDE = ['PRODUCER'] as const;
 
 // Les bornes métier (prix > 0, deadline future…) sont contrôlées par le service avec des messages dédiés.
 const eligibleArg = z.looseObject({ auctionId: idArg });
-const bidArg = z.looseObject({ auctionId: idArg, offeredPrice: z.number(), message: z.string().max(2000).optional() });
-const awardArg = z.looseObject({ auctionId: idArg, winnerBidId: idArg });
+// Phase B2c.1 : `amount` seul n'est plus un bid valide — `basis` (PER_BASE_UNIT | TOTAL_LOT) est obligatoire ;
+// `priceUnit` n'a de sens qu'avec PER_BASE_UNIT (voir `pricing/bid-pricing.ts::buildBidPricing`, qui le revalide).
+const bidArg = z.looseObject({
+  auctionId: idArg,
+  amount: z.number(),
+  basis: z.string().min(1),
+  priceUnit: z.string().min(1).optional().nullable(),
+  message: z.string().max(2000).optional(),
+});
+// `expectedFingerprint` : l'empreinte des termes (prix, base, quantité, total) que l'acheteur a VUS et confirmés —
+// revalidée côté serveur avant toute écriture (voir `services/auction-award.ts`).
+const awardArg = z.looseObject({ auctionId: idArg, winnerBidId: idArg, expectedFingerprint: z.string().min(1) });
 const cancelArg = z.looseObject({ auctionId: idArg, reason: z.string().max(1000).optional() });
 const createArg = z.looseObject({
   subCategoryId: idArg,
