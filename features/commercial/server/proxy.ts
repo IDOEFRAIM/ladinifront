@@ -17,7 +17,7 @@ import { requireCommercial } from '@/lib/api-guard';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const TIMEOUT_MS = 20_000;
-const ALLOWED_LIST_PARAMS = ['filter', 'sort', 'limit', 'offset'] as const;
+const ALLOWED_LIST_PARAMS = ['filter', 'sort', 'limit', 'offset', 'q', 'role'] as const;
 
 function backendConfig(): { base: string; token: string } | null {
   const base = process.env.LADINI_BACKEND_URL;
