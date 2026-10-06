@@ -99,6 +99,13 @@
       "when": 1790715243625,
       "tag": "0013_commercial_followups",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791252047582,
+      "tag": "0014_platform_settings",
+      "breakpoints": true
     }
   ]
 }

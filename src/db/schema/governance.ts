@@ -9,6 +9,7 @@ import {
   numeric,
   uniqueIndex,
   index,
+  check,
   AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql, type InferModel } from 'drizzle-orm';
@@ -166,6 +167,24 @@ export const prohibitedTerms = governanceSchema.table('prohibited_terms', {
   index('prohibited_terms_active_idx').on(t.isActive),
 ]);
 
+/**
+ * Réglages GLOBAUX de la plateforme, administrables (clé -> valeur JSON versionnée).
+ * Première table de configuration éditable par un admin ; sert d'abord
+ * `recurring_supply.minimum_start_lead_days` (délai minimal avant la première livraison d'un besoin récurrent).
+ * Chaque modification est auditée côté backend (`intelligence.audit_logs`, action PLATFORM_SETTING_CHANGED).
+ */
+export const platformSettings = governanceSchema.table('platform_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  version: integer('version').default(1).notNull(),
+  updatedById: uuid('updated_by_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
+}, (t) => [
+  index('platform_settings_updated_by_idx').on(t.updatedById),
+  check('platform_settings_version_chk', sql`${t.version} >= 1`),
+]);
+
 export default {
   organizations,
   userOrganizations,
@@ -177,6 +196,7 @@ export default {
   subCategories,
   standardPrices,
   prohibitedTerms,
+  platformSettings,
 };
 
 // Types
@@ -187,6 +207,7 @@ export type Zone = InferModel<typeof zones>;
 export type SubCategory = InferModel<typeof subCategories>;
 export type StandardPrice = InferModel<typeof standardPrices>;
 export type ProhibitedTerm = InferModel<typeof prohibitedTerms>;
+export type PlatformSetting = InferModel<typeof platformSettings>;
 // governance schema proxy
 
 // Relations are defined centrally in ./relations.ts

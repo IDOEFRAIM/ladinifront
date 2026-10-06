@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bot, Map, Users, Warehouse,
   CheckCircle, Settings, LogOut, Eye, ClipboardList,
-  Tags, Menu, X, BarChart3, Sprout, Scale
+  Tags, Menu, X, BarChart3, Sprout, Scale, Repeat, SlidersHorizontal
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -25,6 +25,9 @@ const adminNavItems = [
   { name: 'Commandes', href: '/admin/orders/kanban', icon: ClipboardList },
   { name: 'Gouvernance', href: '/admin/governance', icon: Tags },
   { name: 'Agents IA', href: '/admin/monitoring', icon: Bot },
+  // Recurring — OPERATIONS (inspecter un besoin réel, régler le délai de départ) ≠ ANALYTICS (agrégats, ci-dessous).
+  { name: 'Recurring', href: '/admin/recurring/needs', icon: Repeat },
+  { name: 'Réglages recurring', href: '/admin/recurring/settings', icon: SlidersHorizontal },
   { name: 'Analytics acheteurs', href: '/admin/analytics/buyers', icon: BarChart3 },
   { name: 'Analytics producteurs', href: '/admin/analytics/producers', icon: Sprout },
   { name: 'Market Balance', href: '/admin/analytics/market-balance', icon: Scale },
