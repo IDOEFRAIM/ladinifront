@@ -1,6 +1,6 @@
 {
-  "id": "caa8e847-f72c-4ca6-9449-9081f80a8e4b",
-  "prevId": "1c0a79eb-b816-430a-ab76-0c2b78bf5d47",
+  "id": "24b3a524-adcf-46ff-8371-7404c0dbae8d",
+  "prevId": "9994447a-54c4-4966-91cd-4b3c66bc6187",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -667,94 +667,6 @@
       },
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "governance.platform_settings": {
-      "name": "platform_settings",
-      "schema": "governance",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_by_id": {
-          "name": "updated_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "platform_settings_updated_by_idx": {
-          "name": "platform_settings_updated_by_idx",
-          "columns": [
-            {
-              "expression": "updated_by_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "platform_settings_updated_by_id_users_id_fk": {
-          "name": "platform_settings_updated_by_id_users_id_fk",
-          "tableFrom": "platform_settings",
-          "tableTo": "users",
-          "schemaTo": "auth",
-          "columnsFrom": [
-            "updated_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "platform_settings_version_chk": {
-          "name": "platform_settings_version_chk",
-          "value": "\"governance\".\"platform_settings\".\"version\" >= 1"
-        }
-      },
       "isRLSEnabled": false
     },
     "governance.prohibited_terms": {
@@ -7853,7 +7765,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "commercial_followups_status_chk": {
+          "name": "commercial_followups_status_chk",
+          "value": "\"intelligence\".\"commercial_followups\".\"status\" IN ('NONE','TO_FOLLOW_UP','FOLLOWED_UP','RESOLVED','NOT_INTERESTED')"
+        }
+      },
       "isRLSEnabled": false
     },
     "intelligence.conversations": {

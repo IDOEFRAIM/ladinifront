@@ -1,180 +1,143 @@
 import { db } from '@/src/db';
 import * as schema from '@/src/db/schema';
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { audit } from '@/lib/audit';
 import getUserIdFromSession from '@/lib/get-userId';
 import { asError } from '@/lib/errors';
+import { AwardNotPossible, BidPricingError, renderPricingLabel } from '@/features/auction/pricing/bid-pricing';
+import { buildAwardDecision, fingerprintOf } from '@/features/auction/pricing/award-decision';
+import { AwardConflict, closeAuctionOnBid } from '@/features/auction/services/auction-award-core';
+import { notifyAwardOutcome } from '@/features/auction/services/auction-award-notify';
 
+/** Erreur métier avec un code stable (renvoyé tel quel à l'appelant). */
+class AwardRefused extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Attribution d'une enchère à une offre (acheteur propriétaire ou admin).
+ *
+ * L'appelant fournit `expectedFingerprint` : l'empreinte des TERMES qu'il a vus et acceptés (producteur, prix + base,
+ * quantité, total — voir `getBidsForAuction().bids[].award`). Elle est revalidée ici, dans la transaction, contre l'état
+ * courant : si le producteur a modifié son offre entre l'affichage et le clic, l'attribution est REFUSÉE
+ * (`award_terms_changed`), jamais exécutée sur d'anciens termes. Un bid dont la base de prix n'est pas certifiée
+ * (antérieur à B2a) n'est pas attribuable (`bid_basis_unknown`) : on ne devine pas « par unité ».
+ *
+ * Idempotent : un second clic sur la même offre déjà attribuée renvoie le résultat existant (`idempotent: true`) sans
+ * rien réécrire — une seule commande, un seul instantané.
+ */
 export async function awardAuction(input: {
   auctionId: string;
   winnerBidId: string;
+  expectedFingerprint: string;
 }) {
   const userId = await getUserIdFromSession();
   if (!userId) return { success: false, error: 'Session expirée' };
+  if (!input.expectedFingerprint) {
+    return { success: false, code: 'expected_terms_required', error: 'Les termes confirmés (empreinte) sont requis pour attribuer.' };
+  }
 
   try {
-    return await db.transaction(async (tx) => {
-      // 1. Lire l'enchère
+    const outcome = await db.transaction(async (tx) => {
       const auction = await tx.query.auctions.findFirst({ where: eq(schema.auctions.id, input.auctionId) });
-      if (!auction) throw new Error('Enchère introuvable');
-      if (auction.status !== 'OPEN') throw new Error('Enchère déjà attribuée ou fermée');
+      if (!auction) throw new AwardRefused('auction_not_found', 'Enchère introuvable');
 
-      // Seul le créateur (buyer) ou un admin peut attribuer
+      // Propriétaire : `auctions.buyer_id` référence `buyer_profiles.id` ; on accepte aussi l'identifiant utilisateur
+      // (enchères historiques créées par le web) — vérification transitoire, voir le doc B2c.1.
       const user = await tx.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, role: true } });
-      const isOwner = auction.buyerId === userId;
+      const profile = await tx.query.buyerProfiles.findFirst({ where: eq(schema.buyerProfiles.userId, userId), columns: { id: true } });
+      const isOwner = auction.buyerId === userId || (profile != null && auction.buyerId === profile.id);
       const isAdmin = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
-      if (!isOwner && !isAdmin) throw new Error('Seul le créateur ou un admin peut attribuer cette enchère');
+      if (!isOwner && !isAdmin) throw new AwardRefused('forbidden', 'Seul le créateur ou un admin peut attribuer cette enchère');
 
-      // Vérifier que le bid appartient bien à cette enchère
-      const winnerBid = await tx.query.bids.findFirst({ where: and(eq(schema.bids.id, input.winnerBidId), eq(schema.bids.auctionId, input.auctionId)) });
-      if (!winnerBid) throw new Error('Bid introuvable pour cette enchère');
+      const bid = await tx.query.bids.findFirst({ where: and(eq(schema.bids.id, input.winnerBidId), eq(schema.bids.auctionId, input.auctionId)) });
+      if (!bid) throw new AwardRefused('bid_not_found', 'Bid introuvable pour cette enchère');
 
-      // 2. Optimistic lock: set AWARDED + winnerBidId + awardedAt
-      const updated = await tx.update(schema.auctions)
-        .set({
-          status: 'AWARDED',
-          winnerBidId: input.winnerBidId,
-          awardedAt: new Date(),
-          version: auction.version + 1,
-        })
-        .where(
-          and(
-            eq(schema.auctions.id, input.auctionId),
-            eq(schema.auctions.version, auction.version),
-            eq(schema.auctions.status, 'OPEN')
-          )
-        )
-        .returning({ id: schema.auctions.id });
-
-      if (updated.length === 0) {
-        throw new Error('Conflit de concurrence : l\'enchère a été modifiée. Réessayez.');
-      }
-
-      // 3. Marquer le bid gagnant + tous les perdants
-      await tx.update(schema.bids)
-        .set({ isWinner: true, status: 'WINNER', notifiedAt: new Date() })
-        .where(eq(schema.bids.id, input.winnerBidId));
-
-      await tx.update(schema.bids)
-        .set({ status: 'LOST', notifiedAt: new Date() })
-        .where(and(
-          eq(schema.bids.auctionId, input.auctionId),
-          ne(schema.bids.id, input.winnerBidId)
-        ));
-
-      // 3b. Générer automatiquement une commande liée à l'enchère (idempotent)
-      const existingOrder = await tx.query.orders.findFirst({
-        where: eq(schema.orders.auctionId, input.auctionId),
-        columns: { id: true },
-      });
-
-      if (!existingOrder) {
-        const winnerBid = await tx.query.bids.findFirst({
-          where: eq(schema.bids.id, input.winnerBidId),
-          columns: { id: true, offeredPrice: true, linkedStockId: true },
-        });
-
-        // Resolve / create buyer profile from auction.buyerId (auth.users.id)
-        let buyerProfile = await tx.query.buyerProfiles.findFirst({
-          where: eq(schema.buyerProfiles.userId, auction.buyerId),
-          columns: { id: true },
-        });
-        if (!buyerProfile) {
-          const [createdProfile] = await tx
-            .insert(schema.buyerProfiles)
-            .values({
-              userId: auction.buyerId,
-              buyerTypeId: null,
-              establishmentName: null,
-              defaultDeliveryAddress: null,
-              isVerified: false,
-            })
-            .returning({ id: schema.buyerProfiles.id });
-          buyerProfile = createdProfile ?? null;
-        }
-
-        const buyerUser = await tx.query.users.findFirst({
-          where: eq(schema.users.id, auction.buyerId),
-          columns: { name: true, phone: true },
-        });
-
-        const totalAmount = winnerBid ? Number(winnerBid.offeredPrice) * Number(auction.quantity) : 0;
-
-        await tx.insert(schema.orders).values({
-          buyerId: buyerProfile?.id ?? null,
-          customerName: buyerUser?.name ?? null,
-          customerPhone: buyerUser?.phone ?? null,
-          totalAmount: String(totalAmount),
-          source: 'AUCTION',
-          status: 'PENDING',
-          deliveryStatus: 'PENDING',
-          zoneId: auction.targetZoneId ?? null,
-          auctionId: auction.id,
-          winningBidId: input.winnerBidId,
-        });
-
-        // LOCK STOCK — Déduire immédiatement la quantité du stock lié
-        if (winnerBid?.linkedStockId) {
-          const stock = await tx.query.stocks.findFirst({
-            where: eq(schema.stocks.id, winnerBid.linkedStockId),
-            columns: { id: true, quantity: true },
-          });
-          if (stock && Number(stock.quantity) >= Number(auction.quantity)) {
-            await tx.update(schema.stocks)
-              .set({ quantity: sql`${schema.stocks.quantity} - ${auction.quantity}` })
-              .where(eq(schema.stocks.id, winnerBid.linkedStockId));
-            await tx.insert(schema.stockMovements).values({
-              stockId: winnerBid.linkedStockId,
-              type: 'SALE',
-              quantity: String(-Number(auction.quantity)),
-              reason: `Enchère #${auction.id.slice(0, 8)} — Attribution manuelle`,
-            });
+      if (auction.status !== 'OPEN') {
+        // Rejeu (double clic, redélivrance) : même enchère déjà attribuée à CE bid => résultat existant, aucune écriture.
+        if (auction.status === 'AWARDED' && auction.winnerBidId === input.winnerBidId) {
+          const order = await tx.query.orders.findFirst({ where: eq(schema.orders.auctionId, auction.id), columns: { id: true, totalAmount: true, awardPricingSnapshot: true } });
+          if (order) {
+            const award = ((order.awardPricingSnapshot ?? {}) as { award?: { fingerprint?: string } }).award;
+            return { replay: true as const, orderId: order.id, totalAmount: String(order.totalAmount), fingerprint: award?.fingerprint ?? null, loserProducerIds: [] as string[], winnerProducerId: null as string | null, pricingLabel: null as string | null };
           }
         }
+        throw new AwardRefused('auction_not_open', 'Enchère déjà attribuée ou fermée');
+      }
+      if (String(bid.status || '').toUpperCase() !== 'PENDING') {
+        throw new AwardRefused('bid_not_selectable', 'Cette offre a été retirée ou n\'est plus disponible pour sélection.');
       }
 
-      // 4. Notifier les perdants (logiquement via notification service)
+      let decision;
       try {
-        const { sendUserNotification } = await import('@/features/notifications/services/notification.service');
-        const loserBids = await tx.query.bids.findMany({
-          where: and(eq(schema.bids.auctionId, input.auctionId), ne(schema.bids.id, input.winnerBidId)),
-          with: { producer: { with: { user: { columns: { id: true, name: true, phone: true } } } } },
-        });
-        for (const lb of loserBids) {
-          if (lb.producer?.user) {
-            await sendUserNotification(lb.producer.user.id, 'AUCTION_LOST', { auctionId: input.auctionId });
-          }
-        }
-        // Notify winner
-        if (winnerBid.producerId) {
-          const wp = await tx.query.producers.findFirst({ where: eq(schema.producers.id, winnerBid.producerId), with: { user: { columns: { id: true, name: true, phone: true } } } });
-          if (wp?.user) {
-            await sendUserNotification(wp.user.id, 'AUCTION_WON', { auctionId: input.auctionId });
-          }
-        }
-      } catch (notifErr) {
-        console.warn('awardAuction: notification failed (non-blocking)', notifErr);
+        decision = buildAwardDecision(bid, { id: auction.id, buyerId: auction.buyerId, quantity: auction.quantity, unit: auction.unit });
+      } catch (e) {
+        if (e instanceof AwardNotPossible) throw new AwardRefused(e.code, e.message);
+        throw e;
+      }
+      if (fingerprintOf(decision) !== input.expectedFingerprint) {
+        throw new AwardRefused('award_terms_changed', 'Les termes de cette offre ont changé depuis votre confirmation (prix, base, quantité ou total). Consultez les offres à nouveau avant de retenir un gagnant.');
       }
 
-      // 5. Audit
+      const closed = await closeAuctionOnBid(tx, {
+        auction: { id: auction.id, buyerId: auction.buyerId, quantity: auction.quantity, unit: auction.unit, status: auction.status, version: auction.version, targetZoneId: auction.targetZoneId },
+        winnerBid: { id: bid.id, producerId: bid.producerId, linkedStockId: bid.linkedStockId },
+        decision,
+        finalStatus: 'AWARDED',
+        stockReason: 'Attribution manuelle',
+      });
+      return { replay: false as const, ...closed, winnerProducerId: bid.producerId, pricingLabel: renderPricingLabel(decision.pricing) };
+    });
+
+    if (!outcome.replay) {
+      await notifyAwardOutcome({ auctionId: input.auctionId, winnerProducerId: outcome.winnerProducerId, loserProducerIds: outcome.loserProducerIds });
       await audit({
         action: 'AWARD_AUCTION',
         entityType: 'Auction',
         entityId: input.auctionId,
         actorId: userId,
-        newValue: { winnerBidId: input.winnerBidId, status: 'AWARDED', version: auction.version + 1 },
+        newValue: { winnerBidId: input.winnerBidId, status: 'AWARDED', orderId: outcome.orderId, totalAmount: outcome.totalAmount, fingerprint: outcome.fingerprint },
       });
+    }
 
-      return {
-        success: true,
-        data: { auctionId: input.auctionId, winnerBidId: input.winnerBidId, status: 'AWARDED' },
-      };
-    });
+    return {
+      success: true,
+      data: {
+        auctionId: input.auctionId,
+        winnerBidId: input.winnerBidId,
+        status: 'AWARDED',
+        orderId: outcome.orderId,
+        totalAmount: outcome.totalAmount,
+        pricingLabel: outcome.pricingLabel,
+        fingerprint: outcome.fingerprint,
+        idempotent: outcome.replay,
+      },
+    };
   } catch (_e: unknown) {
+    if (_e instanceof AwardRefused) return { success: false, code: _e.code, error: _e.message };
+    if (_e instanceof BidPricingError) return { success: false, code: _e.code, error: _e.message };
+    if (_e instanceof AwardConflict) {
+      // Course perdue contre une autre attribution : si celle-ci a retenu CE bid, c'est un rejeu (une seule commande).
+      const replay = await replayIfAlreadyAwarded(input.auctionId, input.winnerBidId);
+      if (replay) return replay;
+      return { success: false, code: _e.code, error: _e.message };
+    }
     const e = asError(_e);
     console.error('awardAuction error:', e);
     return { success: false, error: e.message || 'Erreur de concurrence' };
   }
 }
 
-// ── Liste des bids pour une enchère (visible par le créateur) ──────────
+async function replayIfAlreadyAwarded(auctionId: string, winnerBidId: string) {
+  const auction = await db.query.auctions.findFirst({ where: eq(schema.auctions.id, auctionId), columns: { id: true, status: true, winnerBidId: true } });
+  if (!auction || auction.status !== 'AWARDED' || auction.winnerBidId !== winnerBidId) return null;
+  const order = await db.query.orders.findFirst({ where: eq(schema.orders.auctionId, auctionId), columns: { id: true, totalAmount: true, awardPricingSnapshot: true } });
+  if (!order) return null;
+  const award = ((order.awardPricingSnapshot ?? {}) as { award?: { fingerprint?: string } }).award;
+  return {
+    success: true as const,
+    data: { auctionId, winnerBidId, status: 'AWARDED', orderId: order.id, totalAmount: String(order.totalAmount), pricingLabel: null, fingerprint: award?.fingerprint ?? null, idempotent: true },
+  };
+}

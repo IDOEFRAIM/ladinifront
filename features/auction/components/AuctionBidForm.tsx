@@ -4,16 +4,24 @@ import type { FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Send, Shield } from 'lucide-react';
 import { C, F } from '@/features/auction/utils/auction-tokens';
+import { unitDisplay } from '@/features/auction/pricing/units';
 
 export interface BidMessage {
   type: 'success' | 'error';
   text: string;
 }
 
+/** PER_BASE_UNIT (« 450 000 FCFA par tonne ») | TOTAL_LOT (« 4 200 000 FCFA pour tout le lot »).
+ * PER_PACKAGE n'est délibérément pas proposé sur le web dans cette phase (Phase B2c.1, voir B4/B26). */
+export type BidBasis = 'PER_BASE_UNIT' | 'TOTAL_LOT';
+
 interface Props {
   isOpen: boolean;
   expired: boolean;
   maxPricePerUnit: number | null;
+  auctionUnit: string;
+  basis: BidBasis;
+  onBasisChange: (value: BidBasis) => void;
   price: string;
   onPriceChange: (value: string) => void;
   estimatedDeliveryDate: string;
@@ -24,9 +32,10 @@ interface Props {
 }
 
 export default function AuctionBidForm({
-  isOpen, expired, maxPricePerUnit, price, onPriceChange, estimatedDeliveryDate,
+  isOpen, expired, maxPricePerUnit, auctionUnit, basis, onBasisChange, price, onPriceChange, estimatedDeliveryDate,
   onEstimatedDeliveryDateChange, submitting, bidMessage, onSubmit,
 }: Props) {
+  const unitLabel = unitDisplay(auctionUnit);
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -42,8 +51,38 @@ export default function AuctionBidForm({
       {isOpen ? (
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
+            <label className="text-xs font-bold text-stone-500 uppercase tracking-wide block mb-1.5">
+              Ce prix est
+            </label>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Base du prix">
+              <button
+                type="button"
+                disabled={submitting}
+                aria-pressed={basis === 'PER_BASE_UNIT'}
+                onClick={() => onBasisChange('PER_BASE_UNIT')}
+                className={`py-2 px-3 rounded-lg text-sm font-semibold border transition-colors ${
+                  basis === 'PER_BASE_UNIT' ? 'border-green-600 bg-green-50 text-green-800' : 'border-stone-300 text-stone-600'
+                }`}
+              >
+                Par {unitLabel}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                aria-pressed={basis === 'TOTAL_LOT'}
+                onClick={() => onBasisChange('TOTAL_LOT')}
+                className={`py-2 px-3 rounded-lg text-sm font-semibold border transition-colors ${
+                  basis === 'TOTAL_LOT' ? 'border-green-600 bg-green-50 text-green-800' : 'border-stone-300 text-stone-600'
+                }`}
+              >
+                Pour tout le lot
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label htmlFor="bid-price" className="text-xs font-bold text-stone-500 uppercase tracking-wide block mb-1.5">
-              Prix par unité (FCFA)
+              {basis === 'TOTAL_LOT' ? 'Montant pour tout le lot (FCFA)' : `Prix par ${unitLabel} (FCFA)`}
             </label>
             <input
               id="bid-price"
@@ -52,13 +91,13 @@ export default function AuctionBidForm({
               step="0.01"
               value={price}
               onChange={(e) => onPriceChange(e.target.value)}
-              placeholder="Ex: 250"
+              placeholder={basis === 'TOTAL_LOT' ? 'Ex: 4 200 000' : 'Ex: 450 000'}
               disabled={submitting}
               className="w-full px-3 py-2.5 border border-stone-300 rounded-lg bg-white text-stone-900 placeholder:text-stone-400 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-colors disabled:opacity-50"
-              aria-label="Prix par unité"
+              aria-label={basis === 'TOTAL_LOT' ? 'Montant pour tout le lot' : 'Prix par unité'}
             />
             {maxPricePerUnit && (
-              <p className="text-xs text-stone-400 mt-1">Max : {maxPricePerUnit} FCFA</p>
+              <p className="text-xs text-stone-400 mt-1">Plafond : {maxPricePerUnit} FCFA par {unitLabel}</p>
             )}
           </div>
 
