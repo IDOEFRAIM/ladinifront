@@ -9,6 +9,7 @@ import {
   numeric,
   uniqueIndex,
   index,
+  check,
   AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql, type InferModel } from 'drizzle-orm';
@@ -166,6 +167,20 @@ export const prohibitedTerms = governanceSchema.table('prohibited_terms', {
   index('prohibited_terms_active_idx').on(t.isActive),
 ]);
 
+// ── Réglages plateforme (clé/valeur versionnée, auditée côté backend) ─────────────────────────────
+// Miroir de la migration 0015 (créée d'abord côté backend) — voir backend `services/platform_settings.py`.
+export const platformSettings = governanceSchema.table('platform_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  version: integer('version').default(1).notNull(),
+  updatedById: uuid('updated_by_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  index('platform_settings_updated_by_idx').on(t.updatedById),
+  check('platform_settings_version_chk', sql`${t.version} >= 1`),
+]);
+
 export default {
   organizations,
   userOrganizations,
@@ -177,6 +192,7 @@ export default {
   subCategories,
   standardPrices,
   prohibitedTerms,
+  platformSettings,
 };
 
 // Types
@@ -187,6 +203,7 @@ export type Zone = InferModel<typeof zones>;
 export type SubCategory = InferModel<typeof subCategories>;
 export type StandardPrice = InferModel<typeof standardPrices>;
 export type ProhibitedTerm = InferModel<typeof prohibitedTerms>;
+export type PlatformSetting = InferModel<typeof platformSettings>;
 // governance schema proxy
 
 // Relations are defined centrally in ./relations.ts
