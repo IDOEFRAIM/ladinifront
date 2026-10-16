@@ -16,6 +16,7 @@ import {
   uuid,
   text,
   timestamp,
+  date,
   jsonb,
   boolean,
   integer,
@@ -29,7 +30,7 @@ import { sql, type InferModel } from 'drizzle-orm';
 import { orders } from './marketplace';
 import { zones } from './governance';
 import { users } from './auth';
-import { auctions, buyerProfiles, marketOffers, producers } from './marketplace';
+import { auctions, buyerProfiles, marketOffers, producers, products } from './marketplace';
 import { subCategories } from './governance';
 
 // ── Audit transactionnel ─────────────────────────────────────────────────
@@ -236,6 +237,126 @@ export const commercialFollowups = intelligenceSchema.table('commercial_followup
   index('commercial_followups_assigned_idx').on(t.assignedCommercialId),
 ]);
 
+// ── Diffusion proactive des disponibilités (campagnes WhatsApp) ─────────────────────────────────────
+// Miroir de la migration 0016 (créée d'abord côté backend — voir backend docs/PROACTIVE_AVAILABILITY_CAMPAIGNS.md).
+// Une campagne n'est pas un message : chaque destinataire (availability_campaign_recipients) a son propre suivi, unique par
+// (campagne, exécution, téléphone) — c'est la garde ANTI-DOUBLON.
+export const availabilityCampaignStatusEnum = ['DRAFT', 'SCHEDULED', 'RUNNING', 'COMPLETED', 'CANCELLED', 'FAILED'] as const;
+export const availabilityCampaignFrequencyEnum = ['ONCE', 'WEEKLY', 'CUSTOM_DAYS'] as const;
+export const availabilityRecipientStatusEnum = ['PREPARED', 'QUEUED', 'SENT', 'DELIVERED', 'READ', 'REPLIED', 'FAILED', 'SKIPPED'] as const;
+export const communicationConsentStatusEnum = ['OPTED_IN', 'OPTED_OUT'] as const;
+export const availabilityInterestKindEnum = ['INTEREST', 'PRICE_REQUEST', 'INFO_REQUEST', 'PREORDER_STARTED', 'DECLINED'] as const;
+export const availabilityInterestStatusEnum = ['OPEN', 'PRODUCER_NOTIFIED', 'CLOSED'] as const;
+
+export const availabilityCampaigns = intelligenceSchema.table('availability_campaigns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  status: text('status').default('DRAFT').notNull(),
+  audience: jsonb('audience').default({}).notNull(),
+  offerFilter: jsonb('offer_filter').default({}).notNull(),
+  sendAt: timestamp('send_at'),
+  frequency: text('frequency').default('ONCE').notNull(),
+  intervalDays: integer('interval_days'),
+  responseWindowHours: integer('response_window_hours').default(48).notNull(),
+  deliveryDate: date('delivery_date'),
+  nextRunAt: timestamp('next_run_at'),
+  lastRunKey: text('last_run_key'),
+  contentVersion: integer('content_version').default(1).notNull(),
+  contentHash: text('content_hash'),
+  preview: jsonb('preview'),
+  validatedAt: timestamp('validated_at'),
+  validatedById: uuid('validated_by_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  createdById: uuid('created_by_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  cancelledAt: timestamp('cancelled_at'),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  index('availability_campaigns_due_idx').on(t.status, t.nextRunAt),
+  index('availability_campaigns_validated_by_idx').on(t.validatedById),
+  index('availability_campaigns_created_by_idx').on(t.createdById),
+  check('availability_campaigns_status_chk', sql`${t.status} in ('DRAFT','SCHEDULED','RUNNING','COMPLETED','CANCELLED','FAILED')`),
+  check('availability_campaigns_frequency_chk', sql`${t.frequency} in ('ONCE','WEEKLY','CUSTOM_DAYS')`),
+  check('availability_campaigns_version_chk', sql`${t.contentVersion} >= 1`),
+  check('availability_campaigns_interval_chk', sql`${t.intervalDays} is null or interval_days >= 1`),
+  check('availability_campaigns_window_chk', sql`${t.responseWindowHours} >= 1`),
+]);
+
+export const availabilityCampaignRecipients = intelligenceSchema.table('availability_campaign_recipients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').references((): AnyPgColumn => availabilityCampaigns.id, { onDelete: 'cascade' }).notNull(),
+  runKey: text('run_key').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  phone: text('phone').notNull(),
+  status: text('status').default('PREPARED').notNull(),
+  skipReason: text('skip_reason'),
+  lastError: text('last_error'),
+  outboxId: uuid('outbox_id').references((): AnyPgColumn => notificationOutbox.id, { onDelete: 'set null' }),
+  providerRef: text('provider_ref'),
+  offers: jsonb('offers').default([]).notNull(),
+  contentVersion: integer('content_version').default(1).notNull(),
+  queuedAt: timestamp('queued_at'),
+  sentAt: timestamp('sent_at'),
+  deliveredAt: timestamp('delivered_at'),
+  readAt: timestamp('read_at'),
+  repliedAt: timestamp('replied_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex('availability_recipients_run_phone_uq').on(t.campaignId, t.runKey, t.phone),
+  index('availability_recipients_provider_ref_idx').on(t.providerRef),
+  index('availability_recipients_phone_sent_idx').on(t.phone, t.sentAt),
+  index('availability_recipients_user_idx').on(t.userId),
+  index('availability_recipients_outbox_idx').on(t.outboxId),
+  check('availability_recipients_status_chk', sql`${t.status} in ('PREPARED','QUEUED','SENT','DELIVERED','READ','REPLIED','FAILED','SKIPPED')`),
+]);
+
+export const communicationConsents = intelligenceSchema.table('communication_consents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  phone: text('phone').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  topic: text('topic').default('AVAILABILITY_CAMPAIGNS').notNull(),
+  status: text('status').notNull(),
+  source: text('source').notNull(),
+  proof: jsonb('proof').default({}).notNull(),
+  consentedAt: timestamp('consented_at'),
+  revokedAt: timestamp('revoked_at'),
+  version: integer('version').default(1).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex('communication_consents_phone_topic_uq').on(t.phone, t.topic),
+  index('communication_consents_user_idx').on(t.userId),
+  check('communication_consents_status_chk', sql`${t.status} in ('OPTED_IN','OPTED_OUT')`),
+  check('communication_consents_version_chk', sql`${t.version} >= 1`),
+]);
+
+export const availabilityInterests = intelligenceSchema.table('availability_interests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaignId: uuid('campaign_id').references((): AnyPgColumn => availabilityCampaigns.id, { onDelete: 'cascade' }).notNull(),
+  recipientId: uuid('recipient_id').references((): AnyPgColumn => availabilityCampaignRecipients.id, { onDelete: 'cascade' }).notNull(),
+  phone: text('phone').notNull(),
+  userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  productId: uuid('product_id').references((): AnyPgColumn => products.id, { onDelete: 'set null' }),
+  productLabel: text('product_label').notNull(),
+  quantity: doublePrecision('quantity'),
+  unit: text('unit'),
+  kind: text('kind').notNull(),
+  status: text('status').default('OPEN').notNull(),
+  messageRef: text('message_ref').notNull(),
+  changes: jsonb('changes').default({}).notNull(),
+  producerNotifiedAt: timestamp('producer_notified_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex('availability_interests_recipient_msg_label_uq').on(t.recipientId, t.messageRef, t.productLabel),
+  index('availability_interests_campaign_idx').on(t.campaignId),
+  index('availability_interests_user_idx').on(t.userId),
+  index('availability_interests_product_idx').on(t.productId),
+  check('availability_interests_kind_chk', sql`${t.kind} in ('INTEREST','PRICE_REQUEST','INFO_REQUEST','PREORDER_STARTED','DECLINED')`),
+  check('availability_interests_status_chk', sql`${t.status} in ('OPEN','PRODUCER_NOTIFIED','CLOSED')`),
+]);
+
 export default {
   auditLogs,
   agentActions,
@@ -246,6 +367,10 @@ export default {
   solicitations,
   notificationOutbox,
   commercialFollowups,
+  availabilityCampaigns,
+  availabilityCampaignRecipients,
+  communicationConsents,
+  availabilityInterests,
 };
 
 export type AuditLog = InferModel<typeof auditLogs>;
@@ -257,3 +382,7 @@ export type DemandSignal = InferModel<typeof demandSignals>;
 export type Solicitation = InferModel<typeof solicitations>;
 export type NotificationOutbox = InferModel<typeof notificationOutbox>;
 export type CommercialFollowup = InferModel<typeof commercialFollowups>;
+export type AvailabilityCampaign = InferModel<typeof availabilityCampaigns>;
+export type AvailabilityCampaignRecipient = InferModel<typeof availabilityCampaignRecipients>;
+export type CommunicationConsent = InferModel<typeof communicationConsents>;
+export type AvailabilityInterest = InferModel<typeof availabilityInterests>;
