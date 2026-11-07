@@ -6,6 +6,10 @@ import { WELCOME_TEXT } from '@/features/chat/components/widget/chat.constants';
 import { createId } from '@/features/chat/components/widget/chat.utils';
 import { MAX_INPUT_BYTES, compressToJpegBase64 } from '@/features/chat/components/widget/image-compress';
 
+// Indicateur de fonctionnalité (désactivé par défaut) : bascule le chat sur l'agent conseil via /api/conseil.
+// Booléen public, PAS un secret : le jeton de l'Advisor reste côté serveur.
+export const ADVISOR_CHAT_ENABLED = process.env.NEXT_PUBLIC_ADVISOR_CHAT_ENABLED === 'true';
+
 /** État et actions du chat Ladini : envoi texte / photo (base64) / position, messages d'attente et défilement. */
 export function useLadiniChat(role: Role) {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,13 +48,13 @@ export function useLadiniChat(role: Role) {
 
   const runExchange = async (
     userMessage: ChatMessage,
-    payload: { message: string; image_base64?: string; image_mime?: string }
+    payload: { message: string; image_base64?: string; image_mime?: string; latitude?: number; longitude?: number }
   ) => {
     if (busy) return;
     setMessages((prev) => [...prev, userMessage]);
     setIsSending(true);
     try {
-      const res = await fetch(`/api/chat/${role}`, {
+      const res = await fetch(ADVISOR_CHAT_ENABLED ? '/api/conseil' : `/api/chat/${role}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -64,7 +68,8 @@ export function useLadiniChat(role: Role) {
 
       setMessages((prev) => [
         ...prev,
-        { id: createId(), sender: 'agent', text: data.reply || '...' },
+        // Advisor : `text` affiché tel quel. Ancien webchat : `reply`.
+        { id: createId(), sender: 'agent', text: (ADVISOR_CHAT_ENABLED ? data.text : data.reply) || '...' },
       ]);
     } catch (err) {
       pushSystem(err instanceof Error ? err.message : "L'assistant est momentanément indisponible.");
@@ -133,6 +138,12 @@ export function useLadiniChat(role: Role) {
       async (pos) => {
         setIsLocating(false);
         const { latitude, longitude, accuracy } = pos.coords;
+        if (ADVISOR_CHAT_ENABLED) {
+          // L'Advisor reçoit des coordonnées structurées, pas un lien Google Maps.
+          const advisorText = `📍 Ma position actuelle (précision ±${Math.round(accuracy)} m)`;
+          await runExchange({ id: createId(), sender: 'user', text: advisorText }, { message: advisorText, latitude, longitude });
+          return;
+        }
         const mapsUrl = `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
         const text = `📍 Ma position actuelle : ${mapsUrl} (précision ±${Math.round(accuracy)} m)`;
         await runExchange({ id: createId(), sender: 'user', text }, { message: text });

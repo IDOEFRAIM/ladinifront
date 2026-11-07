@@ -3,7 +3,7 @@
 import React from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import type { Role } from '@/features/chat/components/widget/chat.types';
-import { useLadiniChat } from '@/features/chat/components/widget/useLadiniChat';
+import { useLadiniChat, ADVISOR_CHAT_ENABLED } from '@/features/chat/components/widget/useLadiniChat';
 import ChatMessageList from '@/features/chat/components/widget/ChatMessageList';
 import ChatInputBar from '@/features/chat/components/widget/ChatInputBar';
 
@@ -43,7 +43,7 @@ export default function LadiniChatWidget({
           <div className="flex items-center justify-between px-4 py-3 bg-forest text-white">
             <div>
               <p className="font-bold text-sm">Assistant Ladini</p>
-              <p className="text-[11px] text-white/70">Même conversation que sur WhatsApp</p>
+              {!ADVISOR_CHAT_ENABLED && <p className="text-[11px] text-white/70">Même conversation que sur WhatsApp</p>}
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -73,6 +73,8 @@ export default function LadiniChatWidget({
             onShareLocation={handleShareLocation}
             onKeyDown={handleKeyDown}
             onSend={sendMessage}
+            allowImages={!ADVISOR_CHAT_ENABLED}
+            maxChars={ADVISOR_CHAT_ENABLED ? 2000 : 4000}
           />
         </div>
       )}
