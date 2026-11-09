@@ -76,9 +76,14 @@ export const producers = marketplaceSchema.table('producers', {
   rating: integer('rating'),
   reviewsCount: integer('reviews_count').default(0).notNull(),
   companyRegistrationNumber: text('company_registration_number'),
+  // Frais de livraison PROPRES au producteur (2026-10-25), modifiables à tout moment ; NULL = le montant par défaut de la
+  // plateforme (`governance.platform_settings`, clé `delivery.default_fee`) s'applique. Sa zone principale d'activité est
+  // `zoneId`/`region`/`province`/`commune` ci-dessus.
+  deliveryFeeAmount: numeric('delivery_fee_amount', { precision: 14, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
 }, (t) => [
+  check('producers_delivery_fee_amount_chk', sql`${t.deliveryFeeAmount} IS NULL OR ${t.deliveryFeeAmount} >= 0`),
   index('producers_status_idx').on(t.status),
   index('producers_org_idx').on(t.organizationId),
   index('producers_zone_idx').on(t.zoneId),
@@ -367,6 +372,15 @@ export const orders = marketplaceSchema.table('orders', {
   isAgentOrder: boolean('is_agent_order').default(false).notNull(),
 
   deliveryDate: timestamp('delivery_date'),
+  // Détails de livraison voulus par l'ACHETEUR (2026-10-25) : `deliveryDate` = début du créneau, `deliveryWindowEnd` = sa fin ;
+  // `deliveryAsap` = « dès que possible » (aucun créneau). `recipient*` = contact PROCHE qui peut réceptionner (facilite la
+  // livraison) — l'acheteur reste l'interlocuteur et gère le code de livraison. `deliveryFeeSource` : d'où vient `deliveryFee`
+  // (PLATFORM = montant par défaut de la plateforme, PRODUCER = montant du producteur, TO_AGREE = à convenir).
+  deliveryWindowEnd: timestamp('delivery_window_end'),
+  deliveryAsap: boolean('delivery_asap').default(false).notNull(),
+  recipientName: text('recipient_name'),
+  recipientPhone: text('recipient_phone'),
+  deliveryFeeSource: text('delivery_fee_source'),
   subtotal: numeric('subtotal', { precision: 14, scale: 2 }).default('0').notNull(),
   taxAmount: numeric('tax_amount', { precision: 14, scale: 2 }).default('0').notNull(),
   currency: text('currency').default('XOF').notNull(),
@@ -412,6 +426,8 @@ export const orders = marketplaceSchema.table('orders', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
 }, (t) => [
+  check('orders_delivery_fee_source_chk', sql`${t.deliveryFeeSource} IS NULL OR ${t.deliveryFeeSource} IN ('PLATFORM', 'PRODUCER', 'TO_AGREE')`),
+  check('orders_delivery_window_chk', sql`${t.deliveryWindowEnd} IS NULL OR ${t.deliveryDate} IS NULL OR ${t.deliveryWindowEnd} >= ${t.deliveryDate}`),
   index('orders_buyer_idx').on(t.buyerId),
   index('orders_client_idx').on(t.clientId),
   index('orders_org_idx').on(t.organizationId),
