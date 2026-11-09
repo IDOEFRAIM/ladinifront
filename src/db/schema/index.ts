@@ -5,6 +5,7 @@ export * from './intelligence';
 export * from './runtime';
 export * from './telemetry';
 export * from './analytics';
+export * from './advisor';
 export * from './relations';
 
 // Objet global pour le client Drizzle
@@ -15,6 +16,7 @@ import * as intelligence from './intelligence';
 import * as runtime from './runtime';
 import * as telemetry from './telemetry';
 import * as analytics from './analytics';
+import * as advisor from './advisor';
 
 export const schema = {
   ...auth,
@@ -24,4 +26,5 @@ export const schema = {
   ...runtime,
   ...telemetry,
   ...analytics,
+  ...advisor,
 };

@@ -58,7 +58,7 @@ export default defineConfig({
   },
 
   // 💡 MIS À JOUR : Ajout de 'auth' et inclusion automatique de tous tes schémas métiers
-  schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence'],
+  schemaFilter: ['public', 'auth', 'governance', 'marketplace', 'intelligence', 'advisor'],
 
   // Journal des migrations en public (pas de schema 'drizzle' interne) pour rester
   // cohérent avec la base existante et les scripts baseline/run-migrations.
