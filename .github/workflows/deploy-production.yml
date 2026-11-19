@@ -1,0 +1,51 @@
+name: Deploy frontend production
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ladinifront-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+
+    steps:
+      - name: Deploy
+        working-directory: /opt/ladini/ladinifront
+        run: |
+          set -euo pipefail
+
+          git fetch origin master
+          git checkout master
+          git reset --hard origin/master
+
+          docker compose build
+          docker compose up -d --remove-orphans
+
+          echo "Waiting for frontend healthcheck..."
+
+          for i in $(seq 1 20); do
+            STATUS="$(docker inspect \
+              --format='{{.State.Health.Status}}' \
+              ladinifront-ladinifront-1 2>/dev/null || true)"
+
+            echo "Health: $STATUS"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Deploy successful"
+              exit 0
+            fi
+
+            sleep 3
+          done
+
+          echo "Frontend failed healthcheck"
+          docker compose logs --tail 100 ladinifront
+          exit 1
